@@ -9,6 +9,7 @@ import {
   setApprovalStatus,
 } from './db';
 import { searchAllCategories, searchVideos, detectEquipment, Category, ScoredVideo } from './youtube';
+import { rewriteTitle, formatChannelName } from './translate';
 
 const CATEGORY_EMOJI: Record<Category, string> = {
   stretching: '🧘',
@@ -28,17 +29,13 @@ const DIFFICULTY_RU: Record<string, string> = {
   advanced: 'Продвинутый',
 };
 
-function escapeMarkdown(text: string): string {
-  return text.replace(/([*_`\[\]])/g, '\\$1');
-}
-
 function formatViews(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${Math.round(n / 1_000)}K`;
   return String(n);
 }
 
-function formatApprovalMessage(video: ScoredVideo, category: Category): string {
+async function formatApprovalMessage(video: ScoredVideo, category: Category): Promise<string> {
   const emoji = CATEGORY_EMOJI[category];
   const categoryRu = CATEGORY_RU[category];
   let muscles = '';
@@ -56,8 +53,8 @@ function formatApprovalMessage(video: ScoredVideo, category: Category): string {
   return [
     `${emoji} *${categoryRu}*`,
     '',
-    `*${escapeMarkdown(video.title)}*`,
-    `👤 ${escapeMarkdown(video.channel_name)}`,
+    `*${await rewriteTitle(video.title)}*`,
+    `👤 ${await formatChannelName(video.channel_name)}`,
     `▶️ ${video.video_url}`,
     '',
     `⏱ ${video.duration_label}  •  📊 ${DIFFICULTY_RU[video.difficulty] ?? video.difficulty}`,
@@ -109,7 +106,7 @@ export async function runApprovalFlow(
     const v = videos[0];
     const videoId = upsertVideo(v);
     const sessionId = createApprovalSession(date, category, videoId);
-    const text = formatApprovalMessage(v, category);
+    const text = await formatApprovalMessage(v, category);
     const keyboard = new InlineKeyboard()
       .text('✅ Выбрать', `approve:${sessionId}`)
       .text('🔄 Другое', `refresh:${sessionId}`);
@@ -221,7 +218,7 @@ export function registerApprovalCallbacks(bot: Bot): void {
     const v = videos[0];
     const videoId = upsertVideo(v);
     const newSessionId = createApprovalSession(session.date, session.category as Category, videoId);
-    const text = formatApprovalMessage(v, session.category as Category);
+    const text = await formatApprovalMessage(v, session.category as Category);
     const keyboard = new InlineKeyboard()
       .text('✅ Выбрать', `approve:${newSessionId}`)
       .text('🔄 Другое', `refresh:${newSessionId}`);

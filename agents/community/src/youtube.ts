@@ -15,7 +15,7 @@ import { wasPostedRecently, VideoRow } from './db';
 
 export type Category = 'stretching' | 'strength' | 'mobility';
 
-// Russian-first queries. "Только коврик" — no equipment framing.
+// Mixed RU+EN queries. "Только коврик" — no equipment framing.
 const CATEGORY_QUERIES: Record<Category, string[]> = {
   stretching: [
     'утренняя растяжка дома на коврике',
@@ -23,6 +23,9 @@ const CATEGORY_QUERIES: Record<Category, string[]> = {
     'стретчинг для гибкости дома',
     'утренняя разминка суставов 10 минут',
     'растяжка после тренировки восстановление',
+    'full body stretching routine no equipment',
+    'morning stretch routine 10 min mat only',
+    'gentle flexibility routine beginner',
   ],
   strength: [
     'силовая тренировка дома без инвентаря на коврике',
@@ -30,6 +33,9 @@ const CATEGORY_QUERIES: Record<Category, string[]> = {
     'функциональная тренировка дома без оборудования',
     'бодивейт тренировка 20 минут дома',
     'силовая тренировка без гантелей',
+    'bodyweight workout at home no equipment',
+    'mat only strength training beginner',
+    'full body workout no equipment 15 min',
   ],
   mobility: [
     'мобильность суставов тренировка дома',
@@ -37,6 +43,9 @@ const CATEGORY_QUERIES: Record<Category, string[]> = {
     'суставная гимнастика утром для начинающих',
     'мобильность позвоночника упражнения',
     'подвижность суставов ежедневная практика',
+    'joint mobility routine morning',
+    'hip mobility flow mat only',
+    'spine mobility exercises daily routine',
   ],
 };
 
@@ -272,8 +281,6 @@ export async function searchVideos(
   searchUrl.searchParams.set('videoDuration', 'medium'); // 4-20 min
   searchUrl.searchParams.set('videoEmbeddable', 'true');
   searchUrl.searchParams.set('maxResults', '20');
-  searchUrl.searchParams.set('relevanceLanguage', 'ru');
-  searchUrl.searchParams.set('regionCode', 'RU');
   searchUrl.searchParams.set('key', config.YOUTUBE_API_KEY);
 
   const searchData = await fetchJson<{ items: YouTubeSearchItem[] }>(searchUrl.toString());

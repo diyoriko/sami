@@ -4,7 +4,7 @@ import { getConfig } from './config';
 import { getApprovedVideo, recordPost, wasPostedToday, getCheckinStats, recordCheckinPost, VideoRow } from './db';
 import { downloadVideo, isYtDlpAvailable } from './downloader';
 import { detectEquipment } from './youtube';
-import { translateToRussian } from './translate';
+import { rewriteTitle, formatChannelName } from './translate';
 
 const CATEGORY_EMOJI: Record<string, string> = {
   stretching: '🧘',
@@ -24,10 +24,6 @@ const DIFFICULTY_RU: Record<string, string> = {
   advanced: 'Продвинутый',
 };
 
-function escapeMarkdown(text: string): string {
-  return text.replace(/([*_`\[\]])/g, '\\$1');
-}
-
 async function formatCaption(video: VideoRow): Promise<string> {
   const emoji = CATEGORY_EMOJI[video.category] ?? '🏋️';
   const categoryRu = CATEGORY_RU[video.category] ?? video.category;
@@ -46,14 +42,14 @@ async function formatCaption(video: VideoRow): Promise<string> {
     ? `🎒 Понадобится: ${equipment.join(', ')}`
     : null;
 
-  const title = await translateToRussian(video.title);
-  const channelName = await translateToRussian(video.channel_name);
+  const title = await rewriteTitle(video.title);
+  const channelName = await formatChannelName(video.channel_name);
 
   return [
     `${emoji} *${categoryRu}*`,
     '',
-    `*${escapeMarkdown(title)}*`,
-    `👤 ${escapeMarkdown(channelName)}`,
+    `*${title}*`,
+    `👤 ${channelName}`,
     '',
     `⏱ ${video.duration_label ?? '?'}  •  📊 ${difficultyRu}`,
     `💪 ${muscles}`,
