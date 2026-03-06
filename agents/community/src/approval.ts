@@ -28,6 +28,10 @@ const DIFFICULTY_RU: Record<string, string> = {
   advanced: 'Продвинутый',
 };
 
+function escapeMarkdown(text: string): string {
+  return text.replace(/([*_`\[\]])/g, '\\$1');
+}
+
 function formatViews(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${Math.round(n / 1_000)}K`;
@@ -52,8 +56,8 @@ function formatApprovalMessage(video: ScoredVideo, category: Category): string {
   return [
     `${emoji} *${categoryRu}*`,
     '',
-    `*${video.title}*`,
-    `👤 ${video.channel_name}`,
+    `*${escapeMarkdown(video.title)}*`,
+    `👤 ${escapeMarkdown(video.channel_name)}`,
     `▶️ ${video.video_url}`,
     '',
     `⏱ ${video.duration_label}  •  📊 ${DIFFICULTY_RU[video.difficulty] ?? video.difficulty}`,

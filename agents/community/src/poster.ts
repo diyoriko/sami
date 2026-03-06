@@ -24,6 +24,10 @@ const DIFFICULTY_RU: Record<string, string> = {
   advanced: 'Продвинутый',
 };
 
+function escapeMarkdown(text: string): string {
+  return text.replace(/([*_`\[\]])/g, '\\$1');
+}
+
 async function formatCaption(video: VideoRow): Promise<string> {
   const emoji = CATEGORY_EMOJI[video.category] ?? '🏋️';
   const categoryRu = CATEGORY_RU[video.category] ?? video.category;
@@ -48,8 +52,8 @@ async function formatCaption(video: VideoRow): Promise<string> {
   return [
     `${emoji} *${categoryRu}*`,
     '',
-    `*${title}*`,
-    `👤 ${channelName}`,
+    `*${escapeMarkdown(title)}*`,
+    `👤 ${escapeMarkdown(channelName)}`,
     '',
     `⏱ ${video.duration_label ?? '?'}  •  📊 ${difficultyRu}`,
     `💪 ${muscles}`,
