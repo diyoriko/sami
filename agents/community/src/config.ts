@@ -16,8 +16,8 @@ const ConfigSchema = z.object({
   // Schedule (cron expressions, defaults match the plan)
   CRON_SEARCH_VIDEOS: z.string().default('0 19 * * *'),     // 19:00 — search & send for approval
   CRON_POST_STRETCHING: z.string().default('0 8 * * *'),    // 08:00 — post stretching
-  CRON_POST_STRENGTH: z.string().default('0 12 * * *'),     // 12:00 — post strength
-  CRON_POST_MOBILITY: z.string().default('0 17 * * *'),     // 17:00 — post mobility
+  CRON_POST_STRENGTH: z.string().default('5 8 * * *'),     // 12:00 — post strength
+  CRON_POST_MOBILITY: z.string().default('10 8 * * *'),     // 17:00 — post mobility
   CRON_CHECKIN: z.string().default('0 21 * * *'),           // 21:00 — evening check-in
   // Analytics agent
   CRON_ANALYTICS_DAILY: z.string().default('30 0 * * *'),    // 00:30 — daily metrics
