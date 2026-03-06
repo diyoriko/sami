@@ -17,7 +17,6 @@ RUNTIME_RUNNER_PATH="$RUNTIME_DIR/strategist-launchd-runner.sh"
 RUNTIME_STRATEGIST_PATH="$RUNTIME_DIR/strategist.sh"
 RUNTIME_GOOGLE_SYNC_PATH="$RUNTIME_DIR/google-calendar-sync.mjs"
 RUNTIME_TELEGRAM_NOTIFY_PATH="$RUNTIME_DIR/telegram-notify.mjs"
-RUNTIME_OPENAI_RUNNER_PATH="$RUNTIME_DIR/strategist-openai.mjs"
 RUNTIME_GOOGLE_OAUTH_CLIENT_PATH="$APP_SUPPORT_DIR/google-oauth-client.json"
 
 mkdir -p "$PLIST_DIR" "$ROOT_DIR/reports/strategist"
@@ -32,7 +31,6 @@ touch "$LAUNCHD_ERR_LOG"
 cp "$ROOT_DIR/agents/strategist.sh" "$RUNTIME_STRATEGIST_PATH"
 cp "$ROOT_DIR/agents/google-calendar-sync.mjs" "$RUNTIME_GOOGLE_SYNC_PATH"
 cp "$ROOT_DIR/agents/telegram-notify.mjs" "$RUNTIME_TELEGRAM_NOTIFY_PATH"
-cp "$ROOT_DIR/agents/strategist-openai.mjs" "$RUNTIME_OPENAI_RUNNER_PATH"
 if [[ -f "$ROOT_DIR/agents/google-oauth-client.json" ]]; then
   cp "$ROOT_DIR/agents/google-oauth-client.json" "$RUNTIME_GOOGLE_OAUTH_CLIENT_PATH"
 fi
