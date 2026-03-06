@@ -101,7 +101,9 @@ export async function postVideoToChannel(
             caption,
             parse_mode: 'Markdown',
             supports_streaming: true,
-            duration: video.duration_seconds ?? undefined,
+            duration: download.meta.duration ?? video.duration_seconds ?? undefined,
+            width: download.meta.width ?? undefined,
+            height: download.meta.height ?? undefined,
           }
         );
         download.cleanup();

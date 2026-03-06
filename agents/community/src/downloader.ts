@@ -8,9 +8,16 @@ const execFileAsync = promisify(execFile);
 
 const MAX_SIZE_BYTES = 45 * 1024 * 1024; // 45MB — Telegram Bot API limit is 50MB
 
+export interface VideoMeta {
+  width?: number;
+  height?: number;
+  duration?: number;
+}
+
 export interface DownloadResult {
   filePath: string;
   fileSizeBytes: number;
+  meta: VideoMeta;
   cleanup: () => void;
 }
 
@@ -49,6 +56,28 @@ export function logYtDlpStatus(): void {
     console.log(`[downloader] yt-dlp found: ${bin} (${ver})`);
   } catch {
     console.warn('[downloader] yt-dlp NOT found — will post YouTube links as fallback');
+  }
+}
+
+async function probeVideoMeta(filePath: string): Promise<VideoMeta> {
+  try {
+    const { stdout } = await execFileAsync('ffprobe', [
+      '-v', 'quiet',
+      '-print_format', 'json',
+      '-show_streams',
+      '-show_format',
+      filePath,
+    ], { timeout: 15_000 });
+    const info = JSON.parse(stdout);
+    const videoStream = info.streams?.find((s: any) => s.codec_type === 'video');
+    return {
+      width: videoStream?.width ? Number(videoStream.width) : undefined,
+      height: videoStream?.height ? Number(videoStream.height) : undefined,
+      duration: info.format?.duration ? Math.round(Number(info.format.duration)) : undefined,
+    };
+  } catch (err) {
+    console.warn('[downloader] ffprobe failed, posting without video meta:', err);
+    return {};
   }
 }
 
@@ -103,9 +132,12 @@ export async function downloadVideo(youtubeUrl: string, youtubeId: string): Prom
     throw new Error(`File too large: ${Math.round(size / 1024 / 1024)}MB > 45MB limit`);
   }
 
+  const meta = await probeVideoMeta(filePath);
+
   return {
     filePath,
     fileSizeBytes: size,
+    meta,
     cleanup: () => {
       try { fs.unlinkSync(filePath); } catch { /* ignore */ }
     },
