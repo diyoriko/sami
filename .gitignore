@@ -27,3 +27,6 @@ reports/**/.internal/
 # Google OAuth credentials
 agents/google-oauth-client.json
 agents/google-token.json
+
+# Setup results (contains secrets)
+SETUP_RESULTS.md
