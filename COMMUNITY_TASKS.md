@@ -13,29 +13,25 @@
 - [x] Бот добавлен как admin в группу `Sami Community`
 - [x] YouTube Data API v3 включён в Google Cloud
 - [x] Создан YouTube API key
-- [x] Заполнен env-файл: `~/.config/sami/community.env`
 - [x] TypeScript скомпилирован → `agents/community/dist/`
 - [x] Исправлена ошибка типов в `moderation.ts` (grammY `restrictChatMember`)
-- [x] Файл `.env.production` сохранён в `agents/community/`
+- [x] Исправлен баг: `moderation.ts` message:text handler блокировал command-хендлеры в приватных чатах — добавлен `return next()`
+- [x] Исправлен `COMMUNITY_DB_PATH` в `.env` (был путь от облачной среды `/sessions/...`)
+- [x] `better-sqlite3` пересобран под macOS arm64
+- [x] Код запушен в GitHub: `https://github.com/diyoriko/sami`
+- [x] Бот задеплоен на Railway (проект `courageous-happiness`)
+- [x] Env переменные выставлены в Railway
+- [x] GitHub → Railway автодеплой настроен (пуш в `main` → автодеплой, rootDir: `agents/community`)
 
 ---
 
-## 🔜 Запуск (следующий шаг)
+## 🔜 Следующий шаг — постоянное хранилище
 
-- [ ] На Mac: `cd agents/community && cp .env.production .env && npm install && npm start`
-- [ ] Проверить: бот отвечает на `/start` в `@sami_daily`
-- [ ] Проверить: в 19:00 приходит approval DM
-- [ ] Проверить: в 21:00 публикуется вечерний чекин
-- [ ] Проверить: посты в 08:00, 12:00, 17:00 (стретчинг / силовая / мобильность)
+- [ ] Подключить Railway Volume → смонтировать в `/data`
+- [ ] Обновить `COMMUNITY_DB_PATH` в Railway переменных → `/data/community.db`
+- [ ] Проверить что данные сохраняются после редеплоя
 
----
-
-## 🔲 После запуска
-
-- [ ] Настроить launchd автозапуск на Mac (как у strategist)
-- [ ] Мониторинг первой недели: логи, ошибки, отвалы
-- [ ] Проверить интеграцию со strategist: читает ли агент `community_packet.json`
-- [ ] Проверить запись статистики в `reports/community/.internal/latest.json`
+**Важно:** сейчас SQLite на Railway эфемерна — при каждом редеплое база сбрасывается (теряется статистика чекинов, варны участников, история видео).
 
 ---
 
@@ -49,17 +45,28 @@
 
 ---
 
+## Деплой
+
+| Параметр | Значение |
+|---|---|
+| Railway проект | `courageous-happiness` |
+| Railway project ID | `af9dbf93-c76b-4224-8874-b0bca12682d0` |
+| Railway service ID | `a15a112d-2225-4e22-9df3-979fe1c9b021` |
+| GitHub репо | `https://github.com/diyoriko/sami` |
+| Root directory | `agents/community` |
+| Build command | `npm install && npm run build` |
+| Start command | `npm start` |
+| Логи | Railway dashboard → сервис → Deployments |
+
 ## Идентификаторы
 
 | Параметр | Значение |
 |---|---|
 | Бот | @sami_workout_bot |
-| Bot token | `8709141907:AAHcMa7JEpShG3N-yra2GUCmo-zWiDv9SyM` |
 | Канал | @sami_daily → `-1003746963456` |
 | Группа | Sami Community → `-1003604276410` |
 | Admin user ID | `85013206` |
-| YouTube API key | `AIzaSyA2Y0ea6SynPKKNvj6OoN3OHT_6T9UPsEc` |
-| Env-файл | `~/.config/sami/community.env` |
+| Env-файл (локально) | `agents/community/.env` |
 
 ---
 
