@@ -109,4 +109,28 @@ export function startScheduler(bot: Bot): void {
   }, { timezone: 'Europe/Moscow' });
 
   console.log('[scheduler] all cron jobs registered (community + analytics + content-curator)');
+
+  // Catch-up: if bot started after 19:00 MSK and no approval sessions exist for today, run search now
+  setTimeout(async () => {
+    try {
+      const date = todayDate();
+      const db = (await import('./db')).getDb();
+      const row = db.prepare('SELECT COUNT(*) as cnt FROM approval_sessions WHERE date = ?').get(date) as { cnt: number };
+      if (row.cnt === 0) {
+        const nowMsk = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Moscow' }));
+        const hour = nowMsk.getHours();
+        if (hour >= 19) {
+          console.log('[scheduler] catch-up: no approval sessions for today, running video search now');
+          const packet = readCommunityPacket();
+          await runApprovalFlow(bot, date, {
+            stretching: packet.search_keywords?.stretching,
+            strength: packet.search_keywords?.strength,
+            mobility: packet.search_keywords?.mobility,
+          });
+        }
+      }
+    } catch (err) {
+      console.error('[scheduler] catch-up check failed:', err);
+    }
+  }, 5000); // 5s delay to let bot fully initialize
 }

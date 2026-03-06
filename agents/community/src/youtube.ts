@@ -115,7 +115,7 @@ export async function searchVideos(
   searchUrl.searchParams.set('part', 'snippet');
   searchUrl.searchParams.set('q', query);
   searchUrl.searchParams.set('type', 'video');
-  searchUrl.searchParams.set('videoDuration', 'short'); // under 4 min; use 'medium' for 4-20
+  searchUrl.searchParams.set('videoDuration', 'medium'); // 4-20 min
   searchUrl.searchParams.set('videoEmbeddable', 'true');
   searchUrl.searchParams.set('maxResults', String(count * 3)); // fetch more to filter
   searchUrl.searchParams.set('relevanceLanguage', 'ru');
