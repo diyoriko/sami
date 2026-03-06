@@ -5,9 +5,10 @@ import {
   createApprovalSession,
   setApprovalMessageId,
   getApprovalSessionByMessageId,
+  getApprovalSessionById,
   setApprovalStatus,
 } from './db';
-import { searchAllCategories, Category, ScoredVideo } from './youtube';
+import { searchAllCategories, searchVideos, Category, ScoredVideo } from './youtube';
 
 const CATEGORY_EMOJI: Record<Category, string> = {
   stretching: '🧘',
@@ -108,7 +109,7 @@ export async function runApprovalFlow(
       const text = formatApprovalMessage(v, i + 1, videos.length, category);
       const keyboard = new InlineKeyboard()
         .text('✅ Выбрать', `approve:${sessionId}`)
-        .text('❌ Пропустить', `reject:${sessionId}`);
+        .text('🔄 Другое', `refresh:${sessionId}`);
 
       try {
         // Show thumbnail if available for a richer preview
@@ -183,10 +184,63 @@ export function registerApprovalCallbacks(bot: Bot): void {
 
     const keyboard = new InlineKeyboard()
       .text('✅ Выбрать', `approve:${sessionId}`)
-      .text('❌ Пропустить', `reject:${sessionId}`);
+      .text('🔄 Другое', `refresh:${sessionId}`);
 
     await editKeyboard(ctx as any, keyboard);
     await ctx.answerCallbackQuery('Возвращено в пул');
+  });
+
+  bot.callbackQuery(/^refresh:(\d+)$/, async (ctx) => {
+    const sessionId = parseInt(ctx.match[1]);
+    const config = getConfig();
+
+    const session = getApprovalSessionById(sessionId);
+    if (!session) {
+      await ctx.answerCallbackQuery('Сессия не найдена');
+      return;
+    }
+
+    await ctx.answerCallbackQuery('Ищу другое...');
+
+    let videos: ScoredVideo[];
+    try {
+      videos = await searchVideos(session.category as Category, 1);
+    } catch (err) {
+      await ctx.api.sendMessage(config.TELEGRAM_ADMIN_USER_ID, `❌ Ошибка поиска замены для ${session.category}: ${String(err)}`);
+      return;
+    }
+
+    if (videos.length === 0) {
+      await ctx.api.sendMessage(config.TELEGRAM_ADMIN_USER_ID, `⚠️ Не нашёл другого видео для *${session.category}*`, { parse_mode: 'Markdown' });
+      return;
+    }
+
+    const v = videos[0];
+    const videoId = upsertVideo(v);
+    const newSessionId = createApprovalSession(session.date, session.category as Category, videoId);
+    const text = formatApprovalMessage(v, 1, 1, session.category as Category);
+    const keyboard = new InlineKeyboard()
+      .text('✅ Выбрать', `approve:${newSessionId}`)
+      .text('🔄 Другое', `refresh:${newSessionId}`);
+
+    try {
+      let msg;
+      if (v.thumbnail_url) {
+        msg = await ctx.api.sendPhoto(config.TELEGRAM_ADMIN_USER_ID, v.thumbnail_url, {
+          caption: text,
+          parse_mode: 'Markdown',
+          reply_markup: keyboard,
+        });
+      } else {
+        msg = await ctx.api.sendMessage(config.TELEGRAM_ADMIN_USER_ID, text, {
+          parse_mode: 'Markdown',
+          reply_markup: keyboard,
+        });
+      }
+      setApprovalMessageId(newSessionId, msg.message_id);
+    } catch (err) {
+      console.error('[approval] refresh send failed:', err);
+    }
   });
 
   bot.callbackQuery('noop', async (ctx) => {

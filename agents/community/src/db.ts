@@ -187,10 +187,16 @@ export function setApprovalStatus(sessionId: number, status: 'approved' | 'rejec
   `).run(status, sessionId);
 }
 
-export function getApprovalSessionByMessageId(messageId: number): { id: number; video_id: number; category: string } | null {
+export function getApprovalSessionByMessageId(messageId: number): { id: number; video_id: number; category: string; date: string } | null {
   return getDb().prepare(`
-    SELECT id, video_id, category FROM approval_sessions WHERE message_id = ?
-  `).get(messageId) as { id: number; video_id: number; category: string } | null;
+    SELECT id, video_id, category, date FROM approval_sessions WHERE message_id = ?
+  `).get(messageId) as { id: number; video_id: number; category: string; date: string } | null;
+}
+
+export function getApprovalSessionById(sessionId: number): { id: number; video_id: number; category: string; date: string } | null {
+  return getDb().prepare(`
+    SELECT id, video_id, category, date FROM approval_sessions WHERE id = ?
+  `).get(sessionId) as { id: number; video_id: number; category: string; date: string } | null;
 }
 
 export function setApprovalMessageId(sessionId: number, messageId: number): void {
