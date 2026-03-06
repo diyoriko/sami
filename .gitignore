@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Environment variables (contain secrets)
+.env
+.env.local
+.env.production
+
+# Compiled output
+dist/
+build/
+
+# Logs
+*.log
+nohup.out
+
+# DB files
+*.db
+*.sqlite
+
+# macOS
+.DS_Store
+
+# Reports internal state
+reports/**/.internal/
