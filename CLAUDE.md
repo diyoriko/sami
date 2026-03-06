@@ -79,15 +79,9 @@ Content Curator (еженедельно)
 
 **P1 — ✅ выполнено (метрики синхронизированы)**
 
-**P2 — SAMI мобильное приложение (FlutterFlow):**
-
-**P2 — SAMI мобильное приложение (FlutterFlow):**
-Полный список задач: `APP_TASKS.md`
-1. FlutterFlow проект + дизайн-токены + backend (Supabase) + онбординг
-2. Timeline: лента на день, карточки активностей, стрик
-3. Feed: фид тренировок, фильтры
-4. Workout Creator: визард создания тренировки
-5. Profile + уведомления + QA + TestFlight
+**⏸ Мобильное приложение и лендинг — не в приоритете**
+Начнём после того, как сообщество выйдет на стабильный engagement (waitlist > 500).
+Подробности задач: `APP_TASKS.md`
 
 ---
 
@@ -164,19 +158,17 @@ Telegram:
 - Admin user ID: `85013206`
 
 Content model:
-- 3 workout posts per day (YouTube videos, admin-approved):
-  - 08:00 stretching
-  - 08:05 strength
-  - 08:10 mobility
-- 1 evening check-in post at 21:00
-- Video search + approval flow at 19:00 (sent to admin in DM)
-- 1 video per category shown; `🔄 Другое` для замены; `↩️ Отменить` после выбора
+- 3 workout posts одновременно в 08:00 (stretching + strength + mobility)
+- 1 evening check-in post at 22:00
+- Video search + approval flow at 19:00 (ищет видео на ЗАВТРА, отправляет в DM)
+- 1 video per category; `🔄 Другое` для замены; `↩️ Отменить` после выбора
 - yt-dlp скачивает видео и постит файлом (не ссылкой); fallback — ссылка
 
 Admin commands (в личке боту):
 - `/status` — статистика чекинов за день
-- `/search` — запустить поиск видео вручную
-- `/post [stretching|strength|mobility]` — опубликовать пост вручную
+- `/search` — найти видео на завтра
+- `/reset` — сбросить выбор на завтра (для повторного /search)
+- `/post` — опубликовать все 3 видео сегодня
 - `/checkin` — опубликовать вечерний чекин вручную
 - `/analytics` — запустить аналитику вручную
 - `/curator` — запустить контент-план вручную

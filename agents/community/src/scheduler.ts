@@ -17,6 +17,12 @@ function todayDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function tomorrowDate(): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 function currentWeek(): string {
   const now = new Date();
   const start = new Date(now.getFullYear(), 0, 1);
@@ -30,11 +36,11 @@ export function startScheduler(bot: Bot): void {
 
   console.log('[scheduler] starting cron jobs...');
 
-  // 19:00 — search videos & send approval to admin
+  // 19:00 — search videos for TOMORROW & send approval to admin
   cron.schedule(config.CRON_SEARCH_VIDEOS, async () => {
     console.log('[scheduler] running video search & approval flow');
     const packet = readCommunityPacket();
-    const date = todayDate();
+    const date = tomorrowDate();
     await runApprovalFlow(bot, date, {
       stretching: packet.search_keywords?.stretching,
       strength: packet.search_keywords?.strength,
@@ -42,29 +48,21 @@ export function startScheduler(bot: Bot): void {
     });
   }, { timezone: 'Europe/Moscow' });
 
-  // 08:00 — post stretching
-  cron.schedule(config.CRON_POST_STRETCHING, async () => {
-    console.log('[scheduler] posting stretching');
-    await postVideoToChannel(bot, todayDate(), 'stretching');
+  // 08:00 — post all 3 videos simultaneously
+  cron.schedule(config.CRON_POST_ALL, async () => {
+    console.log('[scheduler] posting all 3 videos');
+    const date = todayDate();
+    await Promise.all([
+      postVideoToChannel(bot, date, 'stretching'),
+      postVideoToChannel(bot, date, 'strength'),
+      postVideoToChannel(bot, date, 'mobility'),
+    ]);
   }, { timezone: 'Europe/Moscow' });
 
-  // 12:00 — post strength
-  cron.schedule(config.CRON_POST_STRENGTH, async () => {
-    console.log('[scheduler] posting strength');
-    await postVideoToChannel(bot, todayDate(), 'strength');
-  }, { timezone: 'Europe/Moscow' });
-
-  // 17:00 — post mobility
-  cron.schedule(config.CRON_POST_MOBILITY, async () => {
-    console.log('[scheduler] posting mobility');
-    await postVideoToChannel(bot, todayDate(), 'mobility');
-  }, { timezone: 'Europe/Moscow' });
-
-  // 21:00 — post evening check-in
+  // 22:00 — post evening check-in
   cron.schedule(config.CRON_CHECKIN, async () => {
     console.log('[scheduler] posting check-in');
-    const date = todayDate();
-    await postCheckin(bot, date);
+    await postCheckin(bot, todayDate());
   }, { timezone: 'Europe/Moscow' });
 
   // 23:55 — write daily report for strategist
@@ -110,17 +108,17 @@ export function startScheduler(bot: Bot): void {
 
   console.log('[scheduler] all cron jobs registered (community + analytics + content-curator)');
 
-  // Catch-up: if bot started after 19:00 MSK and no approval sessions exist for today, run search now
+  // Catch-up: if bot started after 19:00 MSK and no approval sessions exist for tomorrow, run search now
   setTimeout(async () => {
     try {
-      const date = todayDate();
+      const date = tomorrowDate();
       const db = (await import('./db')).getDb();
       const row = db.prepare('SELECT COUNT(*) as cnt FROM approval_sessions WHERE date = ?').get(date) as { cnt: number };
       if (row.cnt === 0) {
         const nowMsk = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Moscow' }));
         const hour = nowMsk.getHours();
         if (hour >= 19) {
-          console.log('[scheduler] catch-up: no approval sessions for today, running video search now');
+          console.log('[scheduler] catch-up: no approval sessions for tomorrow, running video search now');
           const packet = readCommunityPacket();
           await runApprovalFlow(bot, date, {
             stretching: packet.search_keywords?.stretching,
@@ -132,5 +130,5 @@ export function startScheduler(bot: Bot): void {
     } catch (err) {
       console.error('[scheduler] catch-up check failed:', err);
     }
-  }, 5000); // 5s delay to let bot fully initialize
+  }, 5000);
 }

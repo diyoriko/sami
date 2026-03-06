@@ -199,6 +199,13 @@ export function getApprovalSessionById(sessionId: number): { id: number; video_i
   `).get(sessionId) as { id: number; video_id: number; category: string; date: string } | null;
 }
 
+export function resetApprovalSessions(date: string): number {
+  const result = getDb().prepare(`
+    DELETE FROM approval_sessions WHERE date = ?
+  `).run(date);
+  return result.changes;
+}
+
 export function setApprovalMessageId(sessionId: number, messageId: number): void {
   getDb().prepare(`UPDATE approval_sessions SET message_id = ? WHERE id = ?`).run(messageId, sessionId);
 }

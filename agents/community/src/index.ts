@@ -55,27 +55,40 @@ async function main(): Promise<void> {
     );
   });
 
-  // /search command — manual video search trigger for admin
+  // /search command — search videos for tomorrow
   bot.command('search', async (ctx) => {
     if (ctx.from?.id !== config.TELEGRAM_ADMIN_USER_ID) return;
     const { runApprovalFlow } = await import('./approval');
-    const date = new Date().toISOString().slice(0, 10);
+    const tomorrow = new Date();
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    const date = tomorrow.toISOString().slice(0, 10);
     await ctx.reply('🔍 Запускаю поиск видео вручную...');
     await runApprovalFlow(bot, date);
   });
 
-  // /post command — manually trigger posting for admin
+  // /post command — post all 3 videos for today
   bot.command('post', async (ctx) => {
     if (ctx.from?.id !== config.TELEGRAM_ADMIN_USER_ID) return;
-    const args = ctx.match?.trim() as 'stretching' | 'strength' | 'mobility' | undefined;
     const { postVideoToChannel } = await import('./poster');
     const date = new Date().toISOString().slice(0, 10);
+    await ctx.reply('📤 Публикую все 3 видео...');
+    await Promise.all([
+      postVideoToChannel(bot, date, 'stretching'),
+      postVideoToChannel(bot, date, 'strength'),
+      postVideoToChannel(bot, date, 'mobility'),
+    ]);
+    await ctx.reply('✅ Готово');
+  });
 
-    const categories = args ? [args] : (['stretching', 'strength', 'mobility'] as const);
-    for (const cat of categories) {
-      await postVideoToChannel(bot, date, cat);
-    }
-    await ctx.reply(`✅ Пост(ы) опубликованы`);
+  // /reset command — clear tomorrow's approved videos so you can re-search
+  bot.command('reset', async (ctx) => {
+    if (ctx.from?.id !== config.TELEGRAM_ADMIN_USER_ID) return;
+    const { resetApprovalSessions } = await import('./db');
+    const tomorrow = new Date();
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    const date = tomorrow.toISOString().slice(0, 10);
+    const count = resetApprovalSessions(date);
+    await ctx.reply(`🔄 Сброшено ${count} сессий на ${date}. Запусти /search для нового поиска.`);
   });
 
   // /checkin command — manually trigger check-in post
@@ -146,7 +159,7 @@ async function main(): Promise<void> {
       // Notify admin on startup
       bot.api.sendMessage(
         config.TELEGRAM_ADMIN_USER_ID,
-        `🚀 *Sami Community Bot запущен*\n\nКоманды:\n/status — статус дня\n/search — поиск видео\n/post [stretching|strength|mobility] — опубликовать пост\n/checkin — чекин\n/analytics — аналитика\n/curator — контент-план`,
+        `🚀 *Sami Community Bot запущен*\n\nКоманды:\n/status — статус дня\n/search — найти видео на завтра\n/reset — сбросить выбор на завтра\n/post — опубликовать все 3 видео\n/checkin — чекин\n/analytics — аналитика\n/curator — контент-план`,
         { parse_mode: 'Markdown' }
       ).catch(() => {});
     },
