@@ -17,6 +17,9 @@ export function getDb(): Database.Database {
 }
 
 function migrate(db: Database.Database): void {
+  // Add view_count column if upgrading from older schema
+  try { db.exec('ALTER TABLE videos ADD COLUMN view_count INTEGER DEFAULT 0'); } catch { /* already exists */ }
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS videos (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -32,6 +35,7 @@ function migrate(db: Database.Database): void {
       thumbnail_url TEXT,
       video_url TEXT NOT NULL,
       search_query TEXT,
+      view_count INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -84,6 +88,7 @@ function migrate(db: Database.Database): void {
       muted_until TEXT
     );
 
+    -- Migration: add view_count to videos if not exists
     CREATE TABLE IF NOT EXISTS daily_stats (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       date TEXT UNIQUE NOT NULL,
@@ -122,21 +127,23 @@ export interface VideoRow {
   muscles: string | null;
   thumbnail_url: string | null;
   video_url: string;
+  view_count: number;
 }
 
 export function upsertVideo(v: Omit<VideoRow, 'id'> & { search_query?: string }): number {
   const db = getDb();
   const stmt = db.prepare(`
     INSERT INTO videos (youtube_id, title, channel_name, channel_url, duration_seconds,
-      duration_label, difficulty, category, muscles, thumbnail_url, video_url, search_query)
+      duration_label, difficulty, category, muscles, thumbnail_url, video_url, search_query, view_count)
     VALUES (@youtube_id, @title, @channel_name, @channel_url, @duration_seconds,
-      @duration_label, @difficulty, @category, @muscles, @thumbnail_url, @video_url, @search_query)
+      @duration_label, @difficulty, @category, @muscles, @thumbnail_url, @video_url, @search_query, @view_count)
     ON CONFLICT(youtube_id) DO UPDATE SET
       title = excluded.title,
       channel_name = excluded.channel_name,
       duration_label = excluded.duration_label,
       difficulty = excluded.difficulty,
-      muscles = excluded.muscles
+      muscles = excluded.muscles,
+      view_count = excluded.view_count
     RETURNING id
   `);
   const row = stmt.get(v) as { id: number };

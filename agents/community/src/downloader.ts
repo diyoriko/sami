@@ -1,0 +1,82 @@
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+
+const execFileAsync = promisify(execFile);
+
+const MAX_SIZE_BYTES = 45 * 1024 * 1024; // 45MB — Telegram Bot API limit is 50MB
+
+export interface DownloadResult {
+  filePath: string;
+  fileSizeBytes: number;
+  cleanup: () => void;
+}
+
+function findYtDlp(): string {
+  const candidates = [
+    'yt-dlp',
+    '/opt/homebrew/bin/yt-dlp',
+    '/usr/local/bin/yt-dlp',
+    '/usr/bin/yt-dlp',
+  ];
+  for (const bin of candidates) {
+    try {
+      require('child_process').execFileSync(bin, ['--version'], { stdio: 'ignore' });
+      return bin;
+    } catch {
+      continue;
+    }
+  }
+  throw new Error('yt-dlp not found. Install: brew install yt-dlp');
+}
+
+export async function downloadVideo(youtubeUrl: string, youtubeId: string): Promise<DownloadResult> {
+  const ytDlp = findYtDlp();
+  const tmpDir = os.tmpdir();
+  const outTemplate = path.join(tmpDir, `sami-${youtubeId}.%(ext)s`);
+
+  // Target 480p mp4, ~20-40MB for a 15-min video
+  const args = [
+    youtubeUrl,
+    '-f', 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best[height<=480]',
+    '--merge-output-format', 'mp4',
+    '-o', outTemplate,
+    '--no-playlist',
+    '--quiet',
+    '--no-warnings',
+  ];
+
+  await execFileAsync(ytDlp, args, { timeout: 120_000 });
+
+  const filePath = path.join(tmpDir, `sami-${youtubeId}.mp4`);
+
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`Downloaded file not found: ${filePath}`);
+  }
+
+  const { size } = fs.statSync(filePath);
+
+  if (size > MAX_SIZE_BYTES) {
+    fs.unlinkSync(filePath);
+    throw new Error(`File too large: ${Math.round(size / 1024 / 1024)}MB > 45MB limit`);
+  }
+
+  return {
+    filePath,
+    fileSizeBytes: size,
+    cleanup: () => {
+      try { fs.unlinkSync(filePath); } catch { /* ignore */ }
+    },
+  };
+}
+
+export function isYtDlpAvailable(): boolean {
+  try {
+    findYtDlp();
+    return true;
+  } catch {
+    return false;
+  }
+}

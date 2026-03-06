@@ -1,6 +1,8 @@
 import { Bot, InlineKeyboard } from 'grammy';
+import { InputFile } from 'grammy';
 import { getConfig } from './config';
 import { getApprovedVideo, recordPost, wasPostedToday, getCheckinStats, recordCheckinPost, VideoRow } from './db';
+import { downloadVideo, isYtDlpAvailable } from './downloader';
 
 const CATEGORY_EMOJI: Record<string, string> = {
   stretching: '🧘',
@@ -20,7 +22,7 @@ const DIFFICULTY_RU: Record<string, string> = {
   advanced: 'Продвинутый',
 };
 
-function formatVideoPost(video: VideoRow): string {
+function formatCaption(video: VideoRow): string {
   const emoji = CATEGORY_EMOJI[video.category] ?? '🏋️';
   const categoryRu = CATEGORY_RU[video.category] ?? video.category;
   const difficultyRu = DIFFICULTY_RU[video.difficulty] ?? video.difficulty;
@@ -37,16 +39,17 @@ function formatVideoPost(video: VideoRow): string {
     `${emoji} *${categoryRu}*`,
     '',
     `*${video.title}*`,
+    `👤 ${video.channel_name}`,
     '',
-    `▶️ [Смотреть на YouTube](${video.video_url})`,
-    '',
-    `💪 Мышцы: ${muscles}`,
-    `⏱ Длительность: ${video.duration_label ?? '?'}`,
-    `📊 Уровень: ${difficultyRu}`,
-    `👤 Автор: [${video.channel_name}](${video.channel_url ?? video.video_url})`,
+    `⏱ ${video.duration_label ?? '?'}  •  📊 ${difficultyRu}`,
+    `💪 ${muscles}`,
     '',
     `#${video.category} #sami #ежедневнаяпрактика`,
   ].join('\n');
+}
+
+function formatLinkPost(video: VideoRow): string {
+  return formatCaption(video) + `\n\n▶️ [Смотреть](${video.video_url})`;
 }
 
 export async function postVideoToChannel(
@@ -57,14 +60,13 @@ export async function postVideoToChannel(
   const config = getConfig();
 
   if (wasPostedToday(date, category)) {
-    console.log(`[poster] ${category} already posted today (${date}), skipping`);
+    console.log(`[poster] ${category} already posted today, skipping`);
     return;
   }
 
   const video = getApprovedVideo(date, category);
   if (!video) {
     console.warn(`[poster] no approved video for ${category} on ${date}`);
-    // Notify admin
     await bot.api.sendMessage(
       config.TELEGRAM_ADMIN_USER_ID,
       `⚠️ Нет одобренного видео для *${category}* на ${date}. Пост пропущен.`,
@@ -73,15 +75,47 @@ export async function postVideoToChannel(
     return;
   }
 
-  const text = formatVideoPost(video);
+  const caption = formatCaption(video);
 
+  // Try to download and post as video file (works without VPN in Russia)
+  if (isYtDlpAvailable()) {
+    try {
+      console.log(`[poster] downloading ${category} video: ${video.video_url}`);
+      const download = await downloadVideo(video.video_url, video.youtube_id);
+
+      try {
+        const msg = await bot.api.sendVideo(
+          config.TELEGRAM_CHANNEL_ID,
+          new InputFile(download.filePath),
+          {
+            caption,
+            parse_mode: 'Markdown',
+            supports_streaming: true,
+            duration: video.duration_seconds ?? undefined,
+          }
+        );
+        download.cleanup();
+        recordPost(date, category, video.id, msg.message_id);
+        console.log(`[poster] posted ${category} as video file, msgId=${msg.message_id}`);
+        return;
+      } catch (uploadErr) {
+        download.cleanup();
+        console.warn(`[poster] video upload failed, falling back to link:`, uploadErr);
+      }
+    } catch (downloadErr) {
+      console.warn(`[poster] download failed, falling back to link:`, downloadErr);
+    }
+  }
+
+  // Fallback: post as text + YouTube link
   try {
-    const msg = await bot.api.sendMessage(config.TELEGRAM_CHANNEL_ID, text, {
-      parse_mode: 'Markdown',
-      link_preview_options: { is_disabled: false },
-    });
+    const msg = await bot.api.sendMessage(
+      config.TELEGRAM_CHANNEL_ID,
+      formatLinkPost(video),
+      { parse_mode: 'Markdown', link_preview_options: { is_disabled: false } }
+    );
     recordPost(date, category, video.id, msg.message_id);
-    console.log(`[poster] posted ${category} (videoId=${video.id}) to channel, msgId=${msg.message_id}`);
+    console.log(`[poster] posted ${category} as link, msgId=${msg.message_id}`);
   } catch (err) {
     console.error(`[poster] failed to post ${category}:`, err);
     await bot.api.sendMessage(
@@ -125,7 +159,6 @@ export async function updateCheckinResults(bot: Bot, date: string): Promise<void
   const total = stats.did + stats.partial + stats.didnt;
   if (total === 0) return;
 
-  // Find the checkin message to edit (optional, not critical)
   const summary = [
     `📊 *Результаты дня ${date}*`,
     '',

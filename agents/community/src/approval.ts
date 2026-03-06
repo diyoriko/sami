@@ -6,9 +6,8 @@ import {
   setApprovalMessageId,
   getApprovalSessionByMessageId,
   setApprovalStatus,
-  VideoRow,
 } from './db';
-import { searchAllCategories, Category } from './youtube';
+import { searchAllCategories, Category, ScoredVideo } from './youtube';
 
 const CATEGORY_EMOJI: Record<Category, string> = {
   stretching: '🧘',
@@ -22,12 +21,18 @@ const DIFFICULTY_RU: Record<string, string> = {
   advanced: 'Продвинутый',
 };
 
-function formatApprovalMessage(
-  video: Omit<VideoRow, 'id'>,
-  index: number,
-  total: number,
-  category: Category
-): string {
+function formatViews(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${Math.round(n / 1_000)}K`;
+  return String(n);
+}
+
+function scoreBar(score: number): string {
+  const filled = Math.round(score / 10);
+  return '█'.repeat(filled) + '░'.repeat(10 - filled) + ` ${score}`;
+}
+
+function formatApprovalMessage(video: ScoredVideo, index: number, total: number, category: Category): string {
   const emoji = CATEGORY_EMOJI[category];
   let muscles = '';
   try {
@@ -38,31 +43,32 @@ function formatApprovalMessage(
   }
 
   return [
-    `${emoji} *Вариант ${index}/${total} — ${category}*`,
+    `${emoji} *${index}/${total} — ${category.toUpperCase()}*`,
     '',
     `*${video.title}*`,
     `👤 ${video.channel_name}`,
     `▶️ ${video.video_url}`,
     '',
-    `⏱ ${video.duration_label ?? '?'}  📊 ${DIFFICULTY_RU[video.difficulty] ?? video.difficulty}`,
+    `⏱ ${video.duration_label}  •  📊 ${DIFFICULTY_RU[video.difficulty] ?? video.difficulty}`,
     `💪 ${muscles}`,
+    `👁 ${formatViews(video.view_count)} просмотров`,
+    '',
+    `Рейтинг: \`${scoreBar(video.total_score)}\``,
+    `_(бренд: ${video.brand_score} • аудитория: ${Math.round(video.view_count / 1000)}K)_`,
   ].join('\n');
 }
 
-export async function runApprovalFlow(bot: Bot, date: string, customKeywords?: {
-  stretching?: string;
-  strength?: string;
-  mobility?: string;
-}): Promise<void> {
+export async function runApprovalFlow(
+  bot: Bot,
+  date: string,
+  customKeywords?: { stretching?: string; strength?: string; mobility?: string }
+): Promise<void> {
   const config = getConfig();
   const categories: Category[] = ['stretching', 'strength', 'mobility'];
-
-  console.log('[approval] starting video search...');
 
   await bot.api.sendMessage(
     config.TELEGRAM_ADMIN_USER_ID,
     `🔍 Ищу видео на ${date}...`,
-    { parse_mode: 'Markdown' }
   );
 
   let allVideos: Awaited<ReturnType<typeof searchAllCategories>>;
@@ -84,15 +90,14 @@ export async function runApprovalFlow(bot: Bot, date: string, customKeywords?: {
     if (videos.length === 0) {
       await bot.api.sendMessage(
         config.TELEGRAM_ADMIN_USER_ID,
-        `⚠️ Не нашёл видео для *${category}* на ${date}. Попробуй выбрать вручную.`,
-        { parse_mode: 'Markdown' }
+        `⚠️ Не нашёл видео для ${category} на ${date}.`
       );
       continue;
     }
 
     await bot.api.sendMessage(
       config.TELEGRAM_ADMIN_USER_ID,
-      `\n━━━━━━━━━━━━━━━\n${CATEGORY_EMOJI[category]} *${category.toUpperCase()}* — выбери одно видео:`,
+      `\n━━━━━━━━━━━━━━━\n${CATEGORY_EMOJI[category]} *${category.toUpperCase()}* — выбери одно:`,
       { parse_mode: 'Markdown' }
     );
 
@@ -100,22 +105,31 @@ export async function runApprovalFlow(bot: Bot, date: string, customKeywords?: {
       const v = videos[i];
       const videoId = upsertVideo(v);
       const sessionId = createApprovalSession(date, category, videoId);
-
       const text = formatApprovalMessage(v, i + 1, videos.length, category);
       const keyboard = new InlineKeyboard()
-        .text('✅ Выбрать это', `approve:${sessionId}`)
+        .text('✅ Выбрать', `approve:${sessionId}`)
         .text('❌ Пропустить', `reject:${sessionId}`);
 
       try {
-        const msg = await bot.api.sendMessage(
-          config.TELEGRAM_ADMIN_USER_ID,
-          text,
-          { parse_mode: 'Markdown', reply_markup: keyboard }
-        );
+        // Show thumbnail if available for a richer preview
+        let msg;
+        if (v.thumbnail_url) {
+          msg = await bot.api.sendPhoto(
+            config.TELEGRAM_ADMIN_USER_ID,
+            v.thumbnail_url,
+            { caption: text, parse_mode: 'Markdown', reply_markup: keyboard }
+          );
+        } else {
+          msg = await bot.api.sendMessage(
+            config.TELEGRAM_ADMIN_USER_ID,
+            text,
+            { parse_mode: 'Markdown', reply_markup: keyboard }
+          );
+        }
         setApprovalMessageId(sessionId, msg.message_id);
         totalFound++;
       } catch (err) {
-        console.error(`[approval] failed to send approval message for ${category}:`, err);
+        console.error(`[approval] failed to send for ${category}:`, err);
       }
 
       await new Promise(r => setTimeout(r, 300));
@@ -124,8 +138,7 @@ export async function runApprovalFlow(bot: Bot, date: string, customKeywords?: {
 
   await bot.api.sendMessage(
     config.TELEGRAM_ADMIN_USER_ID,
-    `\n━━━━━━━━━━━━━━━\n✅ Готово! ${totalFound} вариантов отправлено. Выбери по одному на каждую категорию.\n\n⏰ Посты выйдут: 08:00 (стретчинг), 12:00 (силовая), 17:00 (мобильность).`,
-    { parse_mode: 'Markdown' }
+    `\n━━━━━━━━━━━━━━━\n✅ ${totalFound} вариантов. Выбери по одному на каждую категорию.\n\n⏰ Посты: 08:00 стретч • 12:00 сила • 17:00 мобильность`
   );
 }
 
@@ -143,11 +156,12 @@ export function registerApprovalCallbacks(bot: Bot): void {
     setApprovalStatus(session.id, action === 'approve' ? 'approved' : 'rejected');
 
     const statusText = action === 'approve' ? '✅ Выбрано' : '❌ Пропущено';
-    await ctx.editMessageReplyMarkup({ reply_markup: new InlineKeyboard().text(statusText, 'noop') });
-    await ctx.answerCallbackQuery(action === 'approve' ? 'Видео выбрано!' : 'Пропущено');
+    try {
+      await ctx.editMessageReplyMarkup({ reply_markup: new InlineKeyboard().text(statusText, 'noop') });
+    } catch { /* photo messages need different edit */ }
+    await ctx.answerCallbackQuery(action === 'approve' ? 'Выбрано!' : 'Пропущено');
   });
 
-  // No-op callback for already-decided buttons
   bot.callbackQuery('noop', async (ctx) => {
     await ctx.answerCallbackQuery();
   });
