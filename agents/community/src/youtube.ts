@@ -1,87 +1,141 @@
+/**
+ * YouTube search with SAMI brand alignment scoring.
+ *
+ * SAMI values (from Figma Strategy):
+ * - "Тренируюсь, чтобы жить лучше, а не быстрее похудеть" → NO weight loss content
+ * - "Тело = партнёр, не проект" → no "fix your body" framing
+ * - "Нужен только коврик" → bodyweight/no equipment only
+ * - "Поддержка, не соревнование" → no competitive/ranking content
+ * - Tone: спокойно, конкретно. Архетип: Опекун + Мудрец (не инфлюенсер)
+ * - "Красота из дисциплины" → instructional, methodical, aesthetic
+ */
+
 import { getConfig } from './config';
 import { wasPostedRecently, VideoRow } from './db';
 
 export type Category = 'stretching' | 'strength' | 'mobility';
 
-// Russian-first queries aligned with SAMI values:
-// Calm, instructional, bodyweight, no hype, audience 25-45
+// Russian-first queries. "Только коврик" — no equipment framing.
 const CATEGORY_QUERIES: Record<Category, string[]> = {
   stretching: [
-    'утренняя растяжка дома',
-    'растяжка всего тела для начинающих',
-    'стретчинг для гибкости',
-    'утренняя разминка 10 минут',
-    'растяжка после тренировки',
+    'утренняя растяжка дома на коврике',
+    'растяжка всего тела для начинающих без инвентаря',
+    'стретчинг для гибкости дома',
+    'утренняя разминка суставов 10 минут',
+    'растяжка после тренировки восстановление',
   ],
   strength: [
-    'силовая тренировка дома без инвентаря',
-    'тренировка с весом тела',
-    'функциональная тренировка дома',
-    'силовая тренировка 20 минут',
-    'бодивейт тренировка для начинающих',
+    'силовая тренировка дома без инвентаря на коврике',
+    'тренировка с весом тела для начинающих',
+    'функциональная тренировка дома без оборудования',
+    'бодивейт тренировка 20 минут дома',
+    'силовая тренировка без гантелей',
   ],
   mobility: [
-    'мобильность суставов тренировка',
-    'мобильность тазобедренных суставов',
-    'суставная гимнастика утром',
-    'мобильность позвоночника',
-    'упражнения на подвижность суставов',
+    'мобильность суставов тренировка дома',
+    'мобильность тазобедренных суставов на коврике',
+    'суставная гимнастика утром для начинающих',
+    'мобильность позвоночника упражнения',
+    'подвижность суставов ежедневная практика',
   ],
 };
 
-// Hype / noise / wrong-audience signals → penalty
-const HYPE_PATTERNS = [
-  /безумн|сумасшедш/i,
-  /трансформац|до и после/i,
-  /похудеть за \d|сжечь жир за \d/i,
-  /best ever|insane|crazy|extreme|epic|incredible/i,
-  /burn fat fast|lose weight fast/i,
-  /не поверишь/i,
+// ─── PENALTY PATTERNS ────────────────────────────────────────────────────────
+
+// Anti-value 1: "жить лучше, а НЕ быстрее похудеть"
+const WEIGHT_LOSS_PATTERNS = [
+  /похудеть за \d|похудеть быстро/i,
+  /сжечь жир|жиросжигание|fat burn|burn fat/i,
+  /до и после|before.?after|трансформация тела/i,
+  /убрать живот|убрать бока|плоский живот/i,
+  /lose weight|weight loss/i,
+  /diet|диета для/i,
 ];
 
-// SAMI brand: calm, instructional, rhythm > bursts
-const CALM_PATTERNS = [
-  /практика|программа|комплекс|система|план/i,
+// Anti-value 2: "не проект" — aggressive "fix yourself" language
+const FIX_BODY_PATTERNS = [
+  /исправь|прокачай с нуля/i,
+  /идеальное тело|perfect body/i,
+  /убери целлюлит/i,
+];
+
+// Anti-value 3: "поддержка, не соревнование"
+const COMPETITION_PATTERNS = [
+  /соревновани|таблица лидеров|leaderboard/i,
+  /vs |против |challenge accepted/i,
+  /рекорд за \d|world record/i,
+];
+
+// Anti-tone: агрессивный мотивационный сленг
+const HYPE_PATTERNS = [
+  /безумн|сумасшедш|insane|crazy|extreme|epic/i,
+  /лучшая тренировка всех времён|best ever|most intense/i,
+  /не поверишь|you won't believe/i,
+  /🔥{2,}|💪{3,}/,
+];
+
+// Anti-value 4: "только коврик" — equipment required
+const EQUIPMENT_PATTERNS = [
+  /гантели|со штангой|тренажёр|kettlebell|dumbbell|barbell/i,
+  /в зале|в спортзале|gym workout(?! alternative)/i,
+];
+
+// Wrong audience
+const WRONG_AUDIENCE_PATTERNS = [
+  /детей|kids|беременн|pregnancy|пожилых|senior for/i,
+];
+
+// ─── BONUS PATTERNS ──────────────────────────────────────────────────────────
+
+// Core value: "только коврик", bodyweight
+const BODYWEIGHT_PATTERNS = [
+  /без инвентаря|без оборудования|no equipment|bodyweight|бодивейт/i,
+  /на коврике|дома|home workout/i,
+];
+
+// SAMI tone: спокойно, конкретно, Опекун + Мудрец
+const CALM_INSTRUCTIONAL_PATTERNS = [
+  /практика|программа|комплекс|система/i,
   /routine|practice|program|tutorial|guide|flow/i,
   /для начинающих|beginner/i,
   /ежедневн|каждый день|daily/i,
-  /дыхание|breathwork|breath/i,
-  /mindful|осознанн/i,
-  /постепенно|медленно|gentle|slow/i,
   /восстановление|recovery/i,
+  /постепенно|медленно|gentle|slow/i,
+  /правильная техника|proper form|техника выполнения/i,
 ];
 
+// SAMI content pillars
 const SAMI_CONTENT_PATTERNS = [
   /мобильность|mobility/i,
   /гибкость|flexibility/i,
   /растяжка|stretching|stretch/i,
   /суставы|joints/i,
-  /без инвентаря|no equipment|bodyweight|бодивейт/i,
-  /дома|home workout/i,
+  /дыхание|breathwork|breath/i,
+  /осанка|posture/i,
 ];
 
-function scoreBrandAlignment(title: string, description: string, channelName: string): number {
+// ─── SCORING ─────────────────────────────────────────────────────────────────
+
+function scoreBrandAlignment(title: string, description: string): number {
   const text = (title + ' ' + description).toLowerCase();
   let score = 50;
 
-  for (const pattern of HYPE_PATTERNS) {
-    if (pattern.test(text)) score -= 15;
-  }
+  // Heavy penalties (anti-SAMI values)
+  for (const p of WEIGHT_LOSS_PATTERNS) if (p.test(text)) score -= 25;
+  for (const p of FIX_BODY_PATTERNS) if (p.test(text)) score -= 20;
+  for (const p of COMPETITION_PATTERNS) if (p.test(text)) score -= 15;
+  for (const p of HYPE_PATTERNS) if (p.test(text)) score -= 15;
+  for (const p of EQUIPMENT_PATTERNS) if (p.test(text)) score -= 20;
+  for (const p of WRONG_AUDIENCE_PATTERNS) if (p.test(text)) score -= 50;
 
-  // ALL CAPS title = hype signal
+  // ALL CAPS title = hype / anti-calm
   const upperRatio = (title.match(/[A-ZА-ЯЁ]/g) || []).length / title.length;
   if (upperRatio > 0.6) score -= 20;
 
-  // Wrong audience
-  if (/детей|kids|беременн|pregnancy|пожилых|senior/.test(text)) score -= 40;
-
-  for (const pattern of CALM_PATTERNS) {
-    if (pattern.test(text)) score += 8;
-  }
-
-  for (const pattern of SAMI_CONTENT_PATTERNS) {
-    if (pattern.test(text)) score += 5;
-  }
+  // Bonuses (pro-SAMI values)
+  for (const p of BODYWEIGHT_PATTERNS) if (p.test(text)) score += 12;
+  for (const p of CALM_INSTRUCTIONAL_PATTERNS) if (p.test(text)) score += 8;
+  for (const p of SAMI_CONTENT_PATTERNS) if (p.test(text)) score += 6;
 
   return Math.max(0, Math.min(100, score));
 }
@@ -97,7 +151,8 @@ function scoreViewCount(viewCount: number): number {
 }
 
 function scoreDuration(seconds: number): number {
-  if (seconds >= 480 && seconds <= 1200) return 100; // 8-20 min sweet spot
+  // SAMI audience (25-45): 8-20 min sweet spot
+  if (seconds >= 480 && seconds <= 1200) return 100;
   if (seconds >= 300 && seconds < 480) return 65;
   if (seconds > 1200 && seconds <= 1500) return 70;
   if (seconds > 1500 && seconds <= 1800) return 40;
@@ -107,6 +162,8 @@ function scoreDuration(seconds: number): number {
 export function computeTotalScore(brandScore: number, viewScore: number, durationScore: number): number {
   return Math.round(brandScore * 0.50 + viewScore * 0.35 + durationScore * 0.15);
 }
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
 
 function parseDuration(iso: string): { seconds: number; label: string } {
   const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
@@ -142,11 +199,12 @@ function guessMuscles(title: string, category: Category): string[] {
   for (const [re, label] of muscleMap) {
     if (re.test(text)) muscles.push(label);
   }
-  if (muscles.length === 0) {
-    return { stretching: ['всё тело'], strength: ['всё тело'], mobility: ['суставы, всё тело'] }[category];
-  }
-  return muscles;
+  return muscles.length > 0
+    ? muscles
+    : { stretching: ['всё тело'], strength: ['всё тело'], mobility: ['суставы, всё тело'] }[category];
 }
+
+// ─── API TYPES ───────────────────────────────────────────────────────────────
 
 interface YouTubeSearchItem {
   id: { videoId: string };
@@ -170,6 +228,8 @@ async function fetchJson<T>(url: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// ─── EXPORTS ─────────────────────────────────────────────────────────────────
+
 export type ScoredVideo = Omit<VideoRow, 'id'> & {
   search_query: string;
   view_count: number;
@@ -190,7 +250,7 @@ export async function searchVideos(
   searchUrl.searchParams.set('part', 'snippet');
   searchUrl.searchParams.set('q', query);
   searchUrl.searchParams.set('type', 'video');
-  searchUrl.searchParams.set('videoDuration', 'medium');
+  searchUrl.searchParams.set('videoDuration', 'medium'); // 4-20 min
   searchUrl.searchParams.set('videoEmbeddable', 'true');
   searchUrl.searchParams.set('maxResults', '20');
   searchUrl.searchParams.set('relevanceLanguage', 'ru');
@@ -228,7 +288,7 @@ export async function searchVideos(
     const channelName = item.snippet.channelTitle;
     const thumbnail = item.snippet.thumbnails.high?.url ?? item.snippet.thumbnails.default?.url ?? null;
 
-    const brandScore = scoreBrandAlignment(title, description, channelName);
+    const brandScore = scoreBrandAlignment(title, description);
     const viewScore = scoreViewCount(viewCount);
     const durationScore = scoreDuration(seconds);
     const totalScore = computeTotalScore(brandScore, viewScore, durationScore);
@@ -265,7 +325,7 @@ export async function searchAllCategories(
     try {
       result[cat] = await searchVideos(cat, 3, keywords?.[cat]);
       const top = result[cat][0];
-      console.log(`[youtube] ${cat}: ${result[cat].length} found, best="${top?.title}" score=${top?.total_score}`);
+      console.log(`[youtube] ${cat}: ${result[cat].length} found, best="${top?.title}" score=${top?.total_score} brand=${top?.brand_score}`);
     } catch (err) {
       console.error(`[youtube] error searching ${cat}:`, err);
       result[cat] = [];
