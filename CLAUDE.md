@@ -68,17 +68,18 @@ Content Curator (еженедельно)
 - Analytics: ежедневно 00:30, еженедельно вс 10:00 — собирает метрики, пишет JSON
 - Content Curator: пн 09:00 — генерирует контент-план на неделю
 
-**⚠️ Известная дыра — метрики не доходят до стратега:**
-- Community/analytics отчёты живут на Railway (`/app/reports/...`), НЕ синхронизируются на Mac
-- Стратег на Mac не видит эти данные
-- Решение (P1): community bot должен отправлять JSON-отчёт в фиксированный Telegram-канал или через webhook, стратег читает оттуда
+**Синхронизация метрик стратегу — ✅ реализовано:**
+- Community bot поднимает HTTP сервер на PORT=3000
+- Endpoints: `GET /report/community` и `GET /report/analytics` (JSON), `GET /health`
+- Публичный URL: `https://courageous-happiness-production.up.railway.app`
+- Стратег делает `curl` перед запуском, сохраняет в `reports/community/.internal/` и `reports/analytics/.internal/`
+- Отчёты появляются после первого запуска analytics (00:30 МСК)
 
 ### 🔜 Следующие шаги (приоритет)
 
-**P1 — Синхронизация метрик стратегу:**
-- Community bot пушит `latest.json` в Telegram (сохранять как файл в избранное / специальный чат)
-- ИЛИ: добавить в бот HTTP endpoint `/report` (Railway expose port) → стратег делает curl
-- Пока не сделано: стратег работает без актуальных данных community
+**P1 — ✅ выполнено (метрики синхронизированы)**
+
+**P2 — SAMI мобильное приложение (FlutterFlow):**
 
 **P2 — SAMI мобильное приложение (FlutterFlow):**
 Полный список задач: `APP_TASKS.md`
