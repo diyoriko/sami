@@ -77,11 +77,11 @@ async function main(): Promise<void> {
     const today = todayMsk();
     const tomorrow = tomorrowMsk();
 
-    // Find which date has approved videos: today first, then tomorrow
+    // Find which date has approved videos: tomorrow first (where /search writes), then today
     const categories = ['stretching', 'strength', 'mobility'] as const;
-    const hasToday = categories.some(c => getApprovedVideo(today, c) !== null);
     const hasTomorrow = categories.some(c => getApprovedVideo(tomorrow, c) !== null);
-    const date = hasToday ? today : hasTomorrow ? tomorrow : null;
+    const hasToday = categories.some(c => getApprovedVideo(today, c) !== null);
+    const date = hasTomorrow ? tomorrow : hasToday ? today : null;
 
     if (!date) {
       await ctx.reply(`⚠️ Нет одобренных видео ни на ${today}, ни на ${tomorrow}. Сначала /search и выбери видео.`);
