@@ -166,7 +166,24 @@ async function main(): Promise<void> {
   });
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   console.error('[sami-community] fatal error:', err);
+  // Try to alert admin before dying
+  try {
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    const adminId = process.env.TELEGRAM_ADMIN_USER_ID;
+    if (token && adminId) {
+      const url = `https://api.telegram.org/bot${token}/sendMessage`;
+      await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: Number(adminId),
+          text: `\u26a0\ufe0f *SAMI Community Bot* — fatal crash\n\n\`${String(err)}\``,
+          parse_mode: 'Markdown',
+        }),
+      });
+    }
+  } catch { /* nothing we can do */ }
   process.exit(1);
 });

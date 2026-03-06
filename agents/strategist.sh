@@ -38,6 +38,23 @@ CLAUDE_MODEL="${STRATEGIST_CLAUDE_MODEL:-claude-sonnet-4-6}"
 MAX_RETRIES="${STRATEGIST_MAX_RETRIES:-5}"
 RETRY_SLEEP_SEC="${STRATEGIST_RETRY_SLEEP_SEC:-12}"
 
+# Emergency Telegram alert if script crashes before normal notification flow
+_emergency_notified=0
+emergency_notify() {
+  [[ "$_emergency_notified" -eq 1 ]] && return
+  _emergency_notified=1
+  local exit_code="$?"
+  if [[ ! -f "$LATEST_JSON" ]] || ! grep -q '"status"' "$LATEST_JSON" 2>/dev/null; then
+    if command -v node >/dev/null 2>&1 && [[ -f "$TELEGRAM_NOTIFY_SCRIPT" ]]; then
+      node "$TELEGRAM_NOTIFY_SCRIPT" \
+        --agent strategist \
+        --status "crash" \
+        --summary "Strategist упал до завершения (exit $exit_code). Проверь логи." 2>/dev/null || true
+    fi
+  fi
+}
+trap emergency_notify EXIT
+
 COMMUNITY_AGENT_URL="${COMMUNITY_AGENT_URL:-https://courageous-happiness-production.up.railway.app}"
 COMMUNITY_REPORT_LOCAL="$PROJECT_ROOT/reports/community/.internal/latest.json"
 ANALYTICS_REPORT_LOCAL="$PROJECT_ROOT/reports/analytics/.internal/latest.json"
@@ -585,4 +602,5 @@ run_telegram_notify "$STATUS"
 write_latest_json "$STATUS" "$RC" "$NOTIFICATION_STATUS"
 write_latest_md "$STATUS" "$RC"
 echo "[$STAMP_UTC] status=$STATUS code=$RC report=$OUT_PATH" >> "$LOG_PATH"
+_emergency_notified=1
 exit "$RC"

@@ -6,6 +6,7 @@ import { runApprovalFlow } from './approval';
 import { readCommunityPacket, writeCommunityReport } from './strategist-sync';
 import { runDailyAnalytics, runWeeklyAnalytics } from './analytics';
 import { runContentCuration } from './content-curator';
+import { notifyAdmin } from './notify-admin';
 
 let newMembersToday = 0;
 
@@ -39,30 +40,45 @@ export function startScheduler(bot: Bot): void {
   // 19:00 — search videos for TOMORROW & send approval to admin
   cron.schedule(config.CRON_SEARCH_VIDEOS, async () => {
     console.log('[scheduler] running video search & approval flow');
-    const packet = readCommunityPacket();
-    const date = tomorrowDate();
-    await runApprovalFlow(bot, date, {
-      stretching: packet.search_keywords?.stretching,
-      strength: packet.search_keywords?.strength,
-      mobility: packet.search_keywords?.mobility,
-    });
+    try {
+      const packet = readCommunityPacket();
+      const date = tomorrowDate();
+      await runApprovalFlow(bot, date, {
+        stretching: packet.search_keywords?.stretching,
+        strength: packet.search_keywords?.strength,
+        mobility: packet.search_keywords?.mobility,
+      });
+    } catch (err) {
+      console.error('[scheduler] video search failed:', err);
+      await notifyAdmin(bot, 'Community', `Поиск видео упал:\n\`${String(err)}\``);
+    }
   }, { timezone: 'Europe/Moscow' });
 
   // 08:00 — post all 3 videos simultaneously
   cron.schedule(config.CRON_POST_ALL, async () => {
     console.log('[scheduler] posting all 3 videos');
-    const date = todayDate();
-    await Promise.all([
-      postVideoToChannel(bot, date, 'stretching'),
-      postVideoToChannel(bot, date, 'strength'),
-      postVideoToChannel(bot, date, 'mobility'),
-    ]);
+    try {
+      const date = todayDate();
+      await Promise.all([
+        postVideoToChannel(bot, date, 'stretching'),
+        postVideoToChannel(bot, date, 'strength'),
+        postVideoToChannel(bot, date, 'mobility'),
+      ]);
+    } catch (err) {
+      console.error('[scheduler] posting failed:', err);
+      await notifyAdmin(bot, 'Community', `Публикация видео упала:\n\`${String(err)}\``);
+    }
   }, { timezone: 'Europe/Moscow' });
 
   // 22:00 — post evening check-in
   cron.schedule(config.CRON_CHECKIN, async () => {
     console.log('[scheduler] posting check-in');
-    await postCheckin(bot, todayDate());
+    try {
+      await postCheckin(bot, todayDate());
+    } catch (err) {
+      console.error('[scheduler] checkin failed:', err);
+      await notifyAdmin(bot, 'Community', `Чекин упал:\n\`${String(err)}\``);
+    }
   }, { timezone: 'Europe/Moscow' });
 
   // 23:55 — write daily report for strategist
@@ -81,6 +97,7 @@ export function startScheduler(bot: Bot): void {
       await runDailyAnalytics(bot, todayDate());
     } catch (err) {
       console.error('[scheduler] daily analytics failed:', err);
+      await notifyAdmin(bot, 'Analytics', `Ежедневная аналитика упала:\n\`${String(err)}\``);
     }
   }, { timezone: 'Europe/Moscow' });
 
@@ -91,6 +108,7 @@ export function startScheduler(bot: Bot): void {
       await runWeeklyAnalytics(bot, currentWeek());
     } catch (err) {
       console.error('[scheduler] weekly analytics failed:', err);
+      await notifyAdmin(bot, 'Analytics', `Недельный дашборд упал:\n\`${String(err)}\``);
     }
   }, { timezone: 'Europe/Moscow' });
 
@@ -103,6 +121,7 @@ export function startScheduler(bot: Bot): void {
       await runContentCuration(bot, currentWeek());
     } catch (err) {
       console.error('[scheduler] content curation failed:', err);
+      await notifyAdmin(bot, 'Content Curator', `Контент-план упал:\n\`${String(err)}\``);
     }
   }, { timezone: 'Europe/Moscow' });
 
