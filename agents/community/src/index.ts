@@ -66,18 +66,40 @@ async function main(): Promise<void> {
     await runApprovalFlow(bot, date);
   });
 
-  // /post command — post all 3 videos for today
+  // /post command — post all 3 videos (today first, then tomorrow if nothing approved for today)
   bot.command('post', async (ctx) => {
     if (ctx.from?.id !== config.TELEGRAM_ADMIN_USER_ID) return;
     const { postVideoToChannel } = await import('./poster');
-    const date = new Date().toISOString().slice(0, 10);
-    await ctx.reply('📤 Публикую все 3 видео...');
-    await Promise.all([
+    const { getApprovedVideo } = await import('./db');
+
+    const today = new Date().toISOString().slice(0, 10);
+    const tomorrow = new Date();
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    const tomorrowDate = tomorrow.toISOString().slice(0, 10);
+
+    // Pick date: use today if any approved videos exist, otherwise try tomorrow
+    const categories = ['stretching', 'strength', 'mobility'] as const;
+    const hasToday = categories.some(c => getApprovedVideo(today, c) !== null);
+    const date = hasToday ? today : tomorrowDate;
+
+    if (!hasToday && !categories.some(c => getApprovedVideo(tomorrowDate, c) !== null)) {
+      await ctx.reply(`⚠️ Нет одобренных видео ни на ${today}, ни на ${tomorrowDate}. Сначала запусти /search.`);
+      return;
+    }
+
+    await ctx.reply(`📤 Публикую видео на ${date}...`);
+    const results = await Promise.allSettled([
       postVideoToChannel(bot, date, 'stretching'),
       postVideoToChannel(bot, date, 'strength'),
       postVideoToChannel(bot, date, 'mobility'),
     ]);
-    await ctx.reply('✅ Готово');
+
+    const failed = results.filter(r => r.status === 'rejected');
+    if (failed.length > 0) {
+      await ctx.reply(`⚠️ Опубликовано с ошибками: ${failed.length}/3 не удалось.`);
+    } else {
+      await ctx.reply('✅ Готово');
+    }
   });
 
   // /reset command — clear tomorrow's approved videos so you can re-search
