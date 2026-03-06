@@ -1,6 +1,7 @@
 import { Bot, session } from 'grammy';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as http from 'http';
 import { getConfig } from './config';
 import { getDb } from './db';
 import { registerModeration } from './moderation';
@@ -110,6 +111,32 @@ async function main(): Promise<void> {
 
   // Start scheduler
   startScheduler(bot);
+
+  // HTTP report server — стратег читает отсюда метрики
+  const port = parseInt(process.env.PORT || '3000');
+  const reportBase = path.resolve(__dirname, '..');
+  const reportFiles: Record<string, string> = {
+    '/report/community': path.resolve(reportBase, config.COMMUNITY_REPORT_DIR, 'latest.json'),
+    '/report/analytics': path.resolve(reportBase, config.ANALYTICS_REPORT_DIR, 'latest.json'),
+  };
+
+  http.createServer((req, res) => {
+    if (req.url === '/health') {
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end('ok');
+      return;
+    }
+    const filePath = reportFiles[req.url ?? ''];
+    if (filePath && fs.existsSync(filePath)) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(fs.readFileSync(filePath, 'utf8'));
+    } else {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'not ready yet' }));
+    }
+  }).listen(port, () => {
+    console.log(`[http] report server on :${port} — /report/community /report/analytics /health`);
+  });
 
   // Start bot
   console.log('[sami-community] starting bot...');

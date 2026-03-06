@@ -38,6 +38,23 @@ CLAUDE_MODEL="${STRATEGIST_CLAUDE_MODEL:-claude-sonnet-4-6}"
 MAX_RETRIES="${STRATEGIST_MAX_RETRIES:-5}"
 RETRY_SLEEP_SEC="${STRATEGIST_RETRY_SLEEP_SEC:-12}"
 
+COMMUNITY_AGENT_URL="${COMMUNITY_AGENT_URL:-https://courageous-happiness-production.up.railway.app}"
+COMMUNITY_REPORT_LOCAL="$PROJECT_ROOT/reports/community/.internal/latest.json"
+ANALYTICS_REPORT_LOCAL="$PROJECT_ROOT/reports/analytics/.internal/latest.json"
+
+# Fetch fresh metrics from Railway before building prompt
+mkdir -p "$(dirname "$COMMUNITY_REPORT_LOCAL")" "$(dirname "$ANALYTICS_REPORT_LOCAL")"
+if curl -sf --max-time 10 "$COMMUNITY_AGENT_URL/report/community" -o "$COMMUNITY_REPORT_LOCAL" 2>/dev/null; then
+  echo "[strategist] fetched community report from Railway"
+else
+  echo "[strategist] community report unavailable (ok, skipping)"
+fi
+if curl -sf --max-time 10 "$COMMUNITY_AGENT_URL/report/analytics" -o "$ANALYTICS_REPORT_LOCAL" 2>/dev/null; then
+  echo "[strategist] fetched analytics report from Railway"
+else
+  echo "[strategist] analytics report unavailable (ok, skipping)"
+fi
+
 CONTEXT_FILES=(
   "$CONTEXT_ROOT/STRATEGIST_BRIEF.md"
   "$CONTEXT_ROOT/SAMI_PRD_v1.md"
@@ -45,9 +62,8 @@ CONTEXT_FILES=(
   "$CONTEXT_ROOT/SAMI_14_DAY_PLAN.md"
   "$CONTEXT_ROOT/APP_TASKS.md"
   "$CONTEXT_ROOT/COMMUNITY_TASKS.md"
-  # Community & Analytics reports (written by Railway agent, synced here when available)
-  "$PROJECT_ROOT/reports/community/.internal/latest.json"
-  "$PROJECT_ROOT/reports/analytics/.internal/latest.json"
+  "$COMMUNITY_REPORT_LOCAL"
+  "$ANALYTICS_REPORT_LOCAL"
 )
 
 write_latest_json() {
