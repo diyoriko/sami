@@ -13,15 +13,15 @@ This repository is for building small autonomous agents for the SAMI project.
 
 | # | Агент | Статус | Что делает | Расписание |
 |---|---|---|---|---|
-| 1 | **Strategist** | ✅ работает | Стратегические отчёты, COMMUNITY_PACKET для SMM, Google Tasks | 3x/день: 10:00, 15:00, 20:00 МСК (launchd) |
-| 2 | **Community (SMM)** | ✅ работает на Railway | YouTube поиск → approval → посты в @sami_daily, чекины, модерация | 19:00 поиск, 08/12/17 посты, 21:00 чекин (node-cron) |
-| 3 | **Analytics** | 🔲 не начат | Метрики Telegram (рост, engagement, check-in stats), еженедельный дашборд | 1x/день 00:30 + 1x/неделю (вс) |
-| 4 | **Content Curator** | 🔲 не начат | Расширенный контент помимо YouTube: статьи, tips, челленджи, мемы. Контент-план на неделю | 1x/неделю (пн утро) |
+| 1 | **Strategist** | ✅ работает | Лаконичный стратегический отчёт + COMMUNITY_PACKET, Telegram DM | 1x/день 09:00 МСК (launchd) |
+| 2 | **Community (SMM)** | ✅ на Railway | YouTube поиск → approval → посты в @sami_daily, чекины, модерация | 19:00 поиск, 08/12/17 посты, 21:00 чекин (node-cron) |
+| 3 | **Analytics** | ✅ модуль в community боте | Метрики Telegram (рост, engagement, check-in stats), еженедельный дашборд | 1x/день 00:30 + 1x/неделю вс 10:00 (node-cron) |
+| 4 | **Content Curator** | ✅ модуль в community боте | Контент-план на неделю: tips, челленджи, мотивация, факты, опросы | 1x/неделю пн 09:00 (node-cron) |
 
 ### Как агенты связаны между собой
 
 ```
-Strategist (3x/день)
+Strategist (1x/день, 09:00 МСК)
   ├── пишет: reports/strategist/.internal/latest.json + COMMUNITY_PACKET
   ├── читает: reports/community/.internal/latest.json (стат. от Community)
   └── читает: reports/analytics/.internal/latest.json (метрики от Analytics)
@@ -48,7 +48,7 @@ Content Curator (еженедельно)
 ### ✅ Сделано
 
 **Strategist (полностью работает):**
-- launchd plist установлен, запуск 3x/день
+- launchd plist установлен, запуск 1x/день (09:00 МСК)
 - Claude-based deep research + отчёты на русском (claude-sonnet-4-6)
 - Google Tasks sync — таска с ссылкой на локальный отчёт
 - COMMUNITY_PACKET генерируется в каждом отчёте
@@ -106,7 +106,7 @@ Content Curator (еженедельно)
 ## Project Context
 
 Active agents:
-- `strategist` — ✅ работает в продакшне (3x/день, launchd на Mac)
+- `strategist` — ✅ работает в продакшне (1x/день 09:00 МСК, launchd на Mac)
 - `community` — ✅ работает на Railway (24/7, автодеплой из GitHub)
 - `analytics` — 🔲 не начат
 - `content-curator` — 🔲 не начат

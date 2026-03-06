@@ -95,6 +95,15 @@ function migrate(db: Database.Database): void {
       waitlist_new INTEGER DEFAULT 0,
       written_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS channel_stats (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      date TEXT UNIQUE NOT NULL,
+      subscriber_count INTEGER DEFAULT 0,
+      group_member_count INTEGER DEFAULT 0,
+      posts_today INTEGER DEFAULT 0,
+      collected_at TEXT DEFAULT (datetime('now'))
+    );
   `);
 }
 
@@ -275,4 +284,42 @@ export function writeDailyStats(date: string, newMembers: number): void {
       new_members = excluded.new_members,
       written_at = datetime('now')
   `).run(date, stats.did, stats.partial, stats.didnt, newMembers);
+}
+
+// --- Channel stats (for analytics agent) ---
+
+export function writeChannelStats(date: string, subscriberCount: number, groupMemberCount: number, postsToday: number): void {
+  getDb().prepare(`
+    INSERT INTO channel_stats (date, subscriber_count, group_member_count, posts_today)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(date) DO UPDATE SET
+      subscriber_count = excluded.subscriber_count,
+      group_member_count = excluded.group_member_count,
+      posts_today = excluded.posts_today,
+      collected_at = datetime('now')
+  `).run(date, subscriberCount, groupMemberCount, postsToday);
+}
+
+export function getChannelStats(date: string): { subscriber_count: number; group_member_count: number; posts_today: number } | null {
+  return getDb().prepare(`SELECT subscriber_count, group_member_count, posts_today FROM channel_stats WHERE date = ?`).get(date) as any;
+}
+
+export function getWeeklyStats(startDate: string, endDate: string): Array<{
+  date: string; checkin_did: number; checkin_partial: number; checkin_didnt: number;
+  new_members: number; subscriber_count: number; group_member_count: number;
+}> {
+  return getDb().prepare(`
+    SELECT d.date, d.checkin_did, d.checkin_partial, d.checkin_didnt, d.new_members,
+           COALESCE(c.subscriber_count, 0) as subscriber_count,
+           COALESCE(c.group_member_count, 0) as group_member_count
+    FROM daily_stats d
+    LEFT JOIN channel_stats c ON c.date = d.date
+    WHERE d.date >= ? AND d.date <= ?
+    ORDER BY d.date
+  `).all(startDate, endDate) as any[];
+}
+
+export function getPostCountForDate(date: string): number {
+  const row = getDb().prepare(`SELECT COUNT(*) as cnt FROM posts WHERE date = ?`).get(date) as { cnt: number };
+  return row.cnt;
 }

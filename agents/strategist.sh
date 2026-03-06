@@ -22,6 +22,7 @@ LATEST_MD="$INTERNAL_DIR/latest.md"
 LOG_PATH="$INTERNAL_DIR/strategist.log"
 LATEST_NOTIFICATION_JSON="$INTERNAL_DIR/latest-notification.json"
 GOOGLE_SYNC_SCRIPT="${SAMI_AGENTS_DIR:-$SCRIPT_DIR}/google-calendar-sync.mjs"
+TELEGRAM_NOTIFY_SCRIPT="${SAMI_AGENTS_DIR:-$SCRIPT_DIR}/telegram-notify.mjs"
 OPENAI_RUNNER_SCRIPT="${SAMI_AGENTS_DIR:-$SCRIPT_DIR}/strategist-openai.mjs"
 
 TIMEOUT_SEC="${STRATEGIST_TIMEOUT_SEC:-1200}"
@@ -313,6 +314,34 @@ PY
   printf '%s\n' "$sync_status"
 }
 
+run_telegram_notify() {
+  local status="$1"
+
+  if [[ "$DRY_RUN" == "1" && "$NOTIFY_ON_DRY_RUN" != "1" ]]; then
+    printf '[strategist] telegram notify skipped: dry-run\n' >> "$RAW_OUT_PATH"
+    return 0
+  fi
+
+  if [[ ! -f "$TELEGRAM_NOTIFY_SCRIPT" ]]; then
+    printf '[strategist] telegram notify skipped: script missing\n' >> "$RAW_OUT_PATH"
+    return 0
+  fi
+
+  if ! command -v node >/dev/null 2>&1; then
+    printf '[strategist] telegram notify skipped: node missing\n' >> "$RAW_OUT_PATH"
+    return 0
+  fi
+
+  if node "$TELEGRAM_NOTIFY_SCRIPT" \
+    --agent strategist \
+    --status "$status" \
+    --report "$OUT_PATH" >> "$RAW_OUT_PATH" 2>&1; then
+    printf '[strategist] telegram notify sent\n' >> "$RAW_OUT_PATH"
+  else
+    printf '[strategist] telegram notify failed\n' >> "$RAW_OUT_PATH"
+  fi
+}
+
 python3 - "$PROMPT_PATH" "${CONTEXT_FILES[@]}" <<'PY'
 import sys
 from pathlib import Path
@@ -324,33 +353,41 @@ for p in files:
     if p.exists():
         text = p.read_text(encoding='utf-8', errors='ignore').strip()
         if text:
-            parts.append(f"## Source: {p.name}\n\n{text[:12000]}")
+            parts.append(f"## Source: {p.name}\n\n{text[:6000]}")
 
 context = "\n\n".join(parts)
 
-prompt = f"""Ты стратегический агент проекта Sami.
+prompt = f"""Ты стратегический агент проекта Sami. Запуск: 1 раз в день утром.
 
 Цель: построить Telegram-сообщество так, чтобы оно конвертировалось в будущий запуск приложения.
 
-Требования к ответу:
-1) Пиши на русском, по делу.
-2) Дай стратегию на 90 дней, но с конкретным фокусом на ближайшие 14 дней.
-3) Обязательно включи блоки:
-- Позиционирование сообщества
-- ICP/сегменты аудитории
-- Ценность сообщества до релиза приложения
-- Контентные рубрики и ритм публикаций
-- Growth loops (как участники приводят новых)
-- Конверсионная воронка: подписчик -> активный участник -> waitlist приложения -> бета-пользователь
-- Метрики (North Star + ведущие и отстающие)
-- Эксперименты на 14 дней (таблица: гипотеза, шаги, метрика успеха, дедлайн)
-- Риски и анти-паттерны
-- 5 решений, которые нужно принять владельцу проекта
-4) Добавь секцию "Ресерч": минимум 5 внешних наблюдений/инсайтов с источниками и датами.
-5) Формат ответа: валидный Markdown.
-6) Начни отчет с заголовка: "# Sami Strategist Report — YYYY-MM-DD".
-7) Сразу после заголовка дай раздел "## Резюме" с 5-7 краткими буллетами.
-8) Не используй MCP/Figma или любые инструментальные вызовы. Никаких команд и работы с файлами, только итоговый текстовый отчёт.
+ВАЖНО — экономия токенов:
+- Будь лаконичен. Не повторяй контекст обратно.
+- Каждый раздел: 3-5 конкретных пунктов, без воды.
+- Общий объём отчёта: до 3000 слов (не больше).
+- Фокус на actionable items, а не описания.
+
+Обязательные блоки:
+1. ## Резюме — 5-7 кратких буллетов (самое важное)
+2. ## Фокус дня — 3 конкретных действия на сегодня
+3. ## Эксперименты — таблица: гипотеза, шаги, метрика, дедлайн (только активные)
+4. ## Метрики — North Star + 3-4 ведущих показателя (цифры, не описания)
+5. ## Решения — 3 решения для владельца проекта
+6. ## Ресерч — 3 внешних инсайта с источниками
+
+Также включи (кратко, по 2-3 пункта):
+- Позиционирование и ICP
+- Контентные рубрики
+- Growth loops
+- Риски
+
+Обязательно в конце добавь блок:
+// COMMUNITY_PACKET_START
+{{JSON с полями: week_focus, content_themes, challenge_active, challenge_name, search_keywords (stretching/strength/mobility), community_priority}}
+// COMMUNITY_PACKET_END
+
+Формат: валидный Markdown. Заголовок: "# Sami Strategist Report — YYYY-MM-DD".
+Пиши на русском. Только текстовый отчёт, без команд и файловых операций.
 
 Контекст проекта:
 {context}
@@ -375,6 +412,7 @@ if [[ "$DRY_RUN" == "1" ]]; then
 - Mode: dry-run
 EOF
   NOTIFICATION_STATUS="$(run_google_sync "dry_run" 0)"
+  run_telegram_notify "dry_run"
   write_latest_json "dry_run" 0 "$NOTIFICATION_STATUS"
   write_latest_md "dry_run" 0
   echo "[$STAMP_UTC] status=dry_run report=$OUT_PATH" >> "$LOG_PATH"
@@ -523,6 +561,7 @@ if [[ "$RC" -ne 0 ]]; then
   STATUS="failed"
 fi
 NOTIFICATION_STATUS="$(run_google_sync "$STATUS" "$RC")"
+run_telegram_notify "$STATUS"
 write_latest_json "$STATUS" "$RC" "$NOTIFICATION_STATUS"
 write_latest_md "$STATUS" "$RC"
 echo "[$STAMP_UTC] status=$STATUS code=$RC report=$OUT_PATH" >> "$LOG_PATH"

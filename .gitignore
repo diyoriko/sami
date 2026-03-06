@@ -23,3 +23,7 @@ nohup.out
 
 # Reports internal state
 reports/**/.internal/
+
+# Google OAuth credentials
+agents/google-oauth-client.json
+agents/google-token.json

@@ -4,6 +4,8 @@ import { getConfig } from './config';
 import { postVideoToChannel, postCheckin } from './poster';
 import { runApprovalFlow } from './approval';
 import { readCommunityPacket, writeCommunityReport } from './strategist-sync';
+import { runDailyAnalytics, runWeeklyAnalytics } from './analytics';
+import { runContentCuration } from './content-curator';
 
 let newMembersToday = 0;
 
@@ -13,6 +15,14 @@ export function incrementNewMembers(): void {
 
 function todayDate(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function currentWeek(): string {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 1);
+  const diff = now.getTime() - start.getTime() + (start.getTimezoneOffset() - now.getTimezoneOffset()) * 60000;
+  const week = Math.ceil((diff / 86400000 + start.getDay() + 1) / 7);
+  return `${now.getFullYear()}-W${String(week).padStart(2, '0')}`;
 }
 
 export function startScheduler(bot: Bot): void {
@@ -64,5 +74,39 @@ export function startScheduler(bot: Bot): void {
     newMembersToday = 0;
   }, { timezone: 'Europe/Moscow' });
 
-  console.log('[scheduler] all cron jobs registered');
+  // ---- Analytics agent ----
+
+  // 00:30 — daily analytics: collect Telegram stats, DM admin
+  cron.schedule(config.CRON_ANALYTICS_DAILY, async () => {
+    console.log('[scheduler] running daily analytics');
+    try {
+      await runDailyAnalytics(bot, todayDate());
+    } catch (err) {
+      console.error('[scheduler] daily analytics failed:', err);
+    }
+  }, { timezone: 'Europe/Moscow' });
+
+  // Sunday 10:00 — weekly analytics dashboard
+  cron.schedule(config.CRON_ANALYTICS_WEEKLY, async () => {
+    console.log('[scheduler] running weekly analytics');
+    try {
+      await runWeeklyAnalytics(bot, currentWeek());
+    } catch (err) {
+      console.error('[scheduler] weekly analytics failed:', err);
+    }
+  }, { timezone: 'Europe/Moscow' });
+
+  // ---- Content Curator agent ----
+
+  // Monday 09:00 — weekly content plan
+  cron.schedule(config.CRON_CONTENT_CURATOR, async () => {
+    console.log('[scheduler] running content curation');
+    try {
+      await runContentCuration(bot, currentWeek());
+    } catch (err) {
+      console.error('[scheduler] content curation failed:', err);
+    }
+  }, { timezone: 'Europe/Moscow' });
+
+  console.log('[scheduler] all cron jobs registered (community + analytics + content-curator)');
 }
