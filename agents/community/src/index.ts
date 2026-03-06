@@ -67,10 +67,13 @@ async function main(): Promise<void> {
   });
 
   // /post command — post all 3 videos (today first, then tomorrow if nothing approved for today)
+  // /post force — ignore "already posted" check and post anyway
   bot.command('post', async (ctx) => {
     if (ctx.from?.id !== config.TELEGRAM_ADMIN_USER_ID) return;
     const { postVideoToChannel } = await import('./poster');
     const { getApprovedVideo } = await import('./db');
+
+    const force = ctx.message?.text?.includes('force') ?? false;
 
     const today = new Date().toISOString().slice(0, 10);
     const tomorrow = new Date();
@@ -87,7 +90,15 @@ async function main(): Promise<void> {
       return;
     }
 
-    await ctx.reply(`📤 Публикую видео на ${date}...`);
+    // If force — clear previous post records for this date so wasPostedToday returns false
+    if (force) {
+      const db = (await import('./db')).getDb();
+      const deleted = db.prepare('DELETE FROM posts WHERE date = ?').run(date).changes;
+      await ctx.reply(`🔄 Сброшено ${deleted} записей постов на ${date}. Публикую заново...`);
+    } else {
+      await ctx.reply(`📤 Публикую видео на ${date}...`);
+    }
+
     const results = await Promise.allSettled([
       postVideoToChannel(bot, date, 'stretching'),
       postVideoToChannel(bot, date, 'strength'),
