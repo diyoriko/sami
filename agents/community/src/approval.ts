@@ -142,10 +142,24 @@ export async function runApprovalFlow(
   );
 }
 
+async function editKeyboard(
+  ctx: { editMessageReplyMarkup: Function; editMessageCaption: Function; callbackQuery: { message?: { caption?: string } } },
+  keyboard: InlineKeyboard
+): Promise<void> {
+  try {
+    await ctx.editMessageReplyMarkup({ reply_markup: keyboard });
+  } catch {
+    // Photo messages may require editMessageCaption to update the keyboard
+    try {
+      const caption = ctx.callbackQuery.message?.caption ?? '';
+      await ctx.editMessageCaption({ caption, parse_mode: 'Markdown', reply_markup: keyboard });
+    } catch { /* ignore */ }
+  }
+}
+
 export function registerApprovalCallbacks(bot: Bot): void {
   bot.callbackQuery(/^(approve|reject):(\d+)$/, async (ctx) => {
     const action = ctx.match[1] as 'approve' | 'reject';
-    const sessionId = parseInt(ctx.match[2]);
 
     const session = getApprovalSessionByMessageId(ctx.callbackQuery.message?.message_id ?? -1);
     if (!session) {
@@ -155,11 +169,24 @@ export function registerApprovalCallbacks(bot: Bot): void {
 
     setApprovalStatus(session.id, action === 'approve' ? 'approved' : 'rejected');
 
-    const statusText = action === 'approve' ? '✅ Выбрано' : '❌ Пропущено';
-    try {
-      await ctx.editMessageReplyMarkup({ reply_markup: new InlineKeyboard().text(statusText, 'noop') });
-    } catch { /* photo messages need different edit */ }
+    const newKeyboard = action === 'approve'
+      ? new InlineKeyboard().text('✅ Выбрано', 'noop').text('↩️ Отменить', `unapprove:${session.id}`)
+      : new InlineKeyboard().text('❌ Пропущено', 'noop').text('↩️ Вернуть', `unapprove:${session.id}`);
+
+    await editKeyboard(ctx as any, newKeyboard);
     await ctx.answerCallbackQuery(action === 'approve' ? 'Выбрано!' : 'Пропущено');
+  });
+
+  bot.callbackQuery(/^unapprove:(\d+)$/, async (ctx) => {
+    const sessionId = parseInt(ctx.match[1]);
+    setApprovalStatus(sessionId, 'pending');
+
+    const keyboard = new InlineKeyboard()
+      .text('✅ Выбрать', `approve:${sessionId}`)
+      .text('❌ Пропустить', `reject:${sessionId}`);
+
+    await editKeyboard(ctx as any, keyboard);
+    await ctx.answerCallbackQuery('Возвращено в пул');
   });
 
   bot.callbackQuery('noop', async (ctx) => {

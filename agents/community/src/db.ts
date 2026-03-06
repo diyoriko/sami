@@ -181,7 +181,7 @@ export function getApprovedVideo(date: string, category: string): VideoRow | nul
   `).get(date, category) as VideoRow | null;
 }
 
-export function setApprovalStatus(sessionId: number, status: 'approved' | 'rejected'): void {
+export function setApprovalStatus(sessionId: number, status: 'approved' | 'rejected' | 'pending'): void {
   getDb().prepare(`
     UPDATE approval_sessions SET status = ?, decided_at = datetime('now') WHERE id = ?
   `).run(status, sessionId);
