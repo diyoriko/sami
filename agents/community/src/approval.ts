@@ -16,6 +16,12 @@ const CATEGORY_EMOJI: Record<Category, string> = {
   mobility: '🔄',
 };
 
+const CATEGORY_RU: Record<Category, string> = {
+  stretching: 'Стретчинг',
+  strength: 'Силовая',
+  mobility: 'Мобильность',
+};
+
 const DIFFICULTY_RU: Record<string, string> = {
   beginner: 'Начинающий',
   intermediate: 'Средний',
@@ -28,13 +34,9 @@ function formatViews(n: number): string {
   return String(n);
 }
 
-function scoreBar(score: number): string {
-  const filled = Math.round(score / 10);
-  return '█'.repeat(filled) + '░'.repeat(10 - filled) + ` ${score}`;
-}
-
 function formatApprovalMessage(video: ScoredVideo, category: Category): string {
   const emoji = CATEGORY_EMOJI[category];
+  const categoryRu = CATEGORY_RU[category];
   let muscles = '';
   try {
     const arr = JSON.parse(video.muscles ?? '[]') as string[];
@@ -48,7 +50,7 @@ function formatApprovalMessage(video: ScoredVideo, category: Category): string {
     : `🧘 Только коврик`;
 
   return [
-    `${emoji} *${category.toUpperCase()}*`,
+    `${emoji} *${categoryRu}*`,
     '',
     `*${video.title}*`,
     `👤 ${video.channel_name}`,
@@ -59,8 +61,7 @@ function formatApprovalMessage(video: ScoredVideo, category: Category): string {
     equipmentLine,
     `👁 ${formatViews(video.view_count)} просмотров`,
     '',
-    `Рейтинг: \`${scoreBar(video.total_score)}\``,
-    `_(бренд: ${video.brand_score} • аудитория: ${Math.round(video.view_count / 1000)}K)_`,
+    `Рейтинг: ${video.total_score}/100 _(бренд: ${video.brand_score})_`,
   ].join('\n');
 }
 

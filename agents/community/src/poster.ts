@@ -4,6 +4,7 @@ import { getConfig } from './config';
 import { getApprovedVideo, recordPost, wasPostedToday, getCheckinStats, recordCheckinPost, VideoRow } from './db';
 import { downloadVideo, isYtDlpAvailable } from './downloader';
 import { detectEquipment } from './youtube';
+import { translateToRussian } from './translate';
 
 const CATEGORY_EMOJI: Record<string, string> = {
   stretching: '🧘',
@@ -23,7 +24,7 @@ const DIFFICULTY_RU: Record<string, string> = {
   advanced: 'Продвинутый',
 };
 
-function formatCaption(video: VideoRow): string {
+async function formatCaption(video: VideoRow): Promise<string> {
   const emoji = CATEGORY_EMOJI[video.category] ?? '🏋️';
   const categoryRu = CATEGORY_RU[video.category] ?? video.category;
   const difficultyRu = DIFFICULTY_RU[video.difficulty] ?? video.difficulty;
@@ -41,11 +42,14 @@ function formatCaption(video: VideoRow): string {
     ? `🎒 Понадобится: ${equipment.join(', ')}`
     : null;
 
+  const title = await translateToRussian(video.title);
+  const channelName = await translateToRussian(video.channel_name);
+
   return [
     `${emoji} *${categoryRu}*`,
     '',
-    `*${video.title}*`,
-    `👤 ${video.channel_name}`,
+    `*${title}*`,
+    `👤 ${channelName}`,
     '',
     `⏱ ${video.duration_label ?? '?'}  •  📊 ${difficultyRu}`,
     `💪 ${muscles}`,
@@ -55,8 +59,8 @@ function formatCaption(video: VideoRow): string {
   ].join('\n');
 }
 
-function formatLinkPost(video: VideoRow): string {
-  return formatCaption(video) + `\n\n▶️ [Смотреть](${video.video_url})`;
+async function formatLinkPost(video: VideoRow): Promise<string> {
+  return (await formatCaption(video)) + `\n\n▶️ [Смотреть](${video.video_url})`;
 }
 
 export async function postVideoToChannel(
@@ -82,7 +86,7 @@ export async function postVideoToChannel(
     return;
   }
 
-  const caption = formatCaption(video);
+  const caption = await formatCaption(video);
 
   // Try to download and post as video file (works without VPN in Russia)
   if (isYtDlpAvailable()) {
@@ -118,7 +122,7 @@ export async function postVideoToChannel(
   try {
     const msg = await bot.api.sendMessage(
       config.TELEGRAM_CHANNEL_ID,
-      formatLinkPost(video),
+      await formatLinkPost(video),
       { parse_mode: 'Markdown', link_preview_options: { is_disabled: false } }
     );
     recordPost(date, category, video.id, msg.message_id);
