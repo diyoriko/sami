@@ -37,8 +37,8 @@ export async function downloadVideo(youtubeUrl: string, youtubeId: string): Prom
   const tmpDir = os.tmpdir();
   const outTemplate = path.join(tmpDir, `sami-${youtubeId}.%(ext)s`);
 
-  // Target 480p mp4, ~20-40MB for a 15-min video
-  const args = [
+  // Target 480p mp4. android/ios player clients bypass YouTube datacenter IP blocks (Railway/VPS).
+  const baseArgs = [
     youtubeUrl,
     '-f', 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best[height<=480]',
     '--merge-output-format', 'mp4',
@@ -48,7 +48,27 @@ export async function downloadVideo(youtubeUrl: string, youtubeId: string): Prom
     '--no-warnings',
   ];
 
-  await execFileAsync(ytDlp, args, { timeout: 120_000 });
+  const attempts = [
+    [...baseArgs, '--extractor-args', 'youtube:player_client=android,web'],
+    [...baseArgs, '--extractor-args', 'youtube:player_client=ios'],
+    [...baseArgs], // plain fallback
+  ];
+
+  let lastError = '';
+  let succeeded = false;
+  for (const args of attempts) {
+    try {
+      await execFileAsync(ytDlp, args, { timeout: 120_000 });
+      succeeded = true;
+      break;
+    } catch (err: any) {
+      lastError = err.stderr || err.message || String(err);
+      console.warn(`[downloader] attempt failed: ${lastError.slice(0, 200)}`);
+    }
+  }
+  if (!succeeded) {
+    throw new Error(`yt-dlp all attempts failed: ${lastError.slice(0, 300)}`);
+  }
 
   const filePath = path.join(tmpDir, `sami-${youtubeId}.mp4`);
 
