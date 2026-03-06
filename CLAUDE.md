@@ -4,7 +4,7 @@ This repository is for building small autonomous agents for the SAMI project.
 
 ---
 
-## 🗂 БЭКЛОГ — последнее обновление: 6 марта 2026
+## 🗂 БЭКЛОГ — последнее обновление: 7 марта 2026
 
 ### Что такое SAMI
 Фитнес-приложение. Миссия — выстроить огромное комьюнити в России вокруг спорта на коврике в любом месте. Помогает пользователям двигаться каждый день без давления и мотивационного шума. Три тренировки в день (стретчинг / силовая / мобильность), персонализация по целям и уровню, стрики, фид и конструктор тренировок.
@@ -55,36 +55,32 @@ Content Curator (еженедельно)
 
 **Community agent (работает на Railway):**
 - Бот `@sami_workout_bot` admin в канале `@sami_daily` и группе `Sami Community`
-- YouTube Data API v3 подключён
+- YouTube Data API v3 подключён, yt-dlp установлен (`/root/.nix-profile/bin/yt-dlp 2025.01.15`)
 - Задеплоен на Railway, работает 24/7 независимо от Mac
 - GitHub → Railway автодеплой: пуш в `main` → автоматический редеплой
-- Код: `https://github.com/diyoriko/sami`, rootDir: `agents/community`
-- Исправлен баг: `moderation.ts` message:text блокировал command-хендлеры → добавлен `return next()`
+- Railway Volume подключён: БД персистентна (`/data/community.db`)
+- nixpacks.toml: `nodejs_22 + python3 + gcc + gnumake + yt-dlp + ffmpeg` (все нужны)
+- Поиск видео: 1 видео на категорию, приоритет коврик-only, fallback с пометкой экипировки
+- Апрув: кнопки `✅ Выбрать` + `🔄 Другое` (вместо пропустить), `↩️ Отменить` после выбора
+- Модерация: math captcha при входе (мут → капча → правильный ответ → снятие мута → goal quiz)
 
-**⚠️ Известная проблема — SQLite эфемерна:**
-- При каждом редеплое на Railway база данных сбрасывается
-- Теряется: статистика чекинов, варны участников, история выданных видео
-- Решение: подключить Railway Volume (см. COMMUNITY_TASKS.md)
+**Analytics + Content Curator (модули в community боте):**
+- Analytics: ежедневно 00:30, еженедельно вс 10:00 — собирает метрики, пишет JSON
+- Content Curator: пн 09:00 — генерирует контент-план на неделю
+
+**⚠️ Известная дыра — метрики не доходят до стратега:**
+- Community/analytics отчёты живут на Railway (`/app/reports/...`), НЕ синхронизируются на Mac
+- Стратег на Mac не видит эти данные
+- Решение (P1): community bot должен отправлять JSON-отчёт в фиксированный Telegram-канал или через webhook, стратег читает оттуда
 
 ### 🔜 Следующие шаги (приоритет)
 
-**P0 — Railway Volume (постоянное хранилище для Community agent):**
-- Подключить Volume в Railway → смонтировать в `/data`
-- Обновить `COMMUNITY_DB_PATH=/data/community.db` в Railway переменных
+**P1 — Синхронизация метрик стратегу:**
+- Community bot пушит `latest.json` в Telegram (сохранять как файл в избранное / специальный чат)
+- ИЛИ: добавить в бот HTTP endpoint `/report` (Railway expose port) → стратег делает curl
+- Пока не сделано: стратег работает без актуальных данных community
 
-**P1 — Собрать Analytics agent:**
-- `agents/analytics/` — Node.js + SQLite
-- Ежедневный сбор: подписчики канала, check-in rate, новые участники
-- Еженедельный markdown-дашборд с трендами
-- JSON-отчёт для Strategist
-
-**P2 — Собрать Content Curator agent:**
-- `agents/content-curator/` — Node.js
-- Читает COMMUNITY_PACKET + analytics → генерирует контент-план
-- Ищет статьи, tips, challenge ideas
-- Выдаёт JSON с контент-планом на неделю для Community agent
-
-**P3 — SAMI мобильное приложение (FlutterFlow):**
+**P2 — SAMI мобильное приложение (FlutterFlow):**
 Полный список задач: `APP_TASKS.md`
 1. FlutterFlow проект + дизайн-токены + backend (Supabase) + онбординг
 2. Timeline: лента на день, карточки активностей, стрик
@@ -108,8 +104,8 @@ Content Curator (еженедельно)
 Active agents:
 - `strategist` — ✅ работает в продакшне (1x/день 09:00 МСК, launchd на Mac)
 - `community` — ✅ работает на Railway (24/7, автодеплой из GitHub)
-- `analytics` — 🔲 не начат
-- `content-curator` — 🔲 не начат
+- `analytics` — ✅ модуль в community боте (00:30 + вс 10:00, данные на Railway)
+- `content-curator` — ✅ модуль в community боте (пн 09:00)
 
 GitHub: `https://github.com/diyoriko/sami`
 
@@ -169,29 +165,32 @@ Telegram:
 Content model:
 - 3 workout posts per day (YouTube videos, admin-approved):
   - 08:00 stretching
-  - 12:00 strength
-  - 17:00 mobility
+  - 08:05 strength
+  - 08:10 mobility
 - 1 evening check-in post at 21:00
-- Evening video search + approval flow at 19:00 (sent to admin in DM)
+- Video search + approval flow at 19:00 (sent to admin in DM)
+- 1 video per category shown; `🔄 Другое` для замены; `↩️ Отменить` после выбора
+- yt-dlp скачивает видео и постит файлом (не ссылкой); fallback — ссылка
 
 Admin commands (в личке боту):
 - `/status` — статистика чекинов за день
 - `/search` — запустить поиск видео вручную
 - `/post [stretching|strength|mobility]` — опубликовать пост вручную
 - `/checkin` — опубликовать вечерний чекин вручную
+- `/analytics` — запустить аналитику вручную
+- `/curator` — запустить контент-план вручную
 
 Moderation layers:
-- New member welcome + goal quiz (captcha-style, filters bots)
-- Link restrictions for new members (first 24h or 5 messages)
-- Auto-delete external links from non-admins
-- Warning → mute → ban escalation
-- Slow mode: 30s between messages
+- Math captcha при входе: мут → пример → правильный ответ → снятие мута → goal quiz
+- Неправильный ответ или таймаут 2 мин → кик (может вернуться)
+- Auto-delete external links from non-admins + warning → mute 24h → ban
+- /report команда для жалоб
 
 Integration contract:
 - `strategist` produces markdown reports + `COMMUNITY_PACKET_START...END` JSON block
 - `community-agent` reads that packet for YouTube search keywords and weekly focus
-- `community-agent` writes daily stats to `reports/community/.internal/latest.json`
-- `strategist` reads that file for next cycle context
+- `community-agent` writes daily stats to `reports/community/.internal/latest.json` (на Railway)
+- `strategist` должен читать этот файл, но он на Railway — синхронизация не реализована (P1)
 
 Local development:
 ```bash
@@ -213,7 +212,7 @@ Environment variables (в Railway):
 - `TELEGRAM_GROUP_ID`
 - `TELEGRAM_ADMIN_USER_ID`
 - `YOUTUBE_API_KEY`
-- `COMMUNITY_DB_PATH` — сейчас `./data/community.db` (эфемерно), нужен Volume → `/data/community.db`
+- `COMMUNITY_DB_PATH=/data/community.db` (Railway Volume смонтирован, данные персистентны)
 
 ## Implementation Preferences
 

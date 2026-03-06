@@ -43,7 +43,11 @@ CONTEXT_FILES=(
   "$CONTEXT_ROOT/SAMI_PRD_v1.md"
   "$CONTEXT_ROOT/SAMI_MVP_SCOPE.md"
   "$CONTEXT_ROOT/SAMI_14_DAY_PLAN.md"
-  "$CONTEXT_ROOT/SAMI_TASKS.md"
+  "$CONTEXT_ROOT/APP_TASKS.md"
+  "$CONTEXT_ROOT/COMMUNITY_TASKS.md"
+  # Community & Analytics reports (written by Railway agent, synced here when available)
+  "$PROJECT_ROOT/reports/community/.internal/latest.json"
+  "$PROJECT_ROOT/reports/analytics/.internal/latest.json"
 )
 
 write_latest_json() {
