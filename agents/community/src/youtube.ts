@@ -230,11 +230,30 @@ async function fetchJson<T>(url: string): Promise<T> {
 
 // ─── EXPORTS ─────────────────────────────────────────────────────────────────
 
+// ─── EQUIPMENT DETECTION ─────────────────────────────────────────────────────
+
+const EQUIPMENT_LABELS: [RegExp, string][] = [
+  [/гантели|dumbbell/i, 'гантели'],
+  [/штанга|barbell/i, 'штанга'],
+  [/резинк|эспандер|resistance band/i, 'резинка'],
+  [/гиря|kettlebell/i, 'гиря'],
+  [/тренажёр|тренажер|machine/i, 'тренажёр'],
+  [/скакалка|jump rope/i, 'скакалка'],
+  [/турник|pull.?up bar/i, 'турник'],
+  [/петли|trx/i, 'петли TRX'],
+];
+
+export function detectEquipment(title: string, description: string): string[] {
+  const text = (title + ' ' + description).toLowerCase();
+  return EQUIPMENT_LABELS.filter(([re]) => re.test(text)).map(([, label]) => label);
+}
+
 export type ScoredVideo = Omit<VideoRow, 'id'> & {
   search_query: string;
   view_count: number;
   brand_score: number;
   total_score: number;
+  equipment: string[]; // empty = mat-only
 };
 
 export async function searchVideos(
@@ -293,6 +312,8 @@ export async function searchVideos(
     const durationScore = scoreDuration(seconds);
     const totalScore = computeTotalScore(brandScore, viewScore, durationScore);
 
+    const equipment = detectEquipment(title, description);
+
     candidates.push({
       youtube_id: videoId,
       title,
@@ -309,10 +330,16 @@ export async function searchVideos(
       view_count: viewCount,
       brand_score: brandScore,
       total_score: totalScore,
+      equipment,
     });
   }
 
-  return candidates.sort((a, b) => b.total_score - a.total_score).slice(0, count);
+  const sorted = candidates.sort((a, b) => b.total_score - a.total_score);
+
+  // Prefer mat-only videos. Fall back to best overall if none found.
+  const matOnly = sorted.filter(v => v.equipment.length === 0);
+  const pool = matOnly.length > 0 ? matOnly : sorted;
+  return pool.slice(0, count);
 }
 
 export async function searchAllCategories(

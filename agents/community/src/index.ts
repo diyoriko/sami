@@ -6,6 +6,7 @@ import { getDb } from './db';
 import { registerModeration } from './moderation';
 import { registerApprovalCallbacks } from './approval';
 import { startScheduler } from './scheduler';
+import { logYtDlpStatus } from './downloader';
 
 async function main(): Promise<void> {
   const config = getConfig();
@@ -13,6 +14,9 @@ async function main(): Promise<void> {
   // Init DB
   getDb();
   console.log('[sami-community] database ready');
+
+  // Check yt-dlp availability on startup
+  logYtDlpStatus();
 
   // Ensure report directories exist
   const reportDirs = [

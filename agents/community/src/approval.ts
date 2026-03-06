@@ -8,7 +8,7 @@ import {
   getApprovalSessionById,
   setApprovalStatus,
 } from './db';
-import { searchAllCategories, searchVideos, Category, ScoredVideo } from './youtube';
+import { searchAllCategories, searchVideos, detectEquipment, Category, ScoredVideo } from './youtube';
 
 const CATEGORY_EMOJI: Record<Category, string> = {
   stretching: '🧘',
@@ -33,7 +33,7 @@ function scoreBar(score: number): string {
   return '█'.repeat(filled) + '░'.repeat(10 - filled) + ` ${score}`;
 }
 
-function formatApprovalMessage(video: ScoredVideo, index: number, total: number, category: Category): string {
+function formatApprovalMessage(video: ScoredVideo, category: Category): string {
   const emoji = CATEGORY_EMOJI[category];
   let muscles = '';
   try {
@@ -43,8 +43,12 @@ function formatApprovalMessage(video: ScoredVideo, index: number, total: number,
     muscles = video.muscles ?? '';
   }
 
+  const equipmentLine = video.equipment.length > 0
+    ? `⚠️ Нужна экипировка: ${video.equipment.join(', ')}`
+    : `🧘 Только коврик`;
+
   return [
-    `${emoji} *${index}/${total} — ${category.toUpperCase()}*`,
+    `${emoji} *${category.toUpperCase()}*`,
     '',
     `*${video.title}*`,
     `👤 ${video.channel_name}`,
@@ -52,6 +56,7 @@ function formatApprovalMessage(video: ScoredVideo, index: number, total: number,
     '',
     `⏱ ${video.duration_label}  •  📊 ${DIFFICULTY_RU[video.difficulty] ?? video.difficulty}`,
     `💪 ${muscles}`,
+    equipmentLine,
     `👁 ${formatViews(video.view_count)} просмотров`,
     '',
     `Рейтинг: \`${scoreBar(video.total_score)}\``,
@@ -96,51 +101,44 @@ export async function runApprovalFlow(
       continue;
     }
 
-    await bot.api.sendMessage(
-      config.TELEGRAM_ADMIN_USER_ID,
-      `\n━━━━━━━━━━━━━━━\n${CATEGORY_EMOJI[category]} *${category.toUpperCase()}* — выбери одно:`,
-      { parse_mode: 'Markdown' }
-    );
+    const v = videos[0];
+    const videoId = upsertVideo(v);
+    const sessionId = createApprovalSession(date, category, videoId);
+    const text = formatApprovalMessage(v, category);
+    const keyboard = new InlineKeyboard()
+      .text('✅ Выбрать', `approve:${sessionId}`)
+      .text('🔄 Другое', `refresh:${sessionId}`);
 
-    for (let i = 0; i < videos.length; i++) {
-      const v = videos[i];
-      const videoId = upsertVideo(v);
-      const sessionId = createApprovalSession(date, category, videoId);
-      const text = formatApprovalMessage(v, i + 1, videos.length, category);
-      const keyboard = new InlineKeyboard()
-        .text('✅ Выбрать', `approve:${sessionId}`)
-        .text('🔄 Другое', `refresh:${sessionId}`);
-
-      try {
-        // Show thumbnail if available for a richer preview
-        let msg;
-        if (v.thumbnail_url) {
-          msg = await bot.api.sendPhoto(
-            config.TELEGRAM_ADMIN_USER_ID,
-            v.thumbnail_url,
-            { caption: text, parse_mode: 'Markdown', reply_markup: keyboard }
-          );
-        } else {
-          msg = await bot.api.sendMessage(
-            config.TELEGRAM_ADMIN_USER_ID,
-            text,
-            { parse_mode: 'Markdown', reply_markup: keyboard }
-          );
-        }
-        setApprovalMessageId(sessionId, msg.message_id);
-        totalFound++;
-      } catch (err) {
-        console.error(`[approval] failed to send for ${category}:`, err);
+    try {
+      let msg;
+      if (v.thumbnail_url) {
+        msg = await bot.api.sendPhoto(
+          config.TELEGRAM_ADMIN_USER_ID,
+          v.thumbnail_url,
+          { caption: text, parse_mode: 'Markdown', reply_markup: keyboard }
+        );
+      } else {
+        msg = await bot.api.sendMessage(
+          config.TELEGRAM_ADMIN_USER_ID,
+          text,
+          { parse_mode: 'Markdown', reply_markup: keyboard }
+        );
       }
-
-      await new Promise(r => setTimeout(r, 300));
+      setApprovalMessageId(sessionId, msg.message_id);
+      totalFound++;
+    } catch (err) {
+      console.error(`[approval] failed to send for ${category}:`, err);
     }
+
+    await new Promise(r => setTimeout(r, 300));
   }
 
-  await bot.api.sendMessage(
-    config.TELEGRAM_ADMIN_USER_ID,
-    `\n━━━━━━━━━━━━━━━\n✅ ${totalFound} вариантов. Выбери по одному на каждую категорию.\n\n⏰ Посты: 08:00 стретч • 12:00 сила • 17:00 мобильность`
-  );
+  if (totalFound > 0) {
+    await bot.api.sendMessage(
+      config.TELEGRAM_ADMIN_USER_ID,
+      `✅ Нашёл по одному видео на каждую категорию. Выбери или нажми 🔄 Другое.\n\n⏰ Посты: 08:00 стретч • 08:05 сила • 08:10 мобильность`
+    );
+  }
 }
 
 async function editKeyboard(
@@ -218,7 +216,7 @@ export function registerApprovalCallbacks(bot: Bot): void {
     const v = videos[0];
     const videoId = upsertVideo(v);
     const newSessionId = createApprovalSession(session.date, session.category as Category, videoId);
-    const text = formatApprovalMessage(v, 1, 1, session.category as Category);
+    const text = formatApprovalMessage(v, session.category as Category);
     const keyboard = new InlineKeyboard()
       .text('✅ Выбрать', `approve:${newSessionId}`)
       .text('🔄 Другое', `refresh:${newSessionId}`);

@@ -3,6 +3,7 @@ import { InputFile } from 'grammy';
 import { getConfig } from './config';
 import { getApprovedVideo, recordPost, wasPostedToday, getCheckinStats, recordCheckinPost, VideoRow } from './db';
 import { downloadVideo, isYtDlpAvailable } from './downloader';
+import { detectEquipment } from './youtube';
 
 const CATEGORY_EMOJI: Record<string, string> = {
   stretching: '🧘',
@@ -35,6 +36,11 @@ function formatCaption(video: VideoRow): string {
     muscles = video.muscles ?? '';
   }
 
+  const equipment = detectEquipment(video.title, '');
+  const equipmentLine = equipment.length > 0
+    ? `🎒 Понадобится: ${equipment.join(', ')}`
+    : null;
+
   return [
     `${emoji} *${categoryRu}*`,
     '',
@@ -43,6 +49,7 @@ function formatCaption(video: VideoRow): string {
     '',
     `⏱ ${video.duration_label ?? '?'}  •  📊 ${difficultyRu}`,
     `💪 ${muscles}`,
+    ...(equipmentLine ? [equipmentLine] : []),
     '',
     `#${video.category} #sami #ежедневнаяпрактика`,
   ].join('\n');

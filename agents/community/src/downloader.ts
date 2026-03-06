@@ -15,11 +15,21 @@ export interface DownloadResult {
 }
 
 function findYtDlp(): string {
+  // Try `which` first to find binary in any PATH (works on Railway/nix)
+  try {
+    const result = require('child_process').execFileSync('which', ['yt-dlp'], { encoding: 'utf8' }).trim();
+    if (result) {
+      require('child_process').execFileSync(result, ['--version'], { stdio: 'ignore' });
+      return result;
+    }
+  } catch { /* not in PATH */ }
+
   const candidates = [
     'yt-dlp',
-    '/opt/homebrew/bin/yt-dlp',
     '/usr/local/bin/yt-dlp',
     '/usr/bin/yt-dlp',
+    '/opt/homebrew/bin/yt-dlp',
+    '/run/current-system/sw/bin/yt-dlp', // nix
   ];
   for (const bin of candidates) {
     try {
@@ -29,7 +39,17 @@ function findYtDlp(): string {
       continue;
     }
   }
-  throw new Error('yt-dlp not found. Install: brew install yt-dlp');
+  throw new Error('yt-dlp not found');
+}
+
+export function logYtDlpStatus(): void {
+  try {
+    const bin = findYtDlp();
+    const ver = require('child_process').execFileSync(bin, ['--version'], { encoding: 'utf8' }).trim();
+    console.log(`[downloader] yt-dlp found: ${bin} (${ver})`);
+  } catch {
+    console.warn('[downloader] yt-dlp NOT found — will post YouTube links as fallback');
+  }
 }
 
 export async function downloadVideo(youtubeUrl: string, youtubeId: string): Promise<DownloadResult> {
