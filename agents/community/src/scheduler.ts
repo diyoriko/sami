@@ -7,29 +7,12 @@ import { readCommunityPacket, writeCommunityReport } from './strategist-sync';
 import { runDailyAnalytics, runWeeklyAnalytics } from './analytics';
 import { runContentCuration } from './content-curator';
 import { notifyAdmin } from './notify-admin';
+import { todayMsk, tomorrowMsk, currentWeekMsk, moscowHour } from './dates';
 
 let newMembersToday = 0;
 
 export function incrementNewMembers(): void {
   newMembersToday++;
-}
-
-function todayDate(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function tomorrowDate(): string {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() + 1);
-  return d.toISOString().slice(0, 10);
-}
-
-function currentWeek(): string {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), 0, 1);
-  const diff = now.getTime() - start.getTime() + (start.getTimezoneOffset() - now.getTimezoneOffset()) * 60000;
-  const week = Math.ceil((diff / 86400000 + start.getDay() + 1) / 7);
-  return `${now.getFullYear()}-W${String(week).padStart(2, '0')}`;
 }
 
 export function startScheduler(bot: Bot): void {
@@ -42,7 +25,7 @@ export function startScheduler(bot: Bot): void {
     console.log('[scheduler] running video search & approval flow');
     try {
       const packet = readCommunityPacket();
-      const date = tomorrowDate();
+      const date = tomorrowMsk();
       await runApprovalFlow(bot, date, {
         stretching: packet.search_keywords?.stretching,
         strength: packet.search_keywords?.strength,
@@ -58,7 +41,7 @@ export function startScheduler(bot: Bot): void {
   cron.schedule(config.CRON_POST_ALL, async () => {
     console.log('[scheduler] posting all 3 videos');
     try {
-      const date = todayDate();
+      const date = todayMsk();
       await Promise.all([
         postVideoToChannel(bot, date, 'stretching'),
         postVideoToChannel(bot, date, 'strength'),
@@ -74,7 +57,7 @@ export function startScheduler(bot: Bot): void {
   cron.schedule(config.CRON_CHECKIN, async () => {
     console.log('[scheduler] posting check-in');
     try {
-      await postCheckin(bot, todayDate());
+      await postCheckin(bot, todayMsk());
     } catch (err) {
       console.error('[scheduler] checkin failed:', err);
       await notifyAdmin(bot, 'Community', `Чекин упал:\n\`${String(err)}\``);
@@ -84,7 +67,7 @@ export function startScheduler(bot: Bot): void {
   // 23:55 — write daily report for strategist
   cron.schedule('55 23 * * *', () => {
     console.log('[scheduler] writing daily community report');
-    writeCommunityReport(todayDate(), newMembersToday);
+    writeCommunityReport(todayMsk(), newMembersToday);
     newMembersToday = 0;
   }, { timezone: 'Europe/Moscow' });
 
@@ -94,7 +77,7 @@ export function startScheduler(bot: Bot): void {
   cron.schedule(config.CRON_ANALYTICS_DAILY, async () => {
     console.log('[scheduler] running daily analytics');
     try {
-      await runDailyAnalytics(bot, todayDate());
+      await runDailyAnalytics(bot, todayMsk());
     } catch (err) {
       console.error('[scheduler] daily analytics failed:', err);
       await notifyAdmin(bot, 'Analytics', `Ежедневная аналитика упала:\n\`${String(err)}\``);
@@ -105,7 +88,7 @@ export function startScheduler(bot: Bot): void {
   cron.schedule(config.CRON_ANALYTICS_WEEKLY, async () => {
     console.log('[scheduler] running weekly analytics');
     try {
-      await runWeeklyAnalytics(bot, currentWeek());
+      await runWeeklyAnalytics(bot, currentWeekMsk());
     } catch (err) {
       console.error('[scheduler] weekly analytics failed:', err);
       await notifyAdmin(bot, 'Analytics', `Недельный дашборд упал:\n\`${String(err)}\``);
@@ -118,7 +101,7 @@ export function startScheduler(bot: Bot): void {
   cron.schedule(config.CRON_CONTENT_CURATOR, async () => {
     console.log('[scheduler] running content curation');
     try {
-      await runContentCuration(bot, currentWeek());
+      await runContentCuration(bot, currentWeekMsk());
     } catch (err) {
       console.error('[scheduler] content curation failed:', err);
       await notifyAdmin(bot, 'Content Curator', `Контент-план упал:\n\`${String(err)}\``);
@@ -130,13 +113,11 @@ export function startScheduler(bot: Bot): void {
   // Catch-up: if bot started after 19:00 MSK and no approval sessions exist for tomorrow, run search now
   setTimeout(async () => {
     try {
-      const date = tomorrowDate();
+      const date = tomorrowMsk();
       const db = (await import('./db')).getDb();
       const row = db.prepare('SELECT COUNT(*) as cnt FROM approval_sessions WHERE date = ?').get(date) as { cnt: number };
       if (row.cnt === 0) {
-        const nowMsk = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Moscow' }));
-        const hour = nowMsk.getHours();
-        if (hour >= 19) {
+        if (moscowHour() >= 19) {
           console.log('[scheduler] catch-up: no approval sessions for tomorrow, running video search now');
           const packet = readCommunityPacket();
           await runApprovalFlow(bot, date, {

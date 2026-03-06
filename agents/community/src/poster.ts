@@ -63,27 +63,26 @@ async function formatLinkPost(video: VideoRow): Promise<string> {
   return (await formatCaption(video)) + `\n\n▶️ [Смотреть](${video.video_url})`;
 }
 
+export type PostResult = 'posted' | 'skipped' | 'no_video' | 'error';
+
 export async function postVideoToChannel(
   bot: Bot,
   date: string,
-  category: 'stretching' | 'strength' | 'mobility'
-): Promise<void> {
+  category: 'stretching' | 'strength' | 'mobility',
+  options?: { force?: boolean }
+): Promise<PostResult> {
   const config = getConfig();
+  const force = options?.force ?? false;
 
-  if (wasPostedToday(date, category)) {
-    console.log(`[poster] ${category} already posted today, skipping`);
-    return;
+  if (!force && wasPostedToday(date, category)) {
+    console.log(`[poster] ${category} already posted for ${date}, skipping`);
+    return 'skipped';
   }
 
   const video = getApprovedVideo(date, category);
   if (!video) {
     console.warn(`[poster] no approved video for ${category} on ${date}`);
-    await bot.api.sendMessage(
-      config.TELEGRAM_ADMIN_USER_ID,
-      `⚠️ Нет одобренного видео для *${category}* на ${date}. Пост пропущен.`,
-      { parse_mode: 'Markdown' }
-    );
-    return;
+    return 'no_video';
   }
 
   const caption = await formatCaption(video);
@@ -108,7 +107,7 @@ export async function postVideoToChannel(
         download.cleanup();
         recordPost(date, category, video.id, msg.message_id);
         console.log(`[poster] posted ${category} as video file, msgId=${msg.message_id}`);
-        return;
+        return 'posted';
       } catch (uploadErr) {
         download.cleanup();
         console.warn(`[poster] video upload failed, falling back to link:`, uploadErr);
@@ -127,13 +126,10 @@ export async function postVideoToChannel(
     );
     recordPost(date, category, video.id, msg.message_id);
     console.log(`[poster] posted ${category} as link, msgId=${msg.message_id}`);
+    return 'posted';
   } catch (err) {
     console.error(`[poster] failed to post ${category}:`, err);
-    await bot.api.sendMessage(
-      config.TELEGRAM_ADMIN_USER_ID,
-      `❌ Ошибка публикации *${category}*: ${String(err)}`,
-      { parse_mode: 'Markdown' }
-    );
+    return 'error';
   }
 }
 

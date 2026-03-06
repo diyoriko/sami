@@ -39,11 +39,15 @@ async function main(): Promise<void> {
   registerModeration(bot);
   registerApprovalCallbacks(bot);
 
-  // /status command for admin
+  // --- Admin commands (all use Moscow timezone) ---
+
+  const { todayMsk, tomorrowMsk, currentWeekMsk } = await import('./dates');
+
+  // /status — checkin stats for today
   bot.command('status', async (ctx) => {
     if (ctx.from?.id !== config.TELEGRAM_ADMIN_USER_ID) return;
     const { getCheckinStats } = await import('./db');
-    const date = new Date().toISOString().slice(0, 10);
+    const date = todayMsk();
     const stats = getCheckinStats(date);
     await ctx.reply(
       `📊 *Sami Community — статус*\n\n` +
@@ -55,104 +59,81 @@ async function main(): Promise<void> {
     );
   });
 
-  // /search command — search videos for tomorrow
+  // /search — find videos for tomorrow (MSK), send to admin for approval
   bot.command('search', async (ctx) => {
     if (ctx.from?.id !== config.TELEGRAM_ADMIN_USER_ID) return;
     const { runApprovalFlow } = await import('./approval');
-    const tomorrow = new Date();
-    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-    const date = tomorrow.toISOString().slice(0, 10);
-    await ctx.reply('🔍 Запускаю поиск видео вручную...');
+    const date = tomorrowMsk();
+    await ctx.reply(`🔍 Ищу видео на ${date}...`);
     await runApprovalFlow(bot, date);
   });
 
-  // /post command — post all 3 videos (today first, then tomorrow if nothing approved for today)
-  // /post force — ignore "already posted" check and post anyway
+  // /post — manually publish approved videos to channel (always force, no duplicate check)
   bot.command('post', async (ctx) => {
     if (ctx.from?.id !== config.TELEGRAM_ADMIN_USER_ID) return;
     const { postVideoToChannel } = await import('./poster');
     const { getApprovedVideo } = await import('./db');
 
-    const force = ctx.message?.text?.includes('force') ?? false;
+    const today = todayMsk();
+    const tomorrow = tomorrowMsk();
 
-    const today = new Date().toISOString().slice(0, 10);
-    const tomorrow = new Date();
-    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-    const tomorrowDate = tomorrow.toISOString().slice(0, 10);
-
-    // Pick date: use today if any approved videos exist, otherwise try tomorrow
+    // Find which date has approved videos: today first, then tomorrow
     const categories = ['stretching', 'strength', 'mobility'] as const;
     const hasToday = categories.some(c => getApprovedVideo(today, c) !== null);
-    const date = hasToday ? today : tomorrowDate;
+    const hasTomorrow = categories.some(c => getApprovedVideo(tomorrow, c) !== null);
+    const date = hasToday ? today : hasTomorrow ? tomorrow : null;
 
-    if (!hasToday && !categories.some(c => getApprovedVideo(tomorrowDate, c) !== null)) {
-      await ctx.reply(`⚠️ Нет одобренных видео ни на ${today}, ни на ${tomorrowDate}. Сначала запусти /search.`);
+    if (!date) {
+      await ctx.reply(`⚠️ Нет одобренных видео ни на ${today}, ни на ${tomorrow}. Сначала /search и выбери видео.`);
       return;
     }
 
-    // If force — clear previous post records for this date so wasPostedToday returns false
-    if (force) {
-      const db = (await import('./db')).getDb();
-      const deleted = db.prepare('DELETE FROM posts WHERE date = ?').run(date).changes;
-      await ctx.reply(`🔄 Сброшено ${deleted} записей постов на ${date}. Публикую заново...`);
-    } else {
-      await ctx.reply(`📤 Публикую видео на ${date}...`);
+    await ctx.reply(`📤 Публикую видео на ${date}...`);
+
+    const report: string[] = [];
+    for (const cat of categories) {
+      const result = await postVideoToChannel(bot, date, cat, { force: true });
+      const label = { stretching: 'Стретчинг', strength: 'Силовая', mobility: 'Мобильность' }[cat];
+      if (result === 'posted') report.push(`✅ ${label}`);
+      else if (result === 'no_video') report.push(`⚠️ ${label} — не выбрано`);
+      else if (result === 'error') report.push(`❌ ${label} — ошибка`);
+      else report.push(`⏭ ${label} — пропущено`);
     }
 
-    const results = await Promise.allSettled([
-      postVideoToChannel(bot, date, 'stretching'),
-      postVideoToChannel(bot, date, 'strength'),
-      postVideoToChannel(bot, date, 'mobility'),
-    ]);
-
-    const failed = results.filter(r => r.status === 'rejected');
-    if (failed.length > 0) {
-      await ctx.reply(`⚠️ Опубликовано с ошибками: ${failed.length}/3 не удалось.`);
-    } else {
-      await ctx.reply('✅ Готово');
-    }
+    await ctx.reply(report.join('\n'));
   });
 
-  // /reset command — clear tomorrow's approved videos so you can re-search
+  // /reset — clear tomorrow's approved videos, allows re-searching
   bot.command('reset', async (ctx) => {
     if (ctx.from?.id !== config.TELEGRAM_ADMIN_USER_ID) return;
     const { resetApprovalSessions } = await import('./db');
-    const tomorrow = new Date();
-    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-    const date = tomorrow.toISOString().slice(0, 10);
+    const date = tomorrowMsk();
     const count = resetApprovalSessions(date);
     await ctx.reply(`🔄 Сброшено ${count} сессий на ${date}. Запусти /search для нового поиска.`);
   });
 
-  // /checkin command — manually trigger check-in post
+  // /checkin — manually publish evening check-in
   bot.command('checkin', async (ctx) => {
     if (ctx.from?.id !== config.TELEGRAM_ADMIN_USER_ID) return;
     const { postCheckin } = await import('./poster');
-    const date = new Date().toISOString().slice(0, 10);
-    await postCheckin(bot, date);
+    await postCheckin(bot, todayMsk());
     await ctx.reply('✅ Чекин опубликован');
   });
 
-  // /analytics command — manually trigger daily analytics
+  // /analytics — manually run daily analytics
   bot.command('analytics', async (ctx) => {
     if (ctx.from?.id !== config.TELEGRAM_ADMIN_USER_ID) return;
     const { runDailyAnalytics } = await import('./analytics');
-    const date = new Date().toISOString().slice(0, 10);
     await ctx.reply('📊 Запускаю аналитику...');
-    await runDailyAnalytics(bot, date);
+    await runDailyAnalytics(bot, todayMsk());
   });
 
-  // /curator command — manually trigger content curation
+  // /curator — manually run content curation
   bot.command('curator', async (ctx) => {
     if (ctx.from?.id !== config.TELEGRAM_ADMIN_USER_ID) return;
     const { runContentCuration } = await import('./content-curator');
-    const now = new Date();
-    const start = new Date(now.getFullYear(), 0, 1);
-    const diff = now.getTime() - start.getTime();
-    const week = Math.ceil((diff / 86400000 + start.getDay() + 1) / 7);
-    const weekStr = `${now.getFullYear()}-W${String(week).padStart(2, '0')}`;
     await ctx.reply('📋 Генерирую контент-план...');
-    await runContentCuration(bot, weekStr);
+    await runContentCuration(bot, currentWeekMsk());
   });
 
   // Start scheduler
