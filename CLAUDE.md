@@ -127,8 +127,8 @@ Primary docs in repo:
 
 Main entrypoints:
 - `agents/strategist.sh`
-- `agents/install-3x-daily-mac.sh`
-- `agents/uninstall-3x-daily-mac.sh`
+- `agents/install-1x-daily-mac.sh`
+- `agents/uninstall-1x-daily-mac.sh`
 
 Important runtime details:
 - Background `launchd` execution runs from `~/Library/Application Support/Sami` because macOS blocks reliable background execution from `~/Documents`.
@@ -141,8 +141,8 @@ Useful commands:
 ```bash
 bash agents/strategist.sh
 STRATEGIST_DRY_RUN=1 bash agents/strategist.sh
-bash agents/install-3x-daily-mac.sh
-bash agents/uninstall-3x-daily-mac.sh
+bash agents/install-1x-daily-mac.sh
+bash agents/uninstall-1x-daily-mac.sh
 ```
 
 Useful status files:
