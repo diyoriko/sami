@@ -330,7 +330,7 @@ export function registerModeration(bot: Bot): void {
       // might fail if message is too old, that's ok
     }
 
-    await ctx.answerCallbackQuery('Отлично! Тренировка записана.');
+    await ctx.answerCallbackQuery('Тренировка записана. Досмотри до конца — это важно.');
   });
 
   // --- Check-in callbacks ---

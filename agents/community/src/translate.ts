@@ -51,13 +51,24 @@ const NORMALIZE: [RegExp, string][] = [
   [/^\s*[-–—]\s*/g, ''],                      // leading dashes
 ];
 
+function toSentenceCase(str: string): string {
+  return str.replace(/\S+/g, (word, index) => {
+    // Keep short abbreviations like "TRX", "HIIT" (2-4 uppercase letters)
+    if (/^[A-ZА-ЯЁ]{2,4}$/.test(word)) return word;
+    return index === 0
+      ? word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+      : word.toLowerCase();
+  });
+}
+
 function cleanTitle(text: string): string {
   let result = text.trim();
 
-  // Fix ALL CAPS → sentence case
-  const upperRatio = (result.match(/[A-ZА-ЯЁ]/g) || []).length / result.length;
-  if (upperRatio > 0.6 && result.length > 5) {
-    result = result.charAt(0).toUpperCase() + result.slice(1).toLowerCase();
+  // Fix ALL CAPS or mostly-caps → sentence case
+  const letters = result.replace(/[^a-zA-Zа-яА-ЯёЁ]/g, '');
+  const upperCount = (letters.match(/[A-ZА-ЯЁ]/g) || []).length;
+  if (letters.length > 3 && upperCount / letters.length > 0.5) {
+    result = toSentenceCase(result);
   }
 
   // Strip hype

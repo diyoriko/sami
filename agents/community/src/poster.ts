@@ -48,21 +48,21 @@ async function formatCaption(video: VideoRow): Promise<string> {
   const rating = updateVideoRating(video.id);
   const ratingStr = formatRating(rating);
 
-  const tags = [
-    categoryRu,
-    video.duration_label ?? '',
-    muscles,
-    difficultyRu,
-    equipmentTag,
-  ].filter(Boolean).join(' · ');
+  const tagParts = [
+    `🏷 ${categoryRu}`,
+    `⏱ ${video.duration_label ?? '?'}`,
+    `💪 ${muscles}`,
+    `📊 ${difficultyRu}`,
+    `🎒 ${equipmentTag}`,
+  ];
 
   const lines = [
     `*${title}*`,
     '',
-    tags,
+    `\`${tagParts.join('  ')}\``,
     ...(ratingStr ? [`★ ${ratingStr}`] : []),
     '',
-    `${channelName} · [YouTube](${video.video_url})`,
+    `${channelName} · [оригинал](${video.video_url})`,
   ];
 
   return lines.join('\n');
@@ -139,7 +139,7 @@ export async function postVideoToChannel(
       await formatLinkPost(video),
       {
         parse_mode: 'Markdown',
-        link_preview_options: { is_disabled: false },
+        link_preview_options: { is_disabled: true },
         reply_markup: keyboard,
       }
     );
