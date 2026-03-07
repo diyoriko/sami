@@ -510,6 +510,7 @@ export interface UgcSubmission {
   status: string;
   admin_message_id: number | null;
   created_at: string;
+  decided_at: string | null;
 }
 
 export function createUgcSubmission(userId: number, username: string | null, videoUrl: string, youtubeId: string | null): number {

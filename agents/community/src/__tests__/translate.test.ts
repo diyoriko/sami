@@ -49,11 +49,28 @@ describe('rewriteTitle', () => {
     const result = await rewriteTitle('');
     expect(result).toBe('');
   });
+
+  it('lowercases individual CAPS words in mixed text', async () => {
+    const result = await rewriteTitle('8 упражнений которые должен делать КАЖДЫЙ');
+    expect(result).not.toContain('КАЖДЫЙ');
+    expect(result).toContain('каждый');
+  });
+
+  it('preserves short abbreviations in mixed text', async () => {
+    const result = await rewriteTitle('Лучшая HIIT тренировка');
+    expect(result).toContain('HIIT');
+  });
 });
 
 describe('formatChannelName', () => {
   it('escapes Markdown in Russian channel names', async () => {
     const result = await formatChannelName('Йога *дома*');
     expect(result).toContain('\\*');
+  });
+
+  it('cleans CAPS in channel names', async () => {
+    const result = await formatChannelName('ПРЕДСТАВЬТЕ фитнес');
+    expect(result).not.toMatch(/^ПРЕДСТАВЬТЕ/);
+    expect(result.toLowerCase()).toContain('представьте');
   });
 });

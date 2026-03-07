@@ -52,12 +52,29 @@ const NORMALIZE: [RegExp, string][] = [
 ];
 
 function toSentenceCase(str: string): string {
-  return str.replace(/\S+/g, (word, index) => {
+  let isFirst = true;
+  return str.replace(/\S+/g, (word) => {
     // Keep short abbreviations like "TRX", "HIIT" (2-4 uppercase letters)
     if (/^[A-ZА-ЯЁ]{2,4}$/.test(word)) return word;
-    return index === 0
-      ? word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-      : word.toLowerCase();
+    if (isFirst) {
+      isFirst = false;
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    }
+    return word.toLowerCase();
+  });
+}
+
+/** Lowercase individual ALL-CAPS words (5+ letters), even when rest of text is normal case */
+function lowercaseCapsWords(str: string): string {
+  return str.replace(/\S+/g, (word) => {
+    // Keep short abbreviations
+    if (/^[A-ZА-ЯЁ]{2,4}$/.test(word)) return word;
+    // Lowercase words that are 5+ uppercase letters (possibly with trailing punctuation)
+    const core = word.replace(/[^a-zA-Zа-яА-ЯёЁ]/g, '');
+    if (core.length >= 5 && core === core.toUpperCase() && /[A-ZА-ЯЁ]/.test(core)) {
+      return word.toLowerCase();
+    }
+    return word;
   });
 }
 
@@ -70,6 +87,9 @@ function cleanTitle(text: string): string {
   if (letters.length > 3 && upperCount / letters.length > 0.5) {
     result = toSentenceCase(result);
   }
+
+  // Lowercase individual CAPS words even in mixed-case text (e.g. "делать КАЖДЫЙ")
+  result = lowercaseCapsWords(result);
 
   // Strip hype
   for (const pattern of HYPE_STRIP) {
@@ -109,9 +129,10 @@ export async function rewriteTitle(title: string): Promise<string> {
  * Translate channel name to Russian if Latin, escape Markdown.
  */
 export async function formatChannelName(name: string): Promise<string> {
-  let result = name;
+  let result = cleanTitle(name);
   if (isLatin(result)) {
     result = await googleTranslate(result);
+    result = cleanTitle(result);
   }
   return escapeMarkdown(result);
 }
