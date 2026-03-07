@@ -32,11 +32,11 @@ function findYtDlp(): string {
   } catch { /* not in PATH */ }
 
   const candidates = [
-    'yt-dlp',
-    '/usr/local/bin/yt-dlp',
+    '/usr/local/bin/yt-dlp',         // pip install location
     '/usr/bin/yt-dlp',
-    '/opt/homebrew/bin/yt-dlp',
+    '/opt/homebrew/bin/yt-dlp',      // macOS
     '/run/current-system/sw/bin/yt-dlp', // nix
+    'yt-dlp',                        // fallback PATH
   ];
   for (const bin of candidates) {
     try {

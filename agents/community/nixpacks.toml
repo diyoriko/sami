@@ -2,10 +2,10 @@
 nixPkgs = ["nodejs_22", "python3", "python3Packages.pip", "gnumake", "gcc", "ffmpeg"]
 
 [phases.install]
-cmds = ["pip install --break-system-packages yt-dlp", "npm install"]
+cmds = ["npm install"]
 
 [phases.build]
 cmds = ["npm run build"]
 
 [start]
-cmd = "npm start"
+cmd = "pip install --break-system-packages -q yt-dlp && npm start"
