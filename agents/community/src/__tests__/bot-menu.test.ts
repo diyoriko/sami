@@ -18,46 +18,29 @@ afterAll(() => {
   try { fs.unlinkSync(TEST_DB_PATH); } catch {}
 });
 
-describe('getUserCompletions', () => {
-  it('returns empty array for user with no completions', async () => {
-    const { getUserCompletions, getUserCompletionTotal } = await import('../db');
-    expect(getUserCompletions(999, 5, 0)).toEqual([]);
-    expect(getUserCompletionTotal(999)).toBe(0);
+describe('getUserSubmissions (Мои тренировки)', () => {
+  it('returns empty for user with no submissions', async () => {
+    const { getUserSubmissions, getUserSubmissionTotal } = await import('../db');
+    expect(getUserSubmissions(999, 5, 0)).toEqual([]);
+    expect(getUserSubmissionTotal(999)).toBe(0);
   });
 
-  it('returns completions with video title and date', async () => {
+  it('returns non-draft submissions', async () => {
     const db = await import('../db');
 
-    const videoId = db.upsertVideo({
-      youtube_id: 'menu_test1',
-      title: 'Morning Stretch',
-      channel_name: 'TestCh',
-      channel_url: null,
-      duration_seconds: 600,
-      duration_label: '10:00',
-      difficulty: 'beginner',
-      category: 'stretching',
-      muscles: '["back"]',
-      thumbnail_url: null,
-      video_url: 'https://youtube.com/watch?v=menu_test1',
-      view_count: 1000,
-      rating: 0,
-      like_ratio: 0.9,
-      channel_subscribers: 10000,
-      search_query: 'test',
-    });
+    // draft — should NOT appear
+    db.createUgcSubmission(80, 'user80', 'https://youtube.com/watch?v=draft1', 'draft1');
 
-    db.recordPost('2026-03-08', 'stretching', videoId, 2001);
-    const post = db.getPostByMessageId(2001)!;
-    db.recordCompletion(post.id, videoId, 42);
+    // pending — should appear
+    const pendingId = db.createUgcSubmission(80, 'user80', 'https://youtube.com/watch?v=pend1', 'pend1');
+    db.updateUgcSubmission(pendingId, { title: 'My Stretch', category: 'stretching', difficulty: 'beginner', status: 'pending' });
 
-    const items = db.getUserCompletions(42, 5, 0);
+    const items = db.getUserSubmissions(80, 5, 0);
     expect(items).toHaveLength(1);
-    expect(items[0].video_title).toBe('Morning Stretch');
-    expect(items[0].category).toBe('stretching');
-    expect(items[0].date).toBe('2026-03-08');
+    expect(items[0].title).toBe('My Stretch');
+    expect(items[0].status).toBe('pending');
 
-    expect(db.getUserCompletionTotal(42)).toBe(1);
+    expect(db.getUserSubmissionTotal(80)).toBe(1);
   });
 });
 

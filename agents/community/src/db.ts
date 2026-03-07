@@ -549,3 +549,19 @@ export function getUserDraftSubmission(userId: number): UgcSubmission | null {
 export function deleteUgcSubmission(id: number): void {
   getDb().prepare(`DELETE FROM ugc_submissions WHERE id = ?`).run(id);
 }
+
+export function getUserSubmissions(userId: number, limit: number, offset: number): UgcSubmission[] {
+  return getDb().prepare(`
+    SELECT * FROM ugc_submissions
+    WHERE telegram_user_id = ? AND status != 'draft'
+    ORDER BY created_at DESC
+    LIMIT ? OFFSET ?
+  `).all(userId, limit, offset) as UgcSubmission[];
+}
+
+export function getUserSubmissionTotal(userId: number): number {
+  const row = getDb().prepare(
+    `SELECT COUNT(*) as cnt FROM ugc_submissions WHERE telegram_user_id = ? AND status != 'draft'`
+  ).get(userId) as { cnt: number };
+  return row.cnt;
+}

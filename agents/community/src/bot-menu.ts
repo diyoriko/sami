@@ -9,8 +9,8 @@
 import { Bot, Keyboard, InlineKeyboard } from 'grammy';
 import { getConfig } from './config';
 import {
-  getUserCompletions,
-  getUserCompletionTotal,
+  getUserSubmissions,
+  getUserSubmissionTotal,
   createUgcSubmission,
   updateUgcSubmission,
   getUgcSubmission,
@@ -342,17 +342,28 @@ export function registerBotMenu(bot: Bot): void {
 
 // --- Helpers ---
 
+const STATUS_RU: Record<string, string> = {
+  pending: 'на модерации',
+  approved: 'одобрена',
+  rejected: 'отклонена',
+};
+
+const DIFFICULTY_RU: Record<string, string> = {
+  beginner: 'начинающий',
+  intermediate: 'средний',
+  advanced: 'продвинутый',
+};
+
 async function sendMyWorkouts(
   ctx: any,
   userId: number,
   offset: number,
   editMessageId?: number
 ): Promise<void> {
-  const config = getConfig();
-  const total = getUserCompletionTotal(userId);
+  const total = getUserSubmissionTotal(userId);
 
   if (total === 0) {
-    const text = 'У тебя пока нет выполненных тренировок.\n\nНажми «Я сделал(а)» под видео в канале, чтобы отметить тренировку.';
+    const text = 'У тебя пока нет загруженных тренировок.\n\nНажми «Предложить тренировку», чтобы добавить свою.';
     if (editMessageId) {
       try { await ctx.api.editMessageText(ctx.chat!.id, editMessageId, text); } catch {}
     } else {
@@ -361,20 +372,20 @@ async function sendMyWorkouts(
     return;
   }
 
-  const items = getUserCompletions(userId, PAGE_SIZE, offset);
-  const channelId = config.TELEGRAM_CHANNEL_ID;
+  const items = getUserSubmissions(userId, PAGE_SIZE, offset);
 
   const lines = items.map((item, i) => {
     const num = offset + i + 1;
-    const catRu = CATEGORY_RU[item.category] ?? item.category;
-    const dateShort = item.date;
-    return `${num}. *${escapeMarkdown(item.video_title)}*\n   ${catRu} · ${dateShort}`;
+    const catRu = item.category ? (CATEGORY_RU[item.category] ?? item.category) : '—';
+    const statusRu = STATUS_RU[item.status] ?? item.status;
+    const title = item.title ? decodeHtmlEntities(item.title) : 'Без названия';
+    const dateShort = item.created_at.slice(0, 10);
+    return `${num}. *${escapeMarkdown(title)}*\n   ${catRu} · ${statusRu} · ${dateShort}`;
   });
 
   const header = `*Мои тренировки* (${total})\n`;
   const text = header + '\n' + lines.join('\n\n');
 
-  // Pagination buttons
   const kb = new InlineKeyboard();
   if (offset > 0) {
     kb.text('← Назад', `mywk:${Math.max(0, offset - PAGE_SIZE)}`);
@@ -383,7 +394,10 @@ async function sendMyWorkouts(
     kb.text('Дальше →', `mywk:${offset + PAGE_SIZE}`);
   }
 
-  const opts: any = { parse_mode: 'Markdown', reply_markup: kb };
+  const opts: any = {
+    parse_mode: 'Markdown',
+    reply_markup: kb,
+  };
 
   if (editMessageId) {
     try {
@@ -428,4 +442,13 @@ async function sendUgcToAdmin(bot: Bot, sub: UgcSubmission): Promise<void> {
 
 function escapeMarkdown(text: string): string {
   return text.replace(/([*_`\[\]])/g, '\\$1');
+}
+
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
 }
