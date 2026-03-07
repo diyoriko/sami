@@ -35,6 +35,10 @@ function formatViews(n: number): string {
   return String(n);
 }
 
+function escMd(text: string): string {
+  return text.replace(/([*_`\[\]()~>#+\-=|{}.!])/g, '\\$1');
+}
+
 async function formatApprovalMessage(video: ScoredVideo, category: Category): Promise<string> {
   const emoji = CATEGORY_EMOJI[category];
   const categoryRu = CATEGORY_RU[category];
@@ -47,23 +51,53 @@ async function formatApprovalMessage(video: ScoredVideo, category: Category): Pr
   }
 
   const equipmentLine = video.equipment.length > 0
-    ? `⚠️ Нужна экипировка: ${video.equipment.join(', ')}`
-    : `🧘 Только коврик`;
+    ? `Нужна экипировка: ${escMd(video.equipment.join(', '))}`
+    : `Только коврик`;
+
+  const title = escMd(await rewriteTitle(video.title));
+  const channel = escMd(await formatChannelName(video.channel_name));
 
   return [
     `${emoji} *${categoryRu}*`,
     '',
-    `*${await rewriteTitle(video.title)}*`,
-    `👤 ${await formatChannelName(video.channel_name)}`,
-    `▶️ ${video.video_url}`,
+    `*${title}*`,
+    `${channel}`,
+    `${video.video_url}`,
     '',
-    `⏱ ${video.duration_label}  •  📊 ${DIFFICULTY_RU[video.difficulty] ?? video.difficulty}`,
-    `💪 ${muscles}`,
+    `${video.duration_label}  •  ${DIFFICULTY_RU[video.difficulty] ?? video.difficulty}`,
+    `${escMd(muscles)}`,
     equipmentLine,
-    `👁 ${formatViews(video.view_count)} просмотров`,
+    `${formatViews(video.view_count)} просмотров`,
     '',
     `Рейтинг: ${video.total_score}/100 _(бренд: ${video.brand_score})_`,
   ].join('\n');
+}
+
+// Send approval card with Markdown fallback to plain text
+async function sendApprovalCard(
+  api: { sendPhoto: Function; sendMessage: Function },
+  chatId: number, thumbnailUrl: string | null, text: string, keyboard: InlineKeyboard
+) {
+  for (const parseMode of ['Markdown', undefined] as const) {
+    try {
+      if (thumbnailUrl) {
+        return await api.sendPhoto(chatId, thumbnailUrl, {
+          caption: text, parse_mode: parseMode, reply_markup: keyboard,
+        });
+      } else {
+        return await api.sendMessage(chatId, text, {
+          parse_mode: parseMode, reply_markup: keyboard,
+        });
+      }
+    } catch (err: any) {
+      if (parseMode === 'Markdown' && err?.description?.includes("can't parse entities")) {
+        console.warn(`[approval] Markdown parse failed, retrying plain text`);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error('sendApprovalCard: all attempts failed');
 }
 
 export async function runApprovalFlow(
@@ -112,20 +146,7 @@ export async function runApprovalFlow(
       .text('🔄 Другое', `refresh:${sessionId}`);
 
     try {
-      let msg;
-      if (v.thumbnail_url) {
-        msg = await bot.api.sendPhoto(
-          config.TELEGRAM_ADMIN_USER_ID,
-          v.thumbnail_url,
-          { caption: text, parse_mode: 'Markdown', reply_markup: keyboard }
-        );
-      } else {
-        msg = await bot.api.sendMessage(
-          config.TELEGRAM_ADMIN_USER_ID,
-          text,
-          { parse_mode: 'Markdown', reply_markup: keyboard }
-        );
-      }
+      const msg = await sendApprovalCard(bot.api, config.TELEGRAM_ADMIN_USER_ID, v.thumbnail_url, text, keyboard);
       setApprovalMessageId(sessionId, msg.message_id);
       totalFound++;
     } catch (err) {
@@ -135,12 +156,16 @@ export async function runApprovalFlow(
     await new Promise(r => setTimeout(r, 300));
   }
 
-  if (totalFound > 0) {
-    await bot.api.sendMessage(
-      config.TELEGRAM_ADMIN_USER_ID,
-      `✅ Нашёл по одному видео на каждую категорию. Выбери или нажми 🔄 Другое.\n\n⏰ Посты: 08:00 стретч • 08:05 сила • 08:10 мобильность`
-    );
-  }
+  const total = categories.length;
+  const failed = total - totalFound;
+  const summary = totalFound === total
+    ? `Нашёл по одному видео на каждую категорию (${totalFound}/${total}).`
+    : `Нашёл ${totalFound} из ${total} категорий.${failed > 0 ? ` ${failed} не удалось отправить — проверь логи.` : ''}`;
+
+  await bot.api.sendMessage(
+    config.TELEGRAM_ADMIN_USER_ID,
+    `${summary} Выбери или нажми Другое.\n\nПосты: 08:00 стретч, 08:05 сила, 08:10 мобильность`
+  );
 }
 
 async function editKeyboard(
@@ -224,19 +249,7 @@ export function registerApprovalCallbacks(bot: Bot): void {
       .text('🔄 Другое', `refresh:${newSessionId}`);
 
     try {
-      let msg;
-      if (v.thumbnail_url) {
-        msg = await ctx.api.sendPhoto(config.TELEGRAM_ADMIN_USER_ID, v.thumbnail_url, {
-          caption: text,
-          parse_mode: 'Markdown',
-          reply_markup: keyboard,
-        });
-      } else {
-        msg = await ctx.api.sendMessage(config.TELEGRAM_ADMIN_USER_ID, text, {
-          parse_mode: 'Markdown',
-          reply_markup: keyboard,
-        });
-      }
+      const msg = await sendApprovalCard(ctx.api, config.TELEGRAM_ADMIN_USER_ID, v.thumbnail_url, text, keyboard);
       setApprovalMessageId(newSessionId, msg.message_id);
     } catch (err) {
       console.error('[approval] refresh send failed:', err);
