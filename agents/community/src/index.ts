@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as http from 'http';
 import { getConfig } from './config';
 import { getDb } from './db';
+import { registerBotMenu } from './bot-menu';
 import { registerModeration } from './moderation';
 import { registerApprovalCallbacks } from './approval';
 import { startScheduler } from './scheduler';
@@ -35,6 +36,7 @@ async function main(): Promise<void> {
   const bot = new Bot(config.TELEGRAM_BOT_TOKEN);
 
   // Register handlers
+  registerBotMenu(bot);
   registerModeration(bot);
   registerApprovalCallbacks(bot);
 
@@ -156,8 +158,18 @@ async function main(): Promise<void> {
   // Start bot
   console.log('[sami-community] starting bot...');
   await bot.start({
-    onStart: (botInfo) => {
+    onStart: async (botInfo) => {
       console.log(`[sami-community] bot @${botInfo.username} is running`);
+
+      // Set bot commands menu for private chats
+      await bot.api.setMyCommands(
+        [
+          { command: 'start', description: 'Главное меню' },
+          { command: 'cancel', description: 'Отменить текущее действие' },
+        ],
+        { scope: { type: 'all_private_chats' } }
+      ).catch(() => {});
+
       // Notify admin on startup
       bot.api.sendMessage(
         config.TELEGRAM_ADMIN_USER_ID,

@@ -103,7 +103,21 @@ function migrate(db: Database.Database): void {
       muted_until TEXT
     );
 
-    -- Migration: add view_count to videos if not exists
+    CREATE TABLE IF NOT EXISTS ugc_submissions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      telegram_user_id INTEGER NOT NULL,
+      username TEXT,
+      video_url TEXT NOT NULL,
+      youtube_id TEXT,
+      title TEXT,
+      category TEXT CHECK(category IN ('stretching','strength','mobility')),
+      difficulty TEXT CHECK(difficulty IN ('beginner','intermediate','advanced')),
+      status TEXT CHECK(status IN ('draft','pending','approved','rejected')) DEFAULT 'draft',
+      admin_message_id INTEGER,
+      created_at TEXT DEFAULT (datetime('now')),
+      decided_at TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS daily_stats (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       date TEXT UNIQUE NOT NULL,
@@ -451,4 +465,86 @@ export function updateVideoRating(videoId: number): number {
   const rating = computeRating(video);
   db.prepare('UPDATE videos SET rating = ? WHERE id = ?').run(rating, videoId);
   return rating;
+}
+
+// --- "Мои тренировки" ---
+
+export interface UserCompletion {
+  video_title: string;
+  category: string;
+  channel_message_id: number;
+  completed_at: string;
+  date: string;
+}
+
+export function getUserCompletions(userId: number, limit: number, offset: number): UserCompletion[] {
+  return getDb().prepare(`
+    SELECT v.title as video_title, p.category, p.channel_message_id, c.completed_at, p.date
+    FROM completions c
+    JOIN videos v ON v.id = c.video_id
+    JOIN posts p ON p.id = c.post_id
+    WHERE c.telegram_user_id = ?
+    ORDER BY c.completed_at DESC
+    LIMIT ? OFFSET ?
+  `).all(userId, limit, offset) as UserCompletion[];
+}
+
+export function getUserCompletionTotal(userId: number): number {
+  const row = getDb().prepare(
+    `SELECT COUNT(*) as cnt FROM completions WHERE telegram_user_id = ?`
+  ).get(userId) as { cnt: number };
+  return row.cnt;
+}
+
+// --- UGC submissions ---
+
+export interface UgcSubmission {
+  id: number;
+  telegram_user_id: number;
+  username: string | null;
+  video_url: string;
+  youtube_id: string | null;
+  title: string | null;
+  category: string | null;
+  difficulty: string | null;
+  status: string;
+  admin_message_id: number | null;
+  created_at: string;
+}
+
+export function createUgcSubmission(userId: number, username: string | null, videoUrl: string, youtubeId: string | null): number {
+  const result = getDb().prepare(`
+    INSERT INTO ugc_submissions (telegram_user_id, username, video_url, youtube_id)
+    VALUES (?, ?, ?, ?)
+  `).run(userId, username, videoUrl, youtubeId);
+  return Number(result.lastInsertRowid);
+}
+
+export function updateUgcSubmission(id: number, fields: Partial<Pick<UgcSubmission, 'title' | 'category' | 'difficulty' | 'status' | 'admin_message_id'>>): void {
+  const sets: string[] = [];
+  const values: any[] = [];
+  for (const [key, val] of Object.entries(fields)) {
+    sets.push(`${key} = ?`);
+    values.push(val);
+  }
+  if (sets.length === 0) return;
+  if (fields.status === 'approved' || fields.status === 'rejected') {
+    sets.push(`decided_at = datetime('now')`);
+  }
+  values.push(id);
+  getDb().prepare(`UPDATE ugc_submissions SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+}
+
+export function getUgcSubmission(id: number): UgcSubmission | null {
+  return (getDb().prepare(`SELECT * FROM ugc_submissions WHERE id = ?`).get(id) as UgcSubmission | undefined) ?? null;
+}
+
+export function getUserDraftSubmission(userId: number): UgcSubmission | null {
+  return getDb().prepare(
+    `SELECT * FROM ugc_submissions WHERE telegram_user_id = ? AND status = 'draft' ORDER BY created_at DESC LIMIT 1`
+  ).get(userId) as UgcSubmission | null;
+}
+
+export function deleteUgcSubmission(id: number): void {
+  getDb().prepare(`DELETE FROM ugc_submissions WHERE id = ?`).run(id);
 }
