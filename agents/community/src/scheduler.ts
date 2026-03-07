@@ -37,19 +37,36 @@ export function startScheduler(bot: Bot): void {
     }
   }, { timezone: 'Europe/Moscow' });
 
-  // 08:00 — post all 3 videos simultaneously
-  cron.schedule(config.CRON_POST_ALL, async () => {
-    console.log('[scheduler] posting all 3 videos');
+  // 07:30 — stretching (утро)
+  cron.schedule(config.CRON_POST_STRETCHING, async () => {
+    console.log('[scheduler] posting stretching');
     try {
-      const date = todayMsk();
-      await Promise.all([
-        postVideoToChannel(bot, date, 'stretching'),
-        postVideoToChannel(bot, date, 'strength'),
-        postVideoToChannel(bot, date, 'mobility'),
-      ]);
+      await postVideoToChannel(bot, todayMsk(), 'stretching');
     } catch (err) {
-      console.error('[scheduler] posting failed:', err);
-      await notifyAdmin(bot, 'Community', `Публикация видео упала:\n\`${String(err)}\``);
+      console.error('[scheduler] stretching post failed:', err);
+      await notifyAdmin(bot, 'Community', `Стретчинг упал:\n\`${String(err)}\``);
+    }
+  }, { timezone: 'Europe/Moscow' });
+
+  // 12:00 — strength (обед)
+  cron.schedule(config.CRON_POST_STRENGTH, async () => {
+    console.log('[scheduler] posting strength');
+    try {
+      await postVideoToChannel(bot, todayMsk(), 'strength');
+    } catch (err) {
+      console.error('[scheduler] strength post failed:', err);
+      await notifyAdmin(bot, 'Community', `Силовая упала:\n\`${String(err)}\``);
+    }
+  }, { timezone: 'Europe/Moscow' });
+
+  // 19:00 — mobility (вечер)
+  cron.schedule(config.CRON_POST_MOBILITY, async () => {
+    console.log('[scheduler] posting mobility');
+    try {
+      await postVideoToChannel(bot, todayMsk(), 'mobility');
+    } catch (err) {
+      console.error('[scheduler] mobility post failed:', err);
+      await notifyAdmin(bot, 'Community', `Мобильность упала:\n\`${String(err)}\``);
     }
   }, { timezone: 'Europe/Moscow' });
 

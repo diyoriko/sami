@@ -154,12 +154,16 @@ async function main(): Promise<void> {
       return;
     }
     const filePath = reportFiles[req.url ?? ''];
-    if (filePath && fs.existsSync(filePath)) {
+    if (filePath) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(fs.readFileSync(filePath, 'utf8'));
+      if (fs.existsSync(filePath)) {
+        res.end(fs.readFileSync(filePath, 'utf8'));
+      } else {
+        res.end(JSON.stringify({ status: 'pending', message: 'report not generated yet', data: null }));
+      }
     } else {
       res.writeHead(404, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'not ready yet' }));
+      res.end(JSON.stringify({ error: 'unknown endpoint' }));
     }
   }).listen(port, () => {
     console.log(`[http] report server on :${port} — /report/community /report/analytics /health`);

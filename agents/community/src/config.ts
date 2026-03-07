@@ -15,7 +15,9 @@ const ConfigSchema = z.object({
   COMMUNITY_REPORT_DIR: z.string().default('../../reports/community/.internal'),
   // Schedule (cron expressions, defaults match the plan)
   CRON_SEARCH_VIDEOS: z.string().default('0 19 * * *'),     // 19:00 — search & send for approval (for tomorrow)
-  CRON_POST_ALL: z.string().default('0 8 * * *'),           // 08:00 — post all 3 videos simultaneously
+  CRON_POST_STRETCHING: z.string().default('30 7 * * *'),    // 07:30 — stretching (утро)
+  CRON_POST_STRENGTH: z.string().default('0 12 * * *'),      // 12:00 — strength (обед)
+  CRON_POST_MOBILITY: z.string().default('0 19 * * *'),      // 19:00 — mobility (вечер)
   CRON_CHECKIN: z.string().default('0 22 * * *'),           // 22:00 — evening check-in
   // Analytics agent
   CRON_ANALYTICS_DAILY: z.string().default('30 0 * * *'),    // 00:30 — daily metrics
