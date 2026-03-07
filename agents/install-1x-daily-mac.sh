@@ -3,8 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PLIST_DIR="$HOME/Library/LaunchAgents"
-PLIST_PATH="$PLIST_DIR/com.sami.codex.strategist.plist"
-LABEL="com.sami.codex.strategist"
+PLIST_PATH="$PLIST_DIR/com.sami.strategist.plist"
+LABEL="com.sami.strategist"
 DOMAIN_TARGET="gui/$(id -u)"
 LOG_DIR="$HOME/Library/Logs/Sami"
 LAUNCHD_OUT_LOG="$LOG_DIR/strategist.launchd.out.log"
@@ -78,7 +78,7 @@ export SAMI_PROJECT_ROOT="$ROOT_DIR"
 export SAMI_AGENTS_DIR="$RUNTIME_DIR"
 export SAMI_CONTEXT_ROOT="$RUNTIME_CONTEXT_DIR"
 export STRATEGIST_REPORT_DIR="$RUNTIME_REPORT_DIR"
-export STRATEGIST_GENERATOR="\${STRATEGIST_GENERATOR:-codex}"
+export STRATEGIST_GENERATOR="\${STRATEGIST_GENERATOR:-claude}"
 
 if [[ -f "\$HOME/.config/sami/strategist.env" ]]; then
   set -a
@@ -91,7 +91,7 @@ load_exported_vars "\$HOME/.zshrc"
 load_exported_vars "\$HOME/.bashrc"
 load_exported_vars "\$HOME/.profile"
 
-if [[ "\${STRATEGIST_GENERATOR:-codex}" == "codex" ]]; then
+if [[ "\${STRATEGIST_GENERATOR:-claude}" == "codex" ]]; then
   unset OPENAI_API_KEY || true
 fi
 

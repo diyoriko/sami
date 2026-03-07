@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PLIST_PATH="$HOME/Library/LaunchAgents/com.sami.codex.strategist.plist"
 DOMAIN_TARGET="gui/$(id -u)"
-launchctl bootout "$DOMAIN_TARGET" "$PLIST_PATH" >/dev/null 2>&1 || true
-rm -f "$PLIST_PATH"
-echo "[strategist-uninstall] removed: $PLIST_PATH"
+
+# Remove old (codex) and new plist
+for plist in \
+  "$HOME/Library/LaunchAgents/com.sami.codex.strategist.plist" \
+  "$HOME/Library/LaunchAgents/com.sami.strategist.plist"; do
+  launchctl bootout "$DOMAIN_TARGET" "$plist" >/dev/null 2>&1 || true
+  rm -f "$plist"
+  echo "[strategist-uninstall] removed: $plist"
+done

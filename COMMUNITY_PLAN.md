@@ -153,18 +153,18 @@ agents/community/
 
 ---
 
-## Синхронизация Claude + Codex
+## Синхронизация агентов
 
 ### Контракт данных
 ```
 reports/
 ├── strategist/
 │   └── .internal/
-│       ├── latest.json          ← Codex пишет, Claude читает
-│       └── community_packet.json ← Codex пишет для Claude
+│       ├── latest.json          ← Стратег (Claude) пишет, Community читает
+│       └── community_packet.json ← Стратег пишет для Community
 └── community/
     └── .internal/
-        └── latest.json          ← Claude пишет, Codex читает
+        └── latest.json          ← Community пишет, Стратег читает
 ```
 
 **`community_packet.json`** — стратег производит каждый прогон:
