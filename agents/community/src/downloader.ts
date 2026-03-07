@@ -52,7 +52,8 @@ export function logYtDlpStatus(): void {
   try {
     const bin = findYtDlp();
     const ver = require('child_process').execFileSync(bin, ['--version'], { encoding: 'utf8' }).trim();
-    console.log(`[downloader] yt-dlp found: ${bin} (${ver})`);
+    const proxy = process.env.YT_PROXY ? 'yes' : 'no';
+    console.log(`[downloader] yt-dlp: ${bin} (${ver}), proxy: ${proxy}`);
   } catch {
     console.warn('[downloader] yt-dlp NOT found — will post YouTube links as fallback');
   }
@@ -96,11 +97,16 @@ export async function downloadVideo(youtubeUrl: string, youtubeId: string): Prom
     '--no-warnings',
   ];
 
-  // Use cookies if available (needed for datacenter IPs blocked by YouTube)
+  // Use proxy if configured (needed for datacenter IPs blocked by YouTube)
+  const proxy = process.env.YT_PROXY;
+  if (proxy) {
+    baseArgs.push('--proxy', proxy);
+  }
+
+  // Use cookies if available (optional, additional auth)
   const cookiesPath = process.env.YT_COOKIES_PATH || '/data/cookies.txt';
   if (fs.existsSync(cookiesPath)) {
     baseArgs.push('--cookies', cookiesPath);
-    console.log(`[downloader] using cookies from ${cookiesPath}`);
   }
 
   const attempts = [
