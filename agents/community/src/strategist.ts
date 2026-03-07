@@ -130,17 +130,20 @@ ${fullContext}`;
 }
 
 function findClaudeBin(): string {
+  // Local node_modules first (Railway puts this in PATH)
+  const localBin = path.resolve(__dirname, '..', 'node_modules', '.bin', 'claude');
+  if (require('fs').existsSync(localBin)) return localBin;
+
   try {
     const result = require('child_process').execFileSync('which', ['claude'], { encoding: 'utf8' }).trim();
     if (result) return result;
   } catch { /* not in PATH */ }
 
   const candidates = [
+    '/app/node_modules/.bin/claude',
     '/usr/local/bin/claude',
-    '/usr/bin/claude',
     '/opt/homebrew/bin/claude',
     `${process.env.HOME}/.claude/local/claude`,
-    '/root/.nix-profile/bin/claude',
   ];
   for (const bin of candidates) {
     try {
