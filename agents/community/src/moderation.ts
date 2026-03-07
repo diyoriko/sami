@@ -1,7 +1,7 @@
 import { Bot } from 'grammy';
 import { InlineKeyboard } from 'grammy';
 import { getConfig } from './config';
-import { upsertMember, setMemberGoal, addWarning, muteMember } from './db';
+import { upsertMember, setMemberGoal, addWarning, muteMember, recordCompletion, getCompletionCount, hasUserCompleted, getPostByMessageId } from './db';
 
 // ─── CAPTCHA ──────────────────────────────────────────────────────────────────
 // Simple math captcha to filter bots. New member is muted until they pass.
@@ -291,6 +291,46 @@ export function registerModeration(bot: Bot): void {
     );
     await ctx.reply('✅ Репорт отправлен.').catch(() => {});
     try { await ctx.deleteMessage(); } catch {}
+  });
+
+  // --- "Сделано ✓" button on video posts ---
+  bot.callbackQuery(/^done:(\d+)$/, async (ctx) => {
+    const videoId = parseInt(ctx.match[1]);
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    // Find the post by the message that was clicked
+    const msg = ctx.callbackQuery.message;
+    if (!msg) {
+      await ctx.answerCallbackQuery('Не удалось определить пост');
+      return;
+    }
+
+    const post = getPostByMessageId(msg.message_id);
+    if (!post) {
+      await ctx.answerCallbackQuery('Пост не найден');
+      return;
+    }
+
+    if (hasUserCompleted(post.id, userId)) {
+      const count = getCompletionCount(post.id);
+      await ctx.answerCallbackQuery(`Ты уже отметил(а) эту тренировку · ${count}`);
+      return;
+    }
+
+    recordCompletion(post.id, videoId, userId);
+    const count = getCompletionCount(post.id);
+
+    // Update button text with new count
+    try {
+      const keyboard = new InlineKeyboard()
+        .text(`Сделано ✓ · ${count}`, `done:${videoId}`);
+      await ctx.editMessageReplyMarkup({ reply_markup: keyboard });
+    } catch {
+      // might fail if message is too old, that's ok
+    }
+
+    await ctx.answerCallbackQuery('Отлично! Тренировка записана.');
   });
 
   // --- Check-in callbacks ---

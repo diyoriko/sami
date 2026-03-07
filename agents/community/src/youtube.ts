@@ -228,7 +228,7 @@ interface YouTubeSearchItem {
 interface YouTubeVideoDetail {
   id: string;
   contentDetails: { duration: string };
-  statistics: { viewCount?: string };
+  statistics: { viewCount?: string; likeCount?: string };
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -260,6 +260,8 @@ export function detectEquipment(title: string, description: string): string[] {
 export type ScoredVideo = Omit<VideoRow, 'id'> & {
   search_query: string;
   view_count: number;
+  like_ratio: number;
+  channel_subscribers: number;
   brand_score: number;
   total_score: number;
   equipment: string[]; // empty = mat-only
@@ -309,6 +311,8 @@ export async function searchVideos(
     if (seconds < 240 || seconds > 1800) continue;
 
     const viewCount = parseInt(detail.statistics.viewCount ?? '0', 10);
+    const likeCount = parseInt(detail.statistics.likeCount ?? '0', 10);
+    const likeRatio = viewCount > 0 ? Math.min(likeCount / viewCount, 1) : 0;
     const title = item.snippet.title;
     const description = item.snippet.description;
     const channelName = item.snippet.channelTitle;
@@ -335,6 +339,9 @@ export async function searchVideos(
       video_url: `https://www.youtube.com/watch?v=${videoId}`,
       search_query: query,
       view_count: viewCount,
+      like_ratio: likeRatio,
+      channel_subscribers: 0, // would require separate channels API call
+      rating: 0,
       brand_score: brandScore,
       total_score: totalScore,
       equipment,

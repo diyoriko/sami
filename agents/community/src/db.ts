@@ -17,8 +17,11 @@ export function getDb(): Database.Database {
 }
 
 function migrate(db: Database.Database): void {
-  // Add view_count column if upgrading from older schema
+  // Migrations for older schemas
   try { db.exec('ALTER TABLE videos ADD COLUMN view_count INTEGER DEFAULT 0'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE videos ADD COLUMN rating REAL DEFAULT 0'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE videos ADD COLUMN like_ratio REAL DEFAULT 0'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE videos ADD COLUMN channel_subscribers INTEGER DEFAULT 0'); } catch { /* already exists */ }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS videos (
@@ -36,7 +39,19 @@ function migrate(db: Database.Database): void {
       video_url TEXT NOT NULL,
       search_query TEXT,
       view_count INTEGER DEFAULT 0,
+      rating REAL DEFAULT 0,
+      like_ratio REAL DEFAULT 0,
+      channel_subscribers INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS completions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      video_id INTEGER NOT NULL REFERENCES videos(id),
+      post_id INTEGER NOT NULL REFERENCES posts(id),
+      telegram_user_id INTEGER NOT NULL,
+      completed_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(post_id, telegram_user_id)
     );
 
     CREATE TABLE IF NOT EXISTS approval_sessions (
@@ -128,22 +143,29 @@ export interface VideoRow {
   thumbnail_url: string | null;
   video_url: string;
   view_count: number;
+  rating: number;
+  like_ratio: number;
+  channel_subscribers: number;
 }
 
 export function upsertVideo(v: Omit<VideoRow, 'id'> & { search_query?: string }): number {
   const db = getDb();
   const stmt = db.prepare(`
     INSERT INTO videos (youtube_id, title, channel_name, channel_url, duration_seconds,
-      duration_label, difficulty, category, muscles, thumbnail_url, video_url, search_query, view_count)
+      duration_label, difficulty, category, muscles, thumbnail_url, video_url, search_query,
+      view_count, like_ratio, channel_subscribers)
     VALUES (@youtube_id, @title, @channel_name, @channel_url, @duration_seconds,
-      @duration_label, @difficulty, @category, @muscles, @thumbnail_url, @video_url, @search_query, @view_count)
+      @duration_label, @difficulty, @category, @muscles, @thumbnail_url, @video_url, @search_query,
+      @view_count, @like_ratio, @channel_subscribers)
     ON CONFLICT(youtube_id) DO UPDATE SET
       title = excluded.title,
       channel_name = excluded.channel_name,
       duration_label = excluded.duration_label,
       difficulty = excluded.difficulty,
       muscles = excluded.muscles,
-      view_count = excluded.view_count
+      view_count = excluded.view_count,
+      like_ratio = excluded.like_ratio,
+      channel_subscribers = excluded.channel_subscribers
     RETURNING id
   `);
   const row = stmt.get(v) as { id: number };
@@ -342,4 +364,73 @@ export function getWeeklyStats(startDate: string, endDate: string): Array<{
 export function getPostCountForDate(date: string): number {
   const row = getDb().prepare(`SELECT COUNT(*) as cnt FROM posts WHERE date = ?`).get(date) as { cnt: number };
   return row.cnt;
+}
+
+// --- Completion helpers ("Сделано" button) ---
+
+export function recordCompletion(postId: number, videoId: number, userId: number): boolean {
+  try {
+    getDb().prepare(`
+      INSERT INTO completions (post_id, video_id, telegram_user_id)
+      VALUES (?, ?, ?)
+      ON CONFLICT(post_id, telegram_user_id) DO NOTHING
+    `).run(postId, videoId, userId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function getCompletionCount(postId: number): number {
+  const row = getDb().prepare(
+    `SELECT COUNT(*) as cnt FROM completions WHERE post_id = ?`
+  ).get(postId) as { cnt: number };
+  return row.cnt;
+}
+
+export function hasUserCompleted(postId: number, userId: number): boolean {
+  const row = getDb().prepare(
+    `SELECT COUNT(*) as cnt FROM completions WHERE post_id = ? AND telegram_user_id = ?`
+  ).get(postId, userId) as { cnt: number };
+  return row.cnt > 0;
+}
+
+export function getPostByMessageId(channelMessageId: number): { id: number; video_id: number; category: string; date: string } | null {
+  return getDb().prepare(
+    `SELECT id, video_id, category, date FROM posts WHERE channel_message_id = ?`
+  ).get(channelMessageId) as any ?? null;
+}
+
+// --- Rating ---
+
+export function computeRating(video: VideoRow): number {
+  const viewScore = video.view_count > 0 ? Math.log10(video.view_count) / 7 : 0; // normalize: 10M views = 1.0
+  const likeScore = video.like_ratio ?? 0; // 0..1
+  const channelScore = video.channel_subscribers > 0
+    ? Math.min(Math.log10(video.channel_subscribers) / 7, 1)
+    : 0.3;
+  const completionRate = getVideoCompletionRate(video.id);
+
+  const raw = 0.4 * viewScore + 0.3 * likeScore + 0.2 * channelScore + 0.1 * completionRate;
+  return Math.round(Math.min(raw * 10, 10) * 10) / 10; // 0.0 .. 10.0
+}
+
+function getVideoCompletionRate(videoId: number): number {
+  // ratio of completions to total posts of this video
+  const row = getDb().prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM completions WHERE video_id = ?) as completions,
+      (SELECT COUNT(*) FROM posts WHERE video_id = ?) as posts
+  `).get(videoId, videoId) as { completions: number; posts: number };
+  if (row.posts === 0) return 0;
+  return Math.min(row.completions / Math.max(row.posts, 1), 1);
+}
+
+export function updateVideoRating(videoId: number): number {
+  const db = getDb();
+  const video = db.prepare('SELECT * FROM videos WHERE id = ?').get(videoId) as VideoRow | undefined;
+  if (!video) return 0;
+  const rating = computeRating(video);
+  db.prepare('UPDATE videos SET rating = ? WHERE id = ?').run(rating, videoId);
+  return rating;
 }

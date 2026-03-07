@@ -1,31 +1,33 @@
 import { Bot, InlineKeyboard } from 'grammy';
 import { InputFile } from 'grammy';
 import { getConfig } from './config';
-import { getApprovedVideo, recordPost, wasPostedToday, getCheckinStats, recordCheckinPost, VideoRow } from './db';
+import {
+  getApprovedVideo, recordPost, wasPostedToday,
+  getCheckinStats, recordCheckinPost, VideoRow,
+  updateVideoRating,
+} from './db';
 import { downloadVideo, isYtDlpAvailable } from './downloader';
 import { detectEquipment } from './youtube';
 import { rewriteTitle, formatChannelName } from './translate';
 
-const CATEGORY_EMOJI: Record<string, string> = {
-  stretching: '🧘',
-  strength: '💪',
-  mobility: '🔄',
-};
-
 const CATEGORY_RU: Record<string, string> = {
-  stretching: 'Стретчинг дня',
-  strength: 'Силовая дня',
-  mobility: 'Мобильность дня',
+  stretching: 'стретчинг',
+  strength: 'сила',
+  mobility: 'мобильность',
 };
 
 const DIFFICULTY_RU: Record<string, string> = {
-  beginner: 'Начинающий',
-  intermediate: 'Средний',
-  advanced: 'Продвинутый',
+  beginner: 'начинающий',
+  intermediate: 'средний',
+  advanced: 'продвинутый',
 };
 
+function formatRating(rating: number): string {
+  if (rating <= 0) return '';
+  return `${rating.toFixed(1)}`;
+}
+
 async function formatCaption(video: VideoRow): Promise<string> {
-  const emoji = CATEGORY_EMOJI[video.category] ?? '🏋️';
   const categoryRu = CATEGORY_RU[video.category] ?? video.category;
   const difficultyRu = DIFFICULTY_RU[video.difficulty] ?? video.difficulty;
 
@@ -38,29 +40,36 @@ async function formatCaption(video: VideoRow): Promise<string> {
   }
 
   const equipment = detectEquipment(video.title, '');
-  const equipmentLine = equipment.length > 0
-    ? `🎒 Понадобится: ${equipment.join(', ')}`
-    : null;
+  const equipmentTag = equipment.length > 0 ? equipment.join(', ') : 'без инвентаря';
 
   const title = await rewriteTitle(video.title);
   const channelName = await formatChannelName(video.channel_name);
 
-  return [
-    `${emoji} *${categoryRu}*`,
-    '',
+  const rating = updateVideoRating(video.id);
+  const ratingStr = formatRating(rating);
+
+  const tags = [
+    categoryRu,
+    video.duration_label ?? '',
+    muscles,
+    difficultyRu,
+    equipmentTag,
+  ].filter(Boolean).join(' · ');
+
+  const lines = [
     `*${title}*`,
-    `👤 ${channelName}`,
     '',
-    `⏱ ${video.duration_label ?? '?'}  •  📊 ${difficultyRu}`,
-    `💪 ${muscles}`,
-    ...(equipmentLine ? [equipmentLine] : []),
+    tags,
+    ...(ratingStr ? [`★ ${ratingStr}`] : []),
     '',
-    `#${video.category} #sami #ежедневнаяпрактика`,
-  ].join('\n');
+    `${channelName} · [YouTube](${video.video_url})`,
+  ];
+
+  return lines.join('\n');
 }
 
 async function formatLinkPost(video: VideoRow): Promise<string> {
-  return (await formatCaption(video)) + `\n\n▶️ [Смотреть](${video.video_url})`;
+  return await formatCaption(video);
 }
 
 export type PostResult = 'posted' | 'skipped' | 'no_video' | 'error';
@@ -87,6 +96,9 @@ export async function postVideoToChannel(
 
   const caption = await formatCaption(video);
 
+  const keyboard = new InlineKeyboard()
+    .text('Сделано ✓', `done:${video.id}`);
+
   // Try to download and post as video file (works without VPN in Russia)
   if (isYtDlpAvailable()) {
     try {
@@ -104,6 +116,7 @@ export async function postVideoToChannel(
             duration: download.meta.duration ?? video.duration_seconds ?? undefined,
             width: download.meta.width ?? undefined,
             height: download.meta.height ?? undefined,
+            reply_markup: keyboard,
           }
         );
         download.cleanup();
@@ -124,7 +137,11 @@ export async function postVideoToChannel(
     const msg = await bot.api.sendMessage(
       config.TELEGRAM_CHANNEL_ID,
       await formatLinkPost(video),
-      { parse_mode: 'Markdown', link_preview_options: { is_disabled: false } }
+      {
+        parse_mode: 'Markdown',
+        link_preview_options: { is_disabled: false },
+        reply_markup: keyboard,
+      }
     );
     recordPost(date, category, video.id, msg.message_id);
     console.log(`[poster] posted ${category} as link, msgId=${msg.message_id}`);
@@ -139,16 +156,15 @@ export async function postCheckin(bot: Bot, date: string): Promise<void> {
   const config = getConfig();
 
   const text = [
-    '📋 *Чекин дня*',
+    '*Чекин дня*',
     '',
     'Как прошёл твой день движения?',
-    'Нажми кнопку ниже 👇',
   ].join('\n');
 
   const keyboard = new InlineKeyboard()
-    .text('✅ Сделал(а)', `checkin:did:${date}`)
-    .text('😅 Частично', `checkin:partial:${date}`)
-    .text('❌ Не получилось', `checkin:didnt:${date}`);
+    .text('Сделал(а)', `checkin:did:${date}`)
+    .text('Частично', `checkin:partial:${date}`)
+    .text('Пропустил(а)', `checkin:didnt:${date}`);
 
   try {
     const msg = await bot.api.sendMessage(config.TELEGRAM_CHANNEL_ID, text, {
@@ -169,14 +185,13 @@ export async function updateCheckinResults(bot: Bot, date: string): Promise<void
   if (total === 0) return;
 
   const summary = [
-    `📊 *Результаты дня ${date}*`,
+    `*Результаты дня ${date}*`,
     '',
-    `✅ Сделал(а): ${stats.did}`,
-    `😅 Частично: ${stats.partial}`,
-    `❌ Не получилось: ${stats.didnt}`,
+    `Сделал(а): ${stats.did}`,
+    `Частично: ${stats.partial}`,
+    `Пропустил(а): ${stats.didnt}`,
     '',
-    `👥 Всего ответили: ${total}`,
-    `🔥 Активность: ${Math.round((stats.did / total) * 100)}%`,
+    `Всего: ${total} · Активность: ${Math.round((stats.did / total) * 100)}%`,
   ].join('\n');
 
   try {
