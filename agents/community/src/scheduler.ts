@@ -6,6 +6,7 @@ import { runApprovalFlow } from './approval';
 import { readCommunityPacket, writeCommunityReport } from './strategist-sync';
 import { runDailyAnalytics, runWeeklyAnalytics } from './analytics';
 import { runContentCuration } from './content-curator';
+import { runStrategist } from './strategist';
 import { notifyAdmin } from './notify-admin';
 import { todayMsk, tomorrowMsk, currentWeekMsk, moscowHour } from './dates';
 
@@ -86,6 +87,19 @@ export function startScheduler(bot: Bot): void {
     console.log('[scheduler] writing daily community report');
     writeCommunityReport(todayMsk(), newMembersToday);
     newMembersToday = 0;
+  }, { timezone: 'Europe/Moscow' });
+
+  // ---- Strategist agent ----
+
+  // 09:00 — daily strategist report
+  cron.schedule(config.CRON_STRATEGIST, async () => {
+    console.log('[scheduler] running strategist');
+    try {
+      await runStrategist(bot);
+    } catch (err) {
+      console.error('[scheduler] strategist failed:', err);
+      await notifyAdmin(bot, 'Strategist', `Стратег упал:\n\`${String(err)}\``);
+    }
   }, { timezone: 'Europe/Moscow' });
 
   // ---- Analytics agent ----

@@ -136,15 +136,27 @@ async function main(): Promise<void> {
     await runContentCuration(bot, currentWeekMsk());
   });
 
+  // /strategist — manually run strategist report
+  bot.command('strategist', async (ctx) => {
+    if (ctx.from?.id !== config.TELEGRAM_ADMIN_USER_ID) return;
+    const { runStrategist } = await import('./strategist');
+    await ctx.reply('Генерирую стратегический отчёт...');
+    await runStrategist(bot);
+  });
+
   // Start scheduler
   startScheduler(bot);
 
   // HTTP report server — стратег читает отсюда метрики
   const port = parseInt(process.env.PORT || '3000');
   const reportBase = path.resolve(__dirname, '..');
+  const strategistReportPath = config.COMMUNITY_DB_PATH.startsWith('/data/')
+    ? '/data/strategist/.internal/latest.json'
+    : path.resolve(reportBase, '../../reports/strategist/.internal/latest.json');
   const reportFiles: Record<string, string> = {
     '/report/community': path.resolve(reportBase, config.COMMUNITY_REPORT_DIR, 'latest.json'),
     '/report/analytics': path.resolve(reportBase, config.ANALYTICS_REPORT_DIR, 'latest.json'),
+    '/report/strategist': strategistReportPath,
   };
 
   http.createServer((req, res) => {
@@ -177,7 +189,7 @@ async function main(): Promise<void> {
       // Notify admin on startup
       bot.api.sendMessage(
         config.TELEGRAM_ADMIN_USER_ID,
-        `🚀 *Sami Community Bot запущен*\n\nКоманды:\n/status — статус дня\n/search — найти видео на завтра\n/reset — сбросить выбор на завтра\n/post — опубликовать все 3 видео\n/checkin — чекин\n/analytics — аналитика\n/curator — контент-план`,
+        `🚀 *Sami Community Bot запущен*\n\nКоманды:\n/status — статус дня\n/search — найти видео на завтра\n/reset — сбросить выбор на завтра\n/post — опубликовать все 3 видео\n/checkin — чекин\n/analytics — аналитика\n/curator — контент-план\n/strategist — стратегический отчёт`,
         { parse_mode: 'Markdown' }
       ).catch(() => {});
     },
