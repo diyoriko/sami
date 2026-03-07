@@ -5,7 +5,7 @@ import { postVideoToChannel, postCheckin } from './poster';
 import { runApprovalFlow } from './approval';
 import { readCommunityPacket, writeCommunityReport } from './strategist-sync';
 import { runDailyAnalytics, runWeeklyAnalytics } from './analytics';
-import { runContentCuration } from './content-curator';
+
 import { notifyAdmin } from './notify-admin';
 import { todayMsk, tomorrowMsk, currentWeekMsk, moscowHour } from './dates';
 
@@ -112,20 +112,7 @@ export function startScheduler(bot: Bot): void {
     }
   }, { timezone: 'Europe/Moscow' });
 
-  // ---- Content Curator agent ----
-
-  // Monday 09:00 — weekly content plan
-  cron.schedule(config.CRON_CONTENT_CURATOR, async () => {
-    console.log('[scheduler] running content curation');
-    try {
-      await runContentCuration(bot, currentWeekMsk());
-    } catch (err) {
-      console.error('[scheduler] content curation failed:', err);
-      await notifyAdmin(bot, 'Content Curator', `Контент-план упал:\n\`${String(err)}\``);
-    }
-  }, { timezone: 'Europe/Moscow' });
-
-  console.log('[scheduler] all cron jobs registered (community + analytics + content-curator)');
+  console.log('[scheduler] all cron jobs registered (community + analytics)');
 
   // Catch-up on startup: run analytics immediately so latest.json is always available
   setTimeout(async () => {

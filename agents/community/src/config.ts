@@ -24,9 +24,6 @@ const ConfigSchema = z.object({
   CRON_ANALYTICS_WEEKLY: z.string().default('0 10 * * 0'),   // Sunday 10:00 — weekly dashboard
   ANALYTICS_REPORT_DIR: z.string().default('../../reports/analytics/.internal'),
   ANALYTICS_WEEKLY_DIR: z.string().default('../../reports/analytics'),
-  // Content Curator agent
-  CRON_CONTENT_CURATOR: z.string().default('0 9 * * 1'),     // Monday 09:00 — weekly content plan
-  CONTENT_CURATOR_REPORT_DIR: z.string().default('../../reports/content-curator/.internal'),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

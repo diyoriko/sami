@@ -24,7 +24,6 @@ async function main(): Promise<void> {
     config.COMMUNITY_REPORT_DIR,
     config.ANALYTICS_REPORT_DIR,
     config.ANALYTICS_WEEKLY_DIR,
-    config.CONTENT_CURATOR_REPORT_DIR,
   ];
   for (const dir of reportDirs) {
     const resolved = path.resolve(__dirname, '..', dir);
@@ -126,14 +125,6 @@ async function main(): Promise<void> {
     const { runDailyAnalytics } = await import('./analytics');
     await ctx.reply('📊 Запускаю аналитику...');
     await runDailyAnalytics(bot, todayMsk());
-  });
-
-  // /curator — manually run content curation
-  bot.command('curator', async (ctx) => {
-    if (ctx.from?.id !== config.TELEGRAM_ADMIN_USER_ID) return;
-    const { runContentCuration } = await import('./content-curator');
-    await ctx.reply('📋 Генерирую контент-план...');
-    await runContentCuration(bot, currentWeekMsk());
   });
 
   // Start scheduler

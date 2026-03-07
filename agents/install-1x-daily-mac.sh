@@ -35,10 +35,7 @@ if [[ -f "$ROOT_DIR/agents/google-oauth-client.json" ]]; then
   cp "$ROOT_DIR/agents/google-oauth-client.json" "$RUNTIME_GOOGLE_OAUTH_CLIENT_PATH"
 fi
 cp "$ROOT_DIR/STRATEGIST_BRIEF.md" "$RUNTIME_CONTEXT_DIR/STRATEGIST_BRIEF.md"
-cp "$ROOT_DIR/SAMI_PRD_v1.md" "$RUNTIME_CONTEXT_DIR/SAMI_PRD_v1.md"
-cp "$ROOT_DIR/SAMI_MVP_SCOPE.md" "$RUNTIME_CONTEXT_DIR/SAMI_MVP_SCOPE.md"
-cp "$ROOT_DIR/SAMI_14_DAY_PLAN.md" "$RUNTIME_CONTEXT_DIR/SAMI_14_DAY_PLAN.md"
-cp "$ROOT_DIR/APP_TASKS.md" "$RUNTIME_CONTEXT_DIR/APP_TASKS.md"
+cp "$ROOT_DIR/COMMUNITY_TASKS.md" "$RUNTIME_CONTEXT_DIR/COMMUNITY_TASKS.md"
 
 cat > "$RUNTIME_RUNNER_PATH" <<RUNNER
 #!/bin/bash
@@ -122,7 +119,7 @@ cat > "$PLIST_PATH" <<PLIST
     <true/>
 
     <key>StartCalendarInterval</key>
-    <dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Hour</key><integer>12</integer><key>Minute</key><integer>30</integer></dict>
 
     <key>StandardOutPath</key>
     <string>$LAUNCHD_OUT_LOG</string>
@@ -136,4 +133,4 @@ launchctl bootout "$DOMAIN_TARGET" "$PLIST_PATH" >/dev/null 2>&1 || true
 launchctl bootstrap "$DOMAIN_TARGET" "$PLIST_PATH"
 
 echo "[strategist-install] installed: $PLIST_PATH"
-echo "[strategist-install] schedule: 09:00 local time (1x/day)"
+echo "[strategist-install] schedule: 12:30 local time (1x/day)"
