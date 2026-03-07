@@ -7,6 +7,30 @@ import * as os from 'os';
 const execFileAsync = promisify(execFile);
 
 const MAX_SIZE_BYTES = 45 * 1024 * 1024; // 45MB — Telegram Bot API limit is 50MB
+const COOKIES_PATH = process.env.YT_COOKIES_PATH || '/data/cookies.txt';
+
+let consecutiveFailures = 0;
+let adminNotified = false;
+let notifyAdmin: ((msg: string) => void) | null = null;
+
+export function setAdminNotifier(fn: (msg: string) => void): void {
+  notifyAdmin = fn;
+}
+
+// Decode cookies from env var (base64) to file on startup
+export function initCookies(): void {
+  const b64 = process.env.YT_COOKIES_B64;
+  if (!b64) return;
+  try {
+    const decoded = Buffer.from(b64, 'base64').toString('utf8');
+    // Write to /tmp if /data doesn't exist (local dev)
+    const target = fs.existsSync(path.dirname(COOKIES_PATH)) ? COOKIES_PATH : path.join(os.tmpdir(), 'yt-cookies.txt');
+    fs.writeFileSync(target, decoded);
+    console.log(`[downloader] cookies written to ${target} (${decoded.split('\n').length} lines)`);
+  } catch (err) {
+    console.warn('[downloader] failed to decode YT_COOKIES_B64:', err);
+  }
+}
 
 export interface VideoMeta {
   width?: number;
@@ -53,7 +77,8 @@ export function logYtDlpStatus(): void {
     const bin = findYtDlp();
     const ver = require('child_process').execFileSync(bin, ['--version'], { encoding: 'utf8' }).trim();
     const proxy = process.env.YT_PROXY ? 'yes' : 'no';
-    console.log(`[downloader] yt-dlp: ${bin} (${ver}), proxy: ${proxy}`);
+    const cookies = fs.existsSync(COOKIES_PATH) ? 'yes' : (fs.existsSync(path.join(os.tmpdir(), 'yt-cookies.txt')) ? 'yes (tmp)' : 'no');
+    console.log(`[downloader] yt-dlp: ${bin} (${ver}), proxy: ${proxy}, cookies: ${cookies}`);
   } catch {
     console.warn('[downloader] yt-dlp NOT found — will post YouTube links as fallback');
   }
@@ -103,10 +128,13 @@ export async function downloadVideo(youtubeUrl: string, youtubeId: string): Prom
     baseArgs.push('--proxy', proxy);
   }
 
-  // Use cookies if available (optional, additional auth)
-  const cookiesPath = process.env.YT_COOKIES_PATH || '/data/cookies.txt';
-  if (fs.existsSync(cookiesPath)) {
-    baseArgs.push('--cookies', cookiesPath);
+  // Use cookies if available (needed for datacenter IP auth)
+  const cookieCandidates = [COOKIES_PATH, path.join(os.tmpdir(), 'yt-cookies.txt')];
+  for (const cp of cookieCandidates) {
+    if (fs.existsSync(cp)) {
+      baseArgs.push('--cookies', cp);
+      break;
+    }
   }
 
   const attempts = [
@@ -130,8 +158,18 @@ export async function downloadVideo(youtubeUrl: string, youtubeId: string): Prom
     }
   }
   if (!succeeded) {
-    throw new Error(`yt-dlp all attempts failed: ${lastError.slice(0, 300)}`);
+    consecutiveFailures++;
+    const err = new Error(`yt-dlp all attempts failed: ${lastError.slice(0, 300)}`);
+    // After 3 consecutive failures, likely cookies expired
+    if (consecutiveFailures >= 3 && !adminNotified) {
+      adminNotified = true;
+      notifyAdmin?.(`Видео не загружаются 3 раза подряд. Скорее всего cookies протухли.\n\nОбнови: экспортируй cookies с youtube.com и установи YT_COOKIES_B64 в Railway.`);
+    }
+    throw err;
   }
+  // Reset on success
+  consecutiveFailures = 0;
+  if (adminNotified) adminNotified = false;
 
   const filePath = path.join(tmpDir, `sami-${youtubeId}.mp4`);
 

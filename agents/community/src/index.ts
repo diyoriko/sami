@@ -8,7 +8,7 @@ import { registerBotMenu } from './bot-menu';
 import { registerModeration } from './moderation';
 import { registerApprovalCallbacks } from './approval';
 import { startScheduler } from './scheduler';
-import { logYtDlpStatus } from './downloader';
+import { logYtDlpStatus, initCookies, setAdminNotifier } from './downloader';
 
 async function main(): Promise<void> {
   const config = getConfig();
@@ -17,7 +17,8 @@ async function main(): Promise<void> {
   getDb();
   console.log('[sami-community] database ready');
 
-  // Check yt-dlp availability on startup
+  // Init YouTube cookies from env and check yt-dlp
+  initCookies();
   logYtDlpStatus();
 
   // Ensure report directories exist
@@ -34,6 +35,11 @@ async function main(): Promise<void> {
 
   // Init bot
   const bot = new Bot(config.TELEGRAM_BOT_TOKEN);
+
+  // Wire up admin notification for download failures
+  setAdminNotifier((msg) => {
+    bot.api.sendMessage(config.TELEGRAM_ADMIN_USER_ID, msg).catch(() => {});
+  });
 
   // Register handlers
   registerBotMenu(bot);
