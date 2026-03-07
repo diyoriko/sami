@@ -127,6 +127,16 @@ export function startScheduler(bot: Bot): void {
 
   console.log('[scheduler] all cron jobs registered (community + analytics + content-curator)');
 
+  // Catch-up on startup: run analytics immediately so latest.json is always available
+  setTimeout(async () => {
+    try {
+      console.log('[scheduler] catch-up: running analytics on startup');
+      await runDailyAnalytics(bot, todayMsk());
+    } catch (err) {
+      console.error('[scheduler] catch-up analytics failed:', err);
+    }
+  }, 3000);
+
   // Catch-up: if bot started after 19:00 MSK and no approval sessions exist for tomorrow, run search now
   setTimeout(async () => {
     try {
