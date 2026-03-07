@@ -48,7 +48,8 @@ export interface DownloadResult {
 function findYtDlp(): string {
   // Prioritize pip-installed version (latest) over nix (often outdated)
   const candidates = [
-    '/usr/local/bin/yt-dlp',         // pip install location (Railway)
+    '/root/.local/bin/yt-dlp',       // pip install --break-system-packages (Railway nixpacks)
+    '/usr/local/bin/yt-dlp',         // pip install location (some systems)
     '/opt/homebrew/bin/yt-dlp',      // macOS homebrew
     '/usr/bin/yt-dlp',
   ];
