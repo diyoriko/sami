@@ -170,10 +170,22 @@ async function main(): Promise<void> {
         { scope: { type: 'all_private_chats' } }
       ).catch(() => {});
 
-      // Notify admin on startup
+      // Notify admin on startup with deploy info
+      const commitMsg = process.env.RAILWAY_GIT_COMMIT_MESSAGE?.trim();
+      const commitSha = process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7);
+
+      const lines = ['*Sami Bot запущен*'];
+      if (commitMsg) {
+        lines.push('', `\`${commitSha}\` ${commitMsg}`);
+      }
+      lines.push(
+        '',
+        'Команды: /status /search /reset /post /analytics',
+      );
+
       bot.api.sendMessage(
         config.TELEGRAM_ADMIN_USER_ID,
-        `🚀 *Sami Community Bot запущен*\n\nКоманды:\n/status — статус дня\n/search — найти видео на завтра\n/reset — сбросить выбор на завтра\n/post — опубликовать все 3 видео\n/analytics — аналитика`,
+        lines.join('\n'),
         { parse_mode: 'Markdown' }
       ).catch(() => {});
     },
