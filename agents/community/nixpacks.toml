@@ -2,7 +2,7 @@
 nixPkgs = ["nodejs_22", "python3", "gnumake", "gcc", "yt-dlp", "ffmpeg"]
 
 [phases.install]
-cmds = ["npm install"]
+cmds = ["npm install", "npm install -g @anthropic-ai/claude-code"]
 
 [phases.build]
 cmds = ["npm run build"]

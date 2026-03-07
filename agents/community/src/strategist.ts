@@ -1,16 +1,19 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { Bot } from 'grammy';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getConfig } from './config';
 import { todayMsk } from './dates';
 
+const execFileAsync = promisify(execFile);
+
 const MODEL = 'claude-sonnet-4-6';
 const MAX_CONTEXT_CHARS = 6000;
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 10_000;
+const CLAUDE_TIMEOUT_MS = 300_000; // 5 min
 
-// Context files relative to project root (repo root on Railway)
 const CONTEXT_FILES = [
   'STRATEGIST_BRIEF.md',
   'SAMI_PRD_v1.md',
@@ -21,16 +24,12 @@ const CONTEXT_FILES = [
 ];
 
 function getProjectRoot(): string {
-  // agents/community/src/strategist.ts -> project root is 3 levels up
   return path.resolve(__dirname, '..', '..', '..');
 }
 
 function getReportDir(): string {
   const config = getConfig();
-  const dbPath = config.COMMUNITY_DB_PATH;
-  // On Railway: /data/community.db -> use /data/strategist for reports
-  // Locally: use project root reports/strategist
-  if (dbPath.startsWith('/data/')) {
+  if (config.COMMUNITY_DB_PATH.startsWith('/data/')) {
     return '/data/strategist';
   }
   return path.resolve(getProjectRoot(), 'reports', 'strategist');
@@ -43,25 +42,18 @@ function ensureDir(dir: string): void {
 function readContextFiles(): string {
   const root = getProjectRoot();
   const parts: string[] = [];
-
   for (const file of CONTEXT_FILES) {
-    const filePath = path.resolve(root, file);
     try {
-      const text = fs.readFileSync(filePath, 'utf8').trim();
-      if (text) {
-        parts.push(`## Source: ${file}\n\n${text.slice(0, MAX_CONTEXT_CHARS)}`);
-      }
-    } catch {
-      // file not found — skip
-    }
+      const text = fs.readFileSync(path.resolve(root, file), 'utf8').trim();
+      if (text) parts.push(`## Source: ${file}\n\n${text.slice(0, MAX_CONTEXT_CHARS)}`);
+    } catch { /* skip */ }
   }
-
   return parts.join('\n\n');
 }
 
-function readLocalReport(reportPath: string): string | null {
+function readLocalReport(p: string): string | null {
   try {
-    const text = fs.readFileSync(reportPath, 'utf8').trim();
+    const text = fs.readFileSync(p, 'utf8').trim();
     if (text) return text.slice(0, MAX_CONTEXT_CHARS);
   } catch { /* not found */ }
   return null;
@@ -74,42 +66,24 @@ async function fetchReport(url: string): Promise<string | null> {
     const data = await res.json() as any;
     if (data.status === 'pending' || data.error) return null;
     return JSON.stringify(data, null, 2).slice(0, MAX_CONTEXT_CHARS);
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 async function gatherReportsContext(): Promise<string> {
-  const config = getConfig();
   const parts: string[] = [];
+  const port = process.env.PORT || '3000';
 
-  // Community report — try local file first, then HTTP
-  const communityDir = path.resolve(getProjectRoot(), 'reports', 'community', '.internal');
-  let community = readLocalReport(path.join(communityDir, 'latest.json'));
-  if (!community) {
-    // On Railway, reports are in /data/ volume
-    community = readLocalReport('/data/reports/community/.internal/latest.json');
-  }
-  if (!community) {
-    // Self-fetch via localhost (we're in the same process)
-    community = await fetchReport(`http://localhost:${process.env.PORT || '3000'}/report/community`);
-  }
-  if (community) {
-    parts.push(`## Source: community-report.json\n\n${community}`);
-  }
+  // Community report
+  let community = readLocalReport('/data/reports/community/.internal/latest.json');
+  if (!community) community = readLocalReport(path.resolve(getProjectRoot(), 'reports/community/.internal/latest.json'));
+  if (!community) community = await fetchReport(`http://localhost:${port}/report/community`);
+  if (community) parts.push(`## Source: community-report.json\n\n${community}`);
 
-  // Analytics report — same strategy
-  const analyticsDir = path.resolve(getProjectRoot(), 'reports', 'analytics', '.internal');
-  let analytics = readLocalReport(path.join(analyticsDir, 'latest.json'));
-  if (!analytics) {
-    analytics = readLocalReport('/data/reports/analytics/.internal/latest.json');
-  }
-  if (!analytics) {
-    analytics = await fetchReport(`http://localhost:${process.env.PORT || '3000'}/report/analytics`);
-  }
-  if (analytics) {
-    parts.push(`## Source: analytics-report.json\n\n${analytics}`);
-  }
+  // Analytics report
+  let analytics = readLocalReport('/data/reports/analytics/.internal/latest.json');
+  if (!analytics) analytics = readLocalReport(path.resolve(getProjectRoot(), 'reports/analytics/.internal/latest.json'));
+  if (!analytics) analytics = await fetchReport(`http://localhost:${port}/report/analytics`);
+  if (analytics) parts.push(`## Source: analytics-report.json\n\n${analytics}`);
 
   return parts.join('\n\n');
 }
@@ -155,31 +129,50 @@ function buildPrompt(context: string, reportsContext: string): string {
 ${fullContext}`;
 }
 
-async function callClaude(prompt: string): Promise<string> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set');
+function findClaudeBin(): string {
+  try {
+    const result = require('child_process').execFileSync('which', ['claude'], { encoding: 'utf8' }).trim();
+    if (result) return result;
+  } catch { /* not in PATH */ }
 
-  const client = new Anthropic({ apiKey });
+  const candidates = [
+    '/usr/local/bin/claude',
+    '/usr/bin/claude',
+    '/opt/homebrew/bin/claude',
+    `${process.env.HOME}/.claude/local/claude`,
+    '/root/.nix-profile/bin/claude',
+  ];
+  for (const bin of candidates) {
+    try {
+      require('child_process').execFileSync(bin, ['--version'], { stdio: 'ignore' });
+      return bin;
+    } catch { continue; }
+  }
+  throw new Error('claude CLI not found');
+}
+
+async function callClaude(prompt: string, promptPath: string): Promise<string> {
+  const claudeBin = findClaudeBin();
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      console.log(`[strategist] Claude API attempt ${attempt}/${MAX_RETRIES}`);
-      const message = await client.messages.create({
-        model: MODEL,
-        max_tokens: 4096,
-        messages: [{ role: 'user', content: prompt }],
+      console.log(`[strategist] claude --print attempt ${attempt}/${MAX_RETRIES}`);
+      const { stdout } = await execFileAsync(claudeBin, [
+        '--print',
+        '--output-format', 'text',
+        '--model', MODEL,
+        '--prompt', fs.readFileSync(promptPath, 'utf8'),
+      ], {
+        timeout: CLAUDE_TIMEOUT_MS,
+        maxBuffer: 10 * 1024 * 1024,
+        env: { ...process.env, CLAUDECODE: '' },
       });
 
-      const text = message.content
-        .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-        .map(b => b.text)
-        .join('\n');
-
-      if (!text.trim()) throw new Error('Empty response from Claude');
-      return text;
+      if (!stdout.trim()) throw new Error('Empty response from claude');
+      return stdout;
     } catch (err: any) {
       const msg = err?.message ?? String(err);
-      const isTransient = /overloaded|rate_limit|529|500|502|503|504|timeout|fetch failed/i.test(msg);
+      const isTransient = /overloaded|rate_limit|529|500|502|503|504|timeout|fetch failed|ETIMEDOUT/i.test(msg);
       if (isTransient && attempt < MAX_RETRIES) {
         console.warn(`[strategist] transient error, retrying in ${RETRY_DELAY_MS / 1000}s: ${msg.slice(0, 200)}`);
         await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
@@ -209,6 +202,7 @@ export async function runStrategist(bot: Bot): Promise<void> {
   const reportPath = path.join(reportDir, reportFile);
   const latestJson = path.join(internalDir, 'latest.json');
   const logPath = path.join(internalDir, 'strategist.log');
+  const promptPath = path.join(internalDir, `prompt-${stamp}.md`);
 
   console.log(`[strategist] starting report generation for ${date}`);
 
@@ -217,12 +211,10 @@ export async function runStrategist(bot: Bot): Promise<void> {
     const context = readContextFiles();
     const reportsContext = await gatherReportsContext();
     const prompt = buildPrompt(context, reportsContext);
+    fs.writeFileSync(promptPath, prompt, 'utf8');
 
-    // Save prompt for debugging
-    fs.writeFileSync(path.join(internalDir, `prompt-${stamp}.md`), prompt, 'utf8');
-
-    // 2. Call Claude
-    const rawReport = await callClaude(prompt);
+    // 2. Call Claude CLI
+    const rawReport = await callClaude(prompt, promptPath);
     const report = ensureSummaryBlock(rawReport, date);
 
     // 3. Save report
@@ -241,7 +233,7 @@ export async function runStrategist(bot: Bot): Promise<void> {
     // 5. Append to log
     fs.appendFileSync(logPath, `[${new Date().toISOString()}] status=completed report=${reportPath}\n`);
 
-    // 6. Notify admin via Telegram
+    // 6. Notify admin
     const summaryLines = report
       .split('\n')
       .filter(l => l.startsWith('- '))
@@ -259,7 +251,6 @@ export async function runStrategist(bot: Bot): Promise<void> {
     const errMsg = err?.message ?? String(err);
     console.error(`[strategist] failed:`, err);
 
-    // Save error report
     const errorReport = `# Sami Strategist Report — ${date}\n\n## Резюме\n- Отчёт не был сгенерирован.\n- Ошибка: ${errMsg.slice(0, 500)}\n`;
     fs.writeFileSync(reportPath, errorReport, 'utf8');
 
@@ -273,7 +264,6 @@ export async function runStrategist(bot: Bot): Promise<void> {
 
     fs.appendFileSync(logPath, `[${new Date().toISOString()}] status=failed error=${errMsg.slice(0, 200)}\n`);
 
-    // Notify admin about failure
     await bot.api.sendMessage(
       config.TELEGRAM_ADMIN_USER_ID,
       `*Strategist FAILED — ${date}*\n\n\`${errMsg.slice(0, 300)}\``,

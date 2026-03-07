@@ -20,7 +20,6 @@ const ConfigSchema = z.object({
   CRON_POST_MOBILITY: z.string().default('0 19 * * *'),      // 19:00 — mobility (вечер)
   CRON_CHECKIN: z.string().default('0 22 * * *'),           // 22:00 — evening check-in
   // Strategist agent
-  ANTHROPIC_API_KEY: z.string().default(''),                  // required for strategist
   CRON_STRATEGIST: z.string().default('0 9 * * *'),           // 09:00 — daily strategist report
   // Analytics agent
   CRON_ANALYTICS_DAILY: z.string().default('30 0 * * *'),    // 00:30 — daily metrics
