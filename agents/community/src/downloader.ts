@@ -22,22 +22,21 @@ export interface DownloadResult {
 }
 
 function findYtDlp(): string {
-  // Try `which` first to find binary in any PATH (works on Railway/nix)
-  try {
-    const result = require('child_process').execFileSync('which', ['yt-dlp'], { encoding: 'utf8' }).trim();
-    if (result) {
-      require('child_process').execFileSync(result, ['--version'], { stdio: 'ignore' });
-      return result;
-    }
-  } catch { /* not in PATH */ }
-
+  // Prioritize pip-installed version (latest) over nix (often outdated)
   const candidates = [
-    '/usr/local/bin/yt-dlp',         // pip install location
+    '/usr/local/bin/yt-dlp',         // pip install location (Railway)
+    '/opt/homebrew/bin/yt-dlp',      // macOS homebrew
     '/usr/bin/yt-dlp',
-    '/opt/homebrew/bin/yt-dlp',      // macOS
-    '/run/current-system/sw/bin/yt-dlp', // nix
-    'yt-dlp',                        // fallback PATH
   ];
+
+  // Also check PATH but only as last resort
+  try {
+    const fromPath = require('child_process').execFileSync('which', ['yt-dlp'], { encoding: 'utf8' }).trim();
+    if (fromPath && !candidates.includes(fromPath)) {
+      candidates.push(fromPath);
+    }
+  } catch {}
+
   for (const bin of candidates) {
     try {
       require('child_process').execFileSync(bin, ['--version'], { stdio: 'ignore' });
@@ -105,6 +104,8 @@ export async function downloadVideo(youtubeUrl: string, youtubeId: string): Prom
   }
 
   const attempts = [
+    [...baseArgs, '--extractor-args', 'youtube:player_client=mediaconnect'],
+    [...baseArgs, '--extractor-args', 'youtube:player_client=tv'],
     [...baseArgs, '--extractor-args', 'youtube:player_client=android,web'],
     [...baseArgs, '--extractor-args', 'youtube:player_client=ios'],
     [...baseArgs], // plain fallback

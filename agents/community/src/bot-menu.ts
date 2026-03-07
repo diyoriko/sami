@@ -28,12 +28,17 @@ const CATEGORY_RU: Record<string, string> = {
 
 // --- Persistent keyboard ---
 
-function mainKeyboard(): Keyboard {
-  return new Keyboard()
+function mainKeyboard(isAdmin = false): Keyboard {
+  const kb = new Keyboard()
     .text('Мои тренировки')
-    .text('Предложить тренировку')
-    .resized()
-    .persistent();
+    .text('Предложить тренировку');
+  if (isAdmin) {
+    kb.row()
+      .text('Статус').text('Поиск видео').text('Опубликовать')
+      .row()
+      .text('Сбросить выбор').text('Аналитика');
+  }
+  return kb.resized().persistent();
 }
 
 // --- UGC conversation state (in-memory, keyed by userId) ---
@@ -61,13 +66,15 @@ function extractYoutubeId(url: string): string | null {
 export function registerBotMenu(bot: Bot): void {
   const config = getConfig();
 
+  const isAdmin = (userId: number) => userId === config.TELEGRAM_ADMIN_USER_ID;
+
   // /start in private chat — show menu
   bot.command('start', async (ctx) => {
     if (ctx.chat.type !== 'private') return;
     ugcStates.delete(ctx.from!.id);
     await ctx.reply(
       'Привет! Я бот Sami.\n\nВыбери действие:',
-      { reply_markup: mainKeyboard() }
+      { reply_markup: mainKeyboard(isAdmin(ctx.from!.id)) }
     );
   });
 
@@ -83,6 +90,78 @@ export function registerBotMenu(bot: Bot): void {
     const offset = parseInt(ctx.match[1]);
     await ctx.answerCallbackQuery();
     await sendMyWorkouts(ctx, ctx.from!.id, offset, ctx.callbackQuery.message?.message_id);
+  });
+
+  // --- Admin buttons ---
+  bot.hears('Статус', async (ctx) => {
+    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
+    const { todayMsk } = await import('./dates');
+    const { getPostCountForDate, getCompletionCountForDate, getUniqueCompletionUsersForDate } = await import('./db');
+    const date = todayMsk();
+    const posts = getPostCountForDate(date);
+    const completions = getCompletionCountForDate(date);
+    const users = getUniqueCompletionUsersForDate(date);
+    await ctx.reply(
+      `*Sami — статус*\n\nДата: ${date}\nПостов: ${posts}\nВыполнений: ${completions} (${users} чел.)`,
+      { parse_mode: 'Markdown' }
+    );
+  });
+
+  bot.hears('Поиск видео', async (ctx) => {
+    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
+    const { tomorrowMsk } = await import('./dates');
+    const { runApprovalFlow } = await import('./approval');
+    const date = tomorrowMsk();
+    await ctx.reply(`Ищу видео на ${date}...`);
+    await runApprovalFlow(bot, date);
+  });
+
+  bot.hears('Опубликовать', async (ctx) => {
+    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
+    const { todayMsk, tomorrowMsk } = await import('./dates');
+    const { postVideoToChannel } = await import('./poster');
+    const { getApprovedVideo } = await import('./db');
+
+    const today = todayMsk();
+    const tomorrow = tomorrowMsk();
+    const categories = ['stretching', 'strength', 'mobility'] as const;
+    const hasTomorrow = categories.some(c => getApprovedVideo(tomorrow, c) !== null);
+    const hasToday = categories.some(c => getApprovedVideo(today, c) !== null);
+    const date = hasTomorrow ? tomorrow : hasToday ? today : null;
+
+    if (!date) {
+      await ctx.reply('Нет одобренных видео. Сначала «Поиск видео».');
+      return;
+    }
+
+    await ctx.reply(`Публикую видео на ${date}...`);
+    const report: string[] = [];
+    for (const cat of categories) {
+      const result = await postVideoToChannel(bot, date, cat, { force: true });
+      const label = { stretching: 'Стретчинг', strength: 'Силовая', mobility: 'Мобильность' }[cat];
+      if (result === 'posted') report.push(`${label} — ok`);
+      else if (result === 'no_video') report.push(`${label} — не выбрано`);
+      else if (result === 'error') report.push(`${label} — ошибка`);
+      else report.push(`${label} — пропущено`);
+    }
+    await ctx.reply(report.join('\n'));
+  });
+
+  bot.hears('Сбросить выбор', async (ctx) => {
+    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
+    const { tomorrowMsk } = await import('./dates');
+    const { resetApprovalSessions } = await import('./db');
+    const date = tomorrowMsk();
+    const count = resetApprovalSessions(date);
+    await ctx.reply(`Сброшено ${count} сессий на ${date}. Нажми «Поиск видео» для нового поиска.`);
+  });
+
+  bot.hears('Аналитика', async (ctx) => {
+    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
+    const { todayMsk } = await import('./dates');
+    const { runDailyAnalytics } = await import('./analytics');
+    await ctx.reply('Запускаю аналитику...');
+    await runDailyAnalytics(bot, todayMsk());
   });
 
   // --- "Предложить тренировку" button ---
@@ -103,7 +182,7 @@ export function registerBotMenu(bot: Bot): void {
       deleteUgcSubmission(state.submissionId);
     }
     ugcStates.delete(ctx.from!.id);
-    await ctx.reply('Отменено.', { reply_markup: mainKeyboard() });
+    await ctx.reply('Отменено.', { reply_markup: mainKeyboard(isAdmin(ctx.from!.id)) });
   });
 
   // --- UGC conversation handler (private chat text) ---
@@ -153,7 +232,7 @@ export function registerBotMenu(bot: Bot): void {
 
       await ctx.reply(
         'Спасибо! Тренировка отправлена на модерацию. Ты получишь уведомление, когда она будет опубликована.',
-        { reply_markup: mainKeyboard() }
+        { reply_markup: mainKeyboard(isAdmin(ctx.from!.id)) }
       );
       return;
     }
