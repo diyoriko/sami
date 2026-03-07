@@ -1,7 +1,7 @@
 import * as cron from 'node-cron';
 import { Bot } from 'grammy';
 import { getConfig } from './config';
-import { postVideoToChannel, postCheckin } from './poster';
+import { postVideoToChannel } from './poster';
 import { runApprovalFlow } from './approval';
 import { readCommunityPacket, writeCommunityReport } from './strategist-sync';
 import { runDailyAnalytics, runWeeklyAnalytics } from './analytics';
@@ -67,17 +67,6 @@ export function startScheduler(bot: Bot): void {
     } catch (err) {
       console.error('[scheduler] mobility post failed:', err);
       await notifyAdmin(bot, 'Community', `Мобильность упала:\n\`${String(err)}\``);
-    }
-  }, { timezone: 'Europe/Moscow' });
-
-  // 22:00 — post evening check-in
-  cron.schedule(config.CRON_CHECKIN, async () => {
-    console.log('[scheduler] posting check-in');
-    try {
-      await postCheckin(bot, todayMsk());
-    } catch (err) {
-      console.error('[scheduler] checkin failed:', err);
-      await notifyAdmin(bot, 'Community', `Чекин упал:\n\`${String(err)}\``);
     }
   }, { timezone: 'Europe/Moscow' });
 

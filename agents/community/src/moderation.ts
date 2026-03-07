@@ -214,7 +214,7 @@ export function registerModeration(bot: Bot): void {
 
     try {
       await ctx.editMessageText(
-        `${response}\n\n_Вечером — чекин дня. Просто нажми кнопку и отметь как прошло._`,
+        `${response}\n\n_Нажми «Я сделал(а)» под видео, когда закончишь тренировку._`,
         { parse_mode: 'Markdown' }
       );
     } catch {}
@@ -331,25 +331,6 @@ export function registerModeration(bot: Bot): void {
     }
 
     await ctx.answerCallbackQuery('Тренировка записана. Досмотри до конца — это важно.');
-  });
-
-  // --- Check-in callbacks ---
-  bot.callbackQuery(/^checkin:(did|partial|didnt):(.+)$/, async (ctx) => {
-    const result = ctx.match[1] as 'did' | 'partial' | 'didnt';
-    const date = ctx.match[2];
-    const userId = ctx.from?.id;
-    if (!userId) return;
-
-    const { recordCheckin } = await import('./db');
-    recordCheckin(date, userId, result);
-
-    const responses: Record<string, string> = {
-      did: 'Отлично! Ещё один день в копилку.',
-      partial: 'Хотя бы что-то — это уже движение.',
-      didnt: 'Ничего. Завтра новый старт.',
-    };
-
-    await ctx.answerCallbackQuery(responses[result] ?? 'Принято!');
   });
 
   console.log('[moderation] handlers registered');

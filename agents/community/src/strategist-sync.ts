@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { getConfig } from './config';
-import { writeDailyStats, getCheckinStats } from './db';
+import { writeDailyStats, getCompletionCountForDate, getUniqueCompletionUsersForDate } from './db';
 
 export interface CommunityPacket {
   week_focus: 'stretching' | 'strength' | 'mobility' | 'general';
@@ -71,17 +71,13 @@ export function writeCommunityReport(date: string, newMembers: number): void {
   const config = getConfig();
   writeDailyStats(date, newMembers);
 
-  const stats = getCheckinStats(date);
-  const total = stats.did + stats.partial + stats.didnt;
-  const activityRate = total > 0 ? Math.round((stats.did / total) * 100) : 0;
+  const completions = getCompletionCountForDate(date);
+  const completionUsers = getUniqueCompletionUsersForDate(date);
 
   const report = {
     date,
-    checkin_did: stats.did,
-    checkin_partial: stats.partial,
-    checkin_didnt: stats.didnt,
-    checkin_total: total,
-    activity_rate_pct: activityRate,
+    completions,
+    completion_users: completionUsers,
     new_members: newMembers,
     written_at: new Date().toISOString(),
   };

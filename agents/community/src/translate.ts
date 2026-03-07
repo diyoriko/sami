@@ -34,7 +34,7 @@ async function googleTranslate(text: string): Promise<string> {
 // Hype/clickbait phrases to strip (both RU and EN)
 const HYPE_STRIP: RegExp[] = [
   /\b(best ever|most intense|you won't believe|insane|crazy|epic|ultimate|killer)\b/gi,
-  /\b(невероятн\S*|безумн\S*|сумасшедш\S*|убийственн\S*|лучшая .* всех времён)\b/gi,
+  /(?:^|\s)(невероятн\S*|безумн\S*|сумасшедш\S*|убийственн\S*|лучшая .* всех времён)(?:\s|$)/gi,
   /\b(no clickbait|not clickbait|real results)\b/gi,
   /[!]{2,}/g,           // excessive !!!
   /[🔥💪🏆⚡]{2,}/g,    // emoji spam

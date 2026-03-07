@@ -3,11 +3,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getConfig } from './config';
 import {
-  getCheckinStats,
   writeChannelStats,
   getChannelStats,
   getWeeklyStats,
   getPostCountForDate,
+  getCompletionCountForDate,
+  getUniqueCompletionUsersForDate,
 } from './db';
 
 // ---------------------------------------------------------------------------
@@ -35,10 +36,9 @@ export async function runDailyAnalytics(bot: Bot, date: string): Promise<void> {
   }
 
   // 2. Get today's community stats from DB
-  const checkin = getCheckinStats(date);
   const postsToday = getPostCountForDate(date);
-  const totalCheckins = checkin.did + checkin.partial + checkin.didnt;
-  const activityRate = totalCheckins > 0 ? Math.round((checkin.did / totalCheckins) * 100) : 0;
+  const completionsToday = getCompletionCountForDate(date);
+  const completionUsers = getUniqueCompletionUsersForDate(date);
 
   // 3. Write to channel_stats table
   writeChannelStats(date, subscriberCount, groupMemberCount, postsToday);
@@ -60,12 +60,9 @@ export async function runDailyAnalytics(bot: Bot, date: string): Promise<void> {
     subscriber_count: subscriberCount,
     subscriber_delta: subDelta,
     group_member_count: groupMemberCount,
-    checkin_did: checkin.did,
-    checkin_partial: checkin.partial,
-    checkin_didnt: checkin.didnt,
-    checkin_total: totalCheckins,
-    activity_rate_pct: activityRate,
     posts_today: postsToday,
+    completions_today: completionsToday,
+    completion_users: completionUsers,
     written_at: new Date().toISOString(),
   };
 
@@ -75,14 +72,12 @@ export async function runDailyAnalytics(bot: Bot, date: string): Promise<void> {
 
   // 6. DM admin
   const lines = [
-    `📊 *Аналитика за ${date}*`,
+    `*Аналитика за ${date}*`,
     '',
-    `👥 Подписчики канала: ${subscriberCount} (${subDeltaStr})`,
-    `💬 Участники группы: ${groupMemberCount}`,
-    `📝 Постов: ${postsToday}`,
-    '',
-    `✅ Check-in: ${checkin.did} сделали / ${checkin.partial} частично / ${checkin.didnt} пропустили`,
-    `📈 Activity rate: ${activityRate}%`,
+    `Подписчики канала: ${subscriberCount} (${subDeltaStr})`,
+    `Участники группы: ${groupMemberCount}`,
+    `Постов: ${postsToday}`,
+    `Выполнений: ${completionsToday} (${completionUsers} чел.)`,
   ];
 
   try {
@@ -103,7 +98,7 @@ export async function runWeeklyAnalytics(bot: Bot, weekStr: string): Promise<voi
   const config = getConfig();
   console.log(`[analytics] Running weekly analytics for ${weekStr}`);
 
-  // Calculate week boundaries (current week: Mon–Sun)
+  // Calculate week boundaries (current week: Mon-Sun)
   const now = new Date();
   const dayOfWeek = now.getDay(); // 0=Sun
   const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
@@ -122,28 +117,14 @@ export async function runWeeklyAnalytics(bot: Bot, weekStr: string): Promise<voi
     return;
   }
 
-  // Aggregate
   const totals = days.reduce(
-    (acc, d) => ({
-      did: acc.did + d.checkin_did,
-      partial: acc.partial + d.checkin_partial,
-      didnt: acc.didnt + d.checkin_didnt,
-      newMembers: acc.newMembers + d.new_members,
-    }),
-    { did: 0, partial: 0, didnt: 0, newMembers: 0 }
+    (acc, d) => ({ newMembers: acc.newMembers + d.new_members }),
+    { newMembers: 0 }
   );
 
   const firstDay = days[0];
   const lastDay = days[days.length - 1];
   const subGrowth = lastDay.subscriber_count - firstDay.subscriber_count;
-  const totalCheckins = totals.did + totals.partial + totals.didnt;
-  const avgRate = totalCheckins > 0 ? Math.round((totals.did / totalCheckins) * 100) : 0;
-
-  // Best check-in day
-  let bestDay = days[0];
-  for (const d of days) {
-    if (d.checkin_did > bestDay.checkin_did) bestDay = d;
-  }
 
   // Write markdown dashboard
   const weeklyDir = path.resolve(__dirname, '..', config.ANALYTICS_WEEKLY_DIR);
@@ -161,19 +142,13 @@ export async function runWeeklyAnalytics(bot: Bot, weekStr: string): Promise<voi
     `| Подписчики канала | ${lastDay.subscriber_count} (${subGrowth >= 0 ? '+' : ''}${subGrowth} за неделю) |`,
     `| Участники группы | ${lastDay.group_member_count} |`,
     `| Новые участники | ${totals.newMembers} |`,
-    `| Check-in ✅ | ${totals.did} |`,
-    `| Check-in 😅 | ${totals.partial} |`,
-    `| Check-in ❌ | ${totals.didnt} |`,
-    `| Avg activity rate | ${avgRate}% |`,
-    `| Лучший день | ${bestDay.date} (${bestDay.checkin_did} ✅) |`,
     '',
     '## По дням',
     '',
-    '| Дата | ✅ | 😅 | ❌ | Новые | Подписчики |',
-    '|---|---|---|---|---|---|',
+    '| Дата | Новые | Подписчики |',
+    '|---|---|---|',
     ...days.map(
-      (d) =>
-        `| ${d.date} | ${d.checkin_did} | ${d.checkin_partial} | ${d.checkin_didnt} | ${d.new_members} | ${d.subscriber_count} |`
+      (d) => `| ${d.date} | ${d.new_members} | ${d.subscriber_count} |`
     ),
     '',
   ].join('\n');
@@ -191,24 +166,17 @@ export async function runWeeklyAnalytics(bot: Bot, weekStr: string): Promise<voi
     subscriber_count: lastDay.subscriber_count,
     subscriber_growth: subGrowth,
     group_member_count: lastDay.group_member_count,
-    total_checkins: totalCheckins,
-    avg_activity_rate_pct: avgRate,
     new_members: totals.newMembers,
-    best_day: bestDay.date,
     written_at: new Date().toISOString(),
   };
   fs.writeFileSync(path.join(reportDir, 'latest-weekly.json'), JSON.stringify(weeklyJson, null, 2) + '\n', 'utf8');
 
   // DM admin
   const dmLines = [
-    `📊 *Недельный дашборд — ${weekStr}*`,
+    `*Недельный дашборд — ${weekStr}*`,
     '',
-    `👥 Подписчики: ${lastDay.subscriber_count} (${subGrowth >= 0 ? '+' : ''}${subGrowth})`,
-    `🆕 Новых: ${totals.newMembers}`,
-    `✅ Check-ins: ${totals.did} / ${totalCheckins} (${avgRate}%)`,
-    `🏆 Лучший день: ${bestDay.date}`,
-    '',
-    `📄 Дашборд: \`${path.basename(dashPath)}\``,
+    `Подписчики: ${lastDay.subscriber_count} (${subGrowth >= 0 ? '+' : ''}${subGrowth})`,
+    `Новых: ${totals.newMembers}`,
   ];
 
   try {

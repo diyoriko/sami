@@ -366,6 +366,24 @@ export function getPostCountForDate(date: string): number {
   return row.cnt;
 }
 
+export function getCompletionCountForDate(date: string): number {
+  const row = getDb().prepare(`
+    SELECT COUNT(*) as cnt FROM completions c
+    JOIN posts p ON p.id = c.post_id
+    WHERE p.date = ?
+  `).get(date) as { cnt: number };
+  return row.cnt;
+}
+
+export function getUniqueCompletionUsersForDate(date: string): number {
+  const row = getDb().prepare(`
+    SELECT COUNT(DISTINCT c.telegram_user_id) as cnt FROM completions c
+    JOIN posts p ON p.id = c.post_id
+    WHERE p.date = ?
+  `).get(date) as { cnt: number };
+  return row.cnt;
+}
+
 // --- Completion helpers ("Сделано" button) ---
 
 export function recordCompletion(postId: number, videoId: number, userId: number): boolean {

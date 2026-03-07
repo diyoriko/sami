@@ -42,18 +42,19 @@ async function main(): Promise<void> {
 
   const { todayMsk, tomorrowMsk, currentWeekMsk } = await import('./dates');
 
-  // /status — checkin stats for today
+  // /status — daily stats
   bot.command('status', async (ctx) => {
     if (ctx.from?.id !== config.TELEGRAM_ADMIN_USER_ID) return;
-    const { getCheckinStats } = await import('./db');
+    const { getPostCountForDate, getCompletionCountForDate, getUniqueCompletionUsersForDate } = await import('./db');
     const date = todayMsk();
-    const stats = getCheckinStats(date);
+    const posts = getPostCountForDate(date);
+    const completions = getCompletionCountForDate(date);
+    const users = getUniqueCompletionUsersForDate(date);
     await ctx.reply(
-      `📊 *Sami Community — статус*\n\n` +
-      `📅 Дата: ${date}\n` +
-      `✅ Чекин сделали: ${stats.did}\n` +
-      `😅 Частично: ${stats.partial}\n` +
-      `❌ Не получилось: ${stats.didnt}\n`,
+      `*Sami — статус*\n\n` +
+      `Дата: ${date}\n` +
+      `Постов: ${posts}\n` +
+      `Выполнений: ${completions} (${users} чел.)`,
       { parse_mode: 'Markdown' }
     );
   });
@@ -111,14 +112,6 @@ async function main(): Promise<void> {
     await ctx.reply(`🔄 Сброшено ${count} сессий на ${date}. Запусти /search для нового поиска.`);
   });
 
-  // /checkin — manually publish evening check-in
-  bot.command('checkin', async (ctx) => {
-    if (ctx.from?.id !== config.TELEGRAM_ADMIN_USER_ID) return;
-    const { postCheckin } = await import('./poster');
-    await postCheckin(bot, todayMsk());
-    await ctx.reply('✅ Чекин опубликован');
-  });
-
   // /analytics — manually run daily analytics
   bot.command('analytics', async (ctx) => {
     if (ctx.from?.id !== config.TELEGRAM_ADMIN_USER_ID) return;
@@ -168,7 +161,7 @@ async function main(): Promise<void> {
       // Notify admin on startup
       bot.api.sendMessage(
         config.TELEGRAM_ADMIN_USER_ID,
-        `🚀 *Sami Community Bot запущен*\n\nКоманды:\n/status — статус дня\n/search — найти видео на завтра\n/reset — сбросить выбор на завтра\n/post — опубликовать все 3 видео\n/checkin — чекин\n/analytics — аналитика\n/curator — контент-план`,
+        `🚀 *Sami Community Bot запущен*\n\nКоманды:\n/status — статус дня\n/search — найти видео на завтра\n/reset — сбросить выбор на завтра\n/post — опубликовать все 3 видео\n/analytics — аналитика`,
         { parse_mode: 'Markdown' }
       ).catch(() => {});
     },

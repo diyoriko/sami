@@ -2,8 +2,7 @@ import { Bot, InlineKeyboard } from 'grammy';
 import { InputFile } from 'grammy';
 import { getConfig } from './config';
 import {
-  getApprovedVideo, recordPost, wasPostedToday,
-  getCheckinStats, recordCheckinPost, VideoRow,
+  getApprovedVideo, recordPost, wasPostedToday, VideoRow,
   updateVideoRating,
 } from './db';
 import { downloadVideo, isYtDlpAvailable } from './downloader';
@@ -149,54 +148,5 @@ export async function postVideoToChannel(
   } catch (err) {
     console.error(`[poster] failed to post ${category}:`, err);
     return 'error';
-  }
-}
-
-export async function postCheckin(bot: Bot, date: string): Promise<void> {
-  const config = getConfig();
-
-  const text = [
-    '*Чекин дня*',
-    '',
-    'Как прошёл твой день движения?',
-  ].join('\n');
-
-  const keyboard = new InlineKeyboard()
-    .text('Сделал(а)', `checkin:did:${date}`)
-    .text('Частично', `checkin:partial:${date}`)
-    .text('Пропустил(а)', `checkin:didnt:${date}`);
-
-  try {
-    const msg = await bot.api.sendMessage(config.TELEGRAM_CHANNEL_ID, text, {
-      parse_mode: 'Markdown',
-      reply_markup: keyboard,
-    });
-    recordCheckinPost(date, msg.message_id);
-    console.log(`[poster] check-in posted for ${date}, msgId=${msg.message_id}`);
-  } catch (err) {
-    console.error(`[poster] failed to post checkin:`, err);
-  }
-}
-
-export async function updateCheckinResults(bot: Bot, date: string): Promise<void> {
-  const config = getConfig();
-  const stats = getCheckinStats(date);
-  const total = stats.did + stats.partial + stats.didnt;
-  if (total === 0) return;
-
-  const summary = [
-    `*Результаты дня ${date}*`,
-    '',
-    `Сделал(а): ${stats.did}`,
-    `Частично: ${stats.partial}`,
-    `Пропустил(а): ${stats.didnt}`,
-    '',
-    `Всего: ${total} · Активность: ${Math.round((stats.did / total) * 100)}%`,
-  ].join('\n');
-
-  try {
-    await bot.api.sendMessage(config.TELEGRAM_CHANNEL_ID, summary, { parse_mode: 'Markdown' });
-  } catch (err) {
-    console.error(`[poster] failed to post checkin results:`, err);
   }
 }
