@@ -1,11 +1,11 @@
 [phases.setup]
-nixPkgs = ["nodejs_22", "python3", "python3Packages.pip", "gnumake", "gcc", "ffmpeg"]
+nixPkgs = ["nodejs_22", "python3", "python3Packages.pip", "yt-dlp", "gnumake", "gcc", "ffmpeg"]
 
 [phases.install]
-cmds = ["pip install --break-system-packages yt-dlp && echo \"yt-dlp installed: $(which yt-dlp) $(yt-dlp --version)\"", "npm install"]
+cmds = ["npm install"]
 
 [phases.build]
 cmds = ["npm run build"]
 
 [start]
-cmd = "export PATH=/root/.local/bin:$PATH && npm start"
+cmd = "npm start"
