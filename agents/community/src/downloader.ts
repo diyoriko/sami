@@ -86,7 +86,7 @@ export async function downloadVideo(youtubeUrl: string, youtubeId: string): Prom
   const tmpDir = os.tmpdir();
   const outTemplate = path.join(tmpDir, `sami-${youtubeId}.%(ext)s`);
 
-  // Target 480p mp4. android/ios player clients bypass YouTube datacenter IP blocks (Railway/VPS).
+  // Target 480p mp4.
   const baseArgs = [
     youtubeUrl,
     '-f', 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best[height<=480]',
@@ -96,6 +96,13 @@ export async function downloadVideo(youtubeUrl: string, youtubeId: string): Prom
     '--quiet',
     '--no-warnings',
   ];
+
+  // Use cookies if available (needed for datacenter IPs blocked by YouTube)
+  const cookiesPath = process.env.YT_COOKIES_PATH || '/data/cookies.txt';
+  if (fs.existsSync(cookiesPath)) {
+    baseArgs.push('--cookies', cookiesPath);
+    console.log(`[downloader] using cookies from ${cookiesPath}`);
+  }
 
   const attempts = [
     [...baseArgs, '--extractor-args', 'youtube:player_client=android,web'],
