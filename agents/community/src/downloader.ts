@@ -74,6 +74,24 @@ function findYtDlp(): string {
 }
 
 export function logYtDlpStatus(): void {
+  // Log which candidates exist for debugging
+  const allCandidates = [
+    '/root/.local/bin/yt-dlp',
+    '/usr/local/bin/yt-dlp',
+    '/opt/homebrew/bin/yt-dlp',
+    '/usr/bin/yt-dlp',
+  ];
+  const existing = allCandidates.filter(p => fs.existsSync(p));
+  console.log(`[downloader] yt-dlp candidates: ${existing.length > 0 ? existing.join(', ') : 'none found'}`);
+
+  // Also try PATH-based discovery
+  try {
+    const fromPath = require('child_process').execFileSync('which', ['yt-dlp'], { encoding: 'utf8' }).trim();
+    console.log(`[downloader] which yt-dlp: ${fromPath}`);
+  } catch {
+    console.log('[downloader] which yt-dlp: not in PATH');
+  }
+
   try {
     const bin = findYtDlp();
     const ver = require('child_process').execFileSync(bin, ['--version'], { encoding: 'utf8' }).trim();
