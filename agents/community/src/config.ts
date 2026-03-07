@@ -19,8 +19,6 @@ const ConfigSchema = z.object({
   CRON_POST_STRENGTH: z.string().default('0 12 * * *'),      // 12:00 — strength (обед)
   CRON_POST_MOBILITY: z.string().default('0 19 * * *'),      // 19:00 — mobility (вечер)
   CRON_CHECKIN: z.string().default('0 22 * * *'),           // 22:00 — evening check-in
-  // Strategist agent
-  CRON_STRATEGIST: z.string().default('0 9 * * *'),           // 09:00 — daily strategist report
   // Analytics agent
   CRON_ANALYTICS_DAILY: z.string().default('30 0 * * *'),    // 00:30 — daily metrics
   CRON_ANALYTICS_WEEKLY: z.string().default('0 10 * * 0'),   // Sunday 10:00 — weekly dashboard
