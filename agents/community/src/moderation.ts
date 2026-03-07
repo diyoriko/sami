@@ -324,7 +324,7 @@ export function registerModeration(bot: Bot): void {
     // Update button text with new count
     try {
       const keyboard = new InlineKeyboard()
-        .text(`Сделано ✓ · ${count}`, `done:${videoId}`);
+        .text(`Я сделал(а) · ${count}`, `done:${videoId}`);
       await ctx.editMessageReplyMarkup({ reply_markup: keyboard });
     } catch {
       // might fail if message is too old, that's ok
