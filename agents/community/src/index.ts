@@ -8,7 +8,7 @@ import { registerBotMenu } from './bot-menu';
 import { registerModeration } from './moderation';
 import { registerApprovalCallbacks } from './approval';
 import { startScheduler } from './scheduler';
-import { logYtDlpStatus, initCookies, setAdminNotifier, runDiagnostic } from './downloader';
+import { upgradeYtDlp, logYtDlpStatus, initCookies, setAdminNotifier, runDiagnostic } from './downloader';
 
 async function main(): Promise<void> {
   const config = getConfig();
@@ -17,7 +17,8 @@ async function main(): Promise<void> {
   getDb();
   console.log('[sami-community] database ready');
 
-  // Init YouTube cookies from env and check yt-dlp
+  // Upgrade yt-dlp to latest, init cookies, log status
+  upgradeYtDlp();
   initCookies();
   logYtDlpStatus();
 

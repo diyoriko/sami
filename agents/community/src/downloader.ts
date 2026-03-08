@@ -80,6 +80,19 @@ function findYtDlp(): string {
   throw new Error('yt-dlp not found');
 }
 
+/** Upgrade yt-dlp via pip at runtime (nix version is frozen/outdated) */
+export function upgradeYtDlp(): void {
+  try {
+    const out = require('child_process').execFileSync(
+      'pip', ['install', '--break-system-packages', '--upgrade', 'yt-dlp'],
+      { encoding: 'utf8', timeout: 60_000 }
+    );
+    console.log(`[downloader] pip upgrade: ${out.trim().split('\n').pop()}`);
+  } catch (err: any) {
+    console.warn(`[downloader] pip upgrade failed: ${(err.message || '').slice(0, 200)}`);
+  }
+}
+
 export function logYtDlpStatus(): void {
   try {
     const bin = findYtDlp();
