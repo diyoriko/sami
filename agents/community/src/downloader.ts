@@ -179,10 +179,9 @@ export async function downloadVideo(youtubeUrl: string, youtubeId: string): Prom
   if (!succeeded) {
     consecutiveFailures++;
     const err = new Error(`yt-dlp all attempts failed: ${lastError.slice(0, 300)}`);
-    // After 3 consecutive failures, likely cookies expired
     if (consecutiveFailures >= 3 && !adminNotified) {
       adminNotified = true;
-      notifyAdmin?.(`Видео не загружаются 3 раза подряд. Скорее всего cookies протухли.\n\nОбнови: экспортируй cookies с youtube.com и установи YT_COOKIES_B64 в Railway.`);
+      notifyAdmin?.(`Видео не загружаются ${consecutiveFailures} раз подряд. Проверь прокси (YT_PROXY) и логи Railway.`);
     }
     throw err;
   }
