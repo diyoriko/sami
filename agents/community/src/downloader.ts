@@ -74,24 +74,6 @@ function findYtDlp(): string {
 }
 
 export function logYtDlpStatus(): void {
-  // Log which candidates exist for debugging
-  const allCandidates = [
-    '/root/.local/bin/yt-dlp',
-    '/usr/local/bin/yt-dlp',
-    '/opt/homebrew/bin/yt-dlp',
-    '/usr/bin/yt-dlp',
-  ];
-  const existing = allCandidates.filter(p => fs.existsSync(p));
-  console.log(`[downloader] yt-dlp candidates: ${existing.length > 0 ? existing.join(', ') : 'none found'}`);
-
-  // Also try PATH-based discovery
-  try {
-    const fromPath = require('child_process').execFileSync('which', ['yt-dlp'], { encoding: 'utf8' }).trim();
-    console.log(`[downloader] which yt-dlp: ${fromPath}`);
-  } catch {
-    console.log('[downloader] which yt-dlp: not in PATH');
-  }
-
   try {
     const bin = findYtDlp();
     const ver = require('child_process').execFileSync(bin, ['--version'], { encoding: 'utf8' }).trim();
@@ -101,6 +83,62 @@ export function logYtDlpStatus(): void {
   } catch {
     console.warn('[downloader] yt-dlp NOT found — will post YouTube links as fallback');
   }
+}
+
+/** Run a real test download on startup to verify the full pipeline works */
+export async function runDiagnostic(): Promise<string> {
+  const lines: string[] = [];
+  const log = (s: string) => { lines.push(s); console.log(`[diagnostic] ${s}`); };
+
+  // 1. yt-dlp binary
+  let bin: string;
+  try {
+    bin = findYtDlp();
+    const ver = require('child_process').execFileSync(bin, ['--version'], { encoding: 'utf8' }).trim();
+    log(`yt-dlp: ${bin} (${ver})`);
+  } catch {
+    log('FAIL: yt-dlp not found');
+    return lines.join('\n');
+  }
+
+  // 2. Proxy
+  const proxy = process.env.YT_PROXY;
+  log(`proxy: ${proxy ? proxy.replace(/:[^:@]+@/, ':***@') : 'none'}`);
+
+  // 3. Cookies
+  const cookieCandidates = [COOKIES_PATH, path.join(os.tmpdir(), 'yt-cookies.txt')];
+  const cookieFile = cookieCandidates.find(p => fs.existsSync(p));
+  log(`cookies: ${cookieFile ?? 'none'}`);
+
+  // 4. Test download — short public domain video
+  const testUrl = 'https://www.youtube.com/watch?v=BaW_jenozKc'; // 10sec test video
+  const testArgs = [testUrl, '-f', 'worst', '-o', path.join(os.tmpdir(), 'sami-diag.%(ext)s'), '--no-playlist', '--max-filesize', '5M'];
+  if (proxy) testArgs.push('--proxy', proxy);
+  if (cookieFile) testArgs.push('--cookies', cookieFile);
+
+  // Try each player client
+  const clients = ['mediaconnect', 'tv', 'android,web', 'ios', ''];
+  for (const client of clients) {
+    const args = client
+      ? [...testArgs, '--extractor-args', `youtube:player_client=${client}`]
+      : [...testArgs];
+    try {
+      const { stderr } = await execFileAsync(bin, args, { timeout: 30_000 });
+      log(`OK with client=${client || 'default'}`);
+      // Cleanup
+      try {
+        const files = require('fs').readdirSync(os.tmpdir()).filter((f: string) => f.startsWith('sami-diag'));
+        files.forEach((f: string) => fs.unlinkSync(path.join(os.tmpdir(), f)));
+      } catch {}
+      return lines.join('\n');
+    } catch (err: any) {
+      const msg = (err.stderr || err.message || '').slice(0, 150);
+      log(`FAIL client=${client || 'default'}: ${msg}`);
+    }
+  }
+
+  log('ALL ATTEMPTS FAILED');
+  return lines.join('\n');
 }
 
 async function probeVideoMeta(filePath: string): Promise<VideoMeta> {

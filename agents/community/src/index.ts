@@ -8,7 +8,7 @@ import { registerBotMenu } from './bot-menu';
 import { registerModeration } from './moderation';
 import { registerApprovalCallbacks } from './approval';
 import { startScheduler } from './scheduler';
-import { logYtDlpStatus, initCookies, setAdminNotifier } from './downloader';
+import { logYtDlpStatus, initCookies, setAdminNotifier, runDiagnostic } from './downloader';
 
 async function main(): Promise<void> {
   const config = getConfig();
@@ -194,6 +194,15 @@ async function main(): Promise<void> {
         lines.join('\n'),
         { parse_mode: 'Markdown' }
       ).catch(() => {});
+
+      // Run download diagnostic and report to admin
+      runDiagnostic().then((report) => {
+        bot.api.sendMessage(
+          config.TELEGRAM_ADMIN_USER_ID,
+          `*Диагностика видео:*\n\`\`\`\n${report}\n\`\`\``,
+          { parse_mode: 'Markdown' }
+        ).catch(() => {});
+      });
     },
   });
 }
