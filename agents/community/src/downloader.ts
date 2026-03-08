@@ -46,15 +46,15 @@ export interface DownloadResult {
 }
 
 function findYtDlp(): string {
-  // Prioritize pip-installed version (latest) over nix (often outdated)
+  // Try pip-installed locations first (latest version), then nix, then PATH
   const candidates = [
-    '/root/.local/bin/yt-dlp',       // pip install --break-system-packages (Railway nixpacks)
-    '/usr/local/bin/yt-dlp',         // pip install location (some systems)
-    '/opt/homebrew/bin/yt-dlp',      // macOS homebrew
+    '/root/.local/bin/yt-dlp',
+    '/usr/local/bin/yt-dlp',
+    '/opt/homebrew/bin/yt-dlp',
     '/usr/bin/yt-dlp',
   ];
 
-  // Also check PATH but only as last resort
+  // Add PATH-discovered location
   try {
     const fromPath = require('child_process').execFileSync('which', ['yt-dlp'], { encoding: 'utf8' }).trim();
     if (fromPath && !candidates.includes(fromPath)) {
@@ -62,14 +62,21 @@ function findYtDlp(): string {
     }
   } catch {}
 
+  // Find all working binaries, pick the newest version
+  let bestBin = '';
+  let bestVer = '';
   for (const bin of candidates) {
     try {
-      require('child_process').execFileSync(bin, ['--version'], { stdio: 'ignore' });
-      return bin;
+      const ver = require('child_process').execFileSync(bin, ['--version'], { encoding: 'utf8' }).trim();
+      if (!bestBin || ver > bestVer) {
+        bestBin = bin;
+        bestVer = ver;
+      }
     } catch {
       continue;
     }
   }
+  if (bestBin) return bestBin;
   throw new Error('yt-dlp not found');
 }
 
@@ -111,7 +118,7 @@ export async function runDiagnostic(): Promise<string> {
   log(`cookies: ${cookieFile ?? 'none'}`);
 
   // 4. Test download — short public domain video
-  const testUrl = 'https://www.youtube.com/watch?v=BaW_jenozKc'; // 10sec test video
+  const testUrl = 'https://www.youtube.com/watch?v=jNQXAC9IVRw'; // "Me at the zoo" — first YouTube video, always available
   const testArgs = [testUrl, '-f', 'worst', '-o', path.join(os.tmpdir(), 'sami-diag.%(ext)s'), '--no-playlist', '--max-filesize', '5M'];
   if (proxy) testArgs.push('--proxy', proxy);
   if (cookieFile) testArgs.push('--cookies', cookieFile);

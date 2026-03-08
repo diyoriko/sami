@@ -8,4 +8,4 @@ cmds = ["npm install"]
 cmds = ["npm run build"]
 
 [start]
-cmd = "pip install --break-system-packages -q yt-dlp && npm start"
+cmd = "pip install --break-system-packages --upgrade yt-dlp && echo \"yt-dlp: $(which yt-dlp) $(yt-dlp --version)\" && npm start"
