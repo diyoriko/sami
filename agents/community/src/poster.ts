@@ -95,6 +95,7 @@ export async function postVideoToChannel(
 
   // Try to download and post as video file
   if (isYtDlpAvailable()) {
+    let videoSent = false;
     try {
       console.log(`[poster] downloading ${category} video: ${video.video_url}`);
       const download = await downloadVideo(video.video_url, video.youtube_id);
@@ -113,18 +114,27 @@ export async function postVideoToChannel(
             reply_markup: keyboard,
           }
         );
+        videoSent = true;
         download.cleanup();
 
-        // Atomic: record post + mark approval as posted in one transaction
-        withTransaction(() => {
-          recordPost(date, category, video.id, msg.message_id, 'video');
-          markApprovalPosted(date, category);
-        });
+        // Record in DB — separate try so DB failure doesn't trigger text fallback
+        try {
+          withTransaction(() => {
+            recordPost(date, category, video.id, msg.message_id, 'video');
+            markApprovalPosted(date, category);
+          });
+        } catch (dbErr) {
+          console.error(`[poster] DB WRITE FAILED for ${category} (video already sent, msgId=${msg.message_id}):`, dbErr);
+        }
 
         console.log(`[poster] posted ${category} as VIDEO file, msgId=${msg.message_id}`);
         return 'posted';
       } catch (uploadErr) {
         download.cleanup();
+        if (videoSent) {
+          console.error(`[poster] POST-UPLOAD ERROR for ${category} (video already sent):`, uploadErr);
+          return 'posted';
+        }
         console.error(`[poster] VIDEO UPLOAD FAILED for ${category} (${video.youtube_id}):`, uploadErr);
         // Fall through to link fallback
       }

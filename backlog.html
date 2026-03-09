@@ -637,7 +637,120 @@
 <div class="services" id="services"></div>
 
 <script>
-const data = {
+const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/diyoriko/sami/main/COMMUNITY_TASKS.md';
+
+// --- Markdown parser ---
+
+function parseMarkdown(md) {
+  const lines = md.split('\n');
+  const releases = [];
+  const sprints = [];
+
+  let section = null;
+  let currentSprint = null;
+  let currentGroup = null;
+  let currentTask = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (/^## Сделано/.test(line)) {
+      section = 'done';
+      continue;
+    }
+
+    const sprintMatch = line.match(/^## SPRINT \d+ — (.+?)(?:\s*\(v([\d.]+)\))?$/);
+    if (sprintMatch) {
+      section = 'sprint';
+      let status = 'planned';
+      for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
+        const sm = lines[j].match(/Статус:\s*\*\*(.+?)\*\*/);
+        if (sm) {
+          const raw = sm[1].toLowerCase();
+          if (raw.includes('деплой') || raw.includes('работ') || raw.includes('active')) status = 'active';
+          break;
+        }
+      }
+      currentSprint = { name: sprintMatch[1].trim(), status, groups: [] };
+      sprints.push(currentSprint);
+      currentGroup = null;
+      currentTask = null;
+      continue;
+    }
+
+    if (/^---\s*$/.test(line)) {
+      section = null;
+      currentSprint = null;
+      currentGroup = null;
+      currentTask = null;
+      continue;
+    }
+
+    const groupMatch = line.match(/^### (P\d):\s*(.+)/i);
+    if (groupMatch && currentSprint) {
+      currentGroup = {
+        title: groupMatch[2].trim(),
+        priority: groupMatch[1].toLowerCase(),
+        tasks: [],
+      };
+      currentSprint.groups.push(currentGroup);
+      currentTask = null;
+      continue;
+    }
+
+    const taskMatch = line.match(/^- \[([ x])\]\s+(.+)/);
+    if (taskMatch) {
+      const done = taskMatch[1] === 'x';
+      let text = taskMatch[2].trim();
+      let detail = '';
+      const boldMatch = text.match(/^\*\*(.+?)\*\*\s*(.*)/);
+      if (boldMatch) {
+        text = boldMatch[1].replace(/\.+$/, '');
+        detail = boldMatch[2] || '';
+      }
+
+      if (section === 'done') {
+        if (!releases.length || !releases[releases.length - 1]._open) {
+          releases.push({ version: 'v0.1.0', date: '', status: 'deployed', items: [], _open: true });
+        }
+        releases[releases.length - 1].items.push(text);
+      } else if (currentGroup) {
+        currentTask = { text, done };
+        if (detail) currentTask.detail = detail;
+        currentGroup.tasks.push(currentTask);
+      }
+      continue;
+    }
+
+    if (currentTask && section === 'sprint' && /^\s{2,}/.test(line) && line.trim()) {
+      currentTask.detail = (currentTask.detail || '') + (currentTask.detail ? ' ' : '') + line.trim();
+    }
+  }
+
+  releases.forEach(r => delete r._open);
+  return { releases, sprints };
+}
+
+async function fetchBacklog() {
+  try {
+    const res = await fetch(GITHUB_RAW_URL + '?t=' + Date.now());
+    if (!res.ok) throw new Error(res.status);
+    const md = await res.text();
+    const parsed = parseMarkdown(md);
+    localStorage.setItem('sami_backlog_md', JSON.stringify(parsed));
+    localStorage.setItem('sami_backlog_ts', Date.now().toString());
+    return parsed;
+  } catch (err) {
+    console.warn('[backlog] fetch failed, trying cache:', err);
+    const cached = localStorage.getItem('sami_backlog_md');
+    if (cached) return JSON.parse(cached);
+    return null;
+  }
+}
+
+// --- Static data (not in markdown) ---
+
+const staticData = {
   releases: [
     {
       version: 'v0.1.0',
@@ -1168,6 +1281,26 @@ const data = {
   ],
 };
 
+// Merged data — populated on load
+let data = null;
+
+async function initData() {
+  const fetched = await fetchBacklog();
+  if (fetched) {
+    data = {
+      releases: fetched.releases,
+      sprints: fetched.sprints,
+      agents: staticData.agents,
+      flows: staticData.flows,
+      services: staticData.services,
+    };
+  } else {
+    // Fallback to static
+    data = staticData;
+  }
+  render();
+}
+
 function getPriorityColor(p) {
   const map = { p0: 'var(--p0)', p1: 'var(--p1)', p2: 'var(--p2)', p3: 'var(--p3)' };
   return map[p] || 'var(--text-muted)';
@@ -1367,12 +1500,13 @@ function render() {
     `).join('')}
   `;
 
-  document.getElementById('lastUpdate').textContent = new Date().toLocaleString('ru-RU', {
-    hour: '2-digit', minute: '2-digit', second: '2-digit'
-  });
+  const ts = localStorage.getItem('sami_backlog_ts');
+  const src = ts ? 'GitHub' : 'static';
+  const time = new Date().toLocaleString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  document.getElementById('lastUpdate').textContent = `${time} (${src})`;
 }
 
-render();
+initData();
 </script>
 </body>
 </html>
