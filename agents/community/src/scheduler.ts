@@ -70,6 +70,9 @@ export function startScheduler(bot: Bot): void {
     }
   }, { timezone: 'Europe/Moscow' });
 
+  // Strategist runs on Mac (claude --print, Max subscription) and POSTs packet to /packet endpoint.
+  // If ANTHROPIC_API_KEY is set, can also run locally on Railway (future option).
+
   console.log('[scheduler] all cron jobs registered (community + analytics)');
 
   // Catch-up on startup: run analytics immediately so latest.json is always available

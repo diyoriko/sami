@@ -9,16 +9,18 @@ import { registerModeration } from './moderation';
 import { registerApprovalCallbacks } from './approval';
 import { startScheduler } from './scheduler';
 import { upgradeYtDlp, logYtDlpStatus, initCookies, setAdminNotifier, runDiagnostic } from './downloader';
+import { migrateStrategist, savePacketFromExternal } from './strategist';
 
 async function main(): Promise<void> {
   const config = getConfig();
 
   // Init DB
   getDb();
+  migrateStrategist();
   console.log('[sami-community] database ready');
 
   // Upgrade yt-dlp to latest, init cookies, log status
-  upgradeYtDlp();
+  await upgradeYtDlp();
   initCookies();
   logYtDlpStatus();
 
@@ -146,6 +148,32 @@ async function main(): Promise<void> {
       res.end('ok');
       return;
     }
+
+    // POST /packet — receive COMMUNITY_PACKET from Mac strategist
+    if (req.url === '/packet' && req.method === 'POST') {
+      const authHeader = req.headers['x-admin-token'];
+      if (authHeader !== config.TELEGRAM_BOT_TOKEN) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'unauthorized' }));
+        return;
+      }
+
+      let body = '';
+      req.on('data', (chunk) => { body += chunk; });
+      req.on('end', () => {
+        try {
+          const payload = JSON.parse(body);
+          savePacketFromExternal(payload.packet, payload.report);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: 'ok' }));
+        } catch (err) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'invalid JSON' }));
+        }
+      });
+      return;
+    }
+
     const filePath = reportFiles[req.url ?? ''];
     if (filePath) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -159,7 +187,7 @@ async function main(): Promise<void> {
       res.end(JSON.stringify({ error: 'unknown endpoint' }));
     }
   }).listen(port, () => {
-    console.log(`[http] report server on :${port} — /report/community /report/analytics /health`);
+    console.log(`[http] report server on :${port} — /report/community /report/analytics /packet /health`);
   });
 
   // Start bot

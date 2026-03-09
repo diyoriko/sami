@@ -321,44 +321,47 @@ const data = {
     'Тесты: vitest, 36 тестов',
     'Residential proxy (Dataimpulse, 5GB)',
     'Мониторинг: DM после 3 фейлов',
-    'Видео файлом в Telegram (09.03)',
+    '/post перехват + очередь (09.03)',
+    'yt-dlp async upgrade + кэш бинаря (10.03)',
+    'Стратег Mac: TCC + env + curl fix (10.03)',
+    'POST /packet: стратег → бот синхронизация (10.03)',
+    'Teletype: чистка мёртвых агентов (10.03)',
   ],
 
   sprints: [
     {
-      name: 'Sprint 2 — Стабильность и polish',
+      name: 'Sprint 2 — Стабильность и polish (v0.2.0)',
       status: 'active',
       groups: [
         {
-          title: 'Баги',
+          title: 'Ждут деплоя',
           priority: 'p0',
           tasks: [
-            { text: '/post перехватывается UGC-хэндлером', done: false },
-            { text: 'Очередь не очищается после публикации', done: false },
+            { text: 'Видео постится текстом — async upgradeYtDlp fix', done: false },
+            { text: 'Дубликат поста — проверить wasPostedToday + force', done: false },
           ]
         },
         {
-          title: 'Стратег не работает (с 08.03)',
-          priority: 'p0',
+          title: 'Нейминг кнопки',
+          priority: 'p1',
           tasks: [
-            { text: 'macOS TCC блокирует доступ к Documents (Full Disk Access)', done: false },
-            { text: 'curl к Railway фейлит — нет данных для отчёта', done: false },
-            { text: 'Telegram notify: env не прокинуты в launchd', done: false },
-            { text: 'Проверить генерацию отчёта после починки', done: false },
+            { text: '"Я сделал(а)" -> переименовать', done: false },
           ]
         },
         {
-          title: 'Инфраструктура',
-          priority: 'p0',
+          title: 'Монетизация (влияет на UX)',
+          priority: 'p1',
           tasks: [
-            { text: 'yt-dlp устаревший (2025.01.15) — обновление при старте', done: false },
+            { text: 'Исследовать модели (задача стратегу)', done: false },
+            { text: 'Опрос в группе', done: false },
+            { text: 'Архитектура free/premium в боте', done: false },
           ]
         },
         {
           title: 'Исследование автопостинга',
           priority: 'p1',
           tasks: [
-            { text: 'Задача стратегу: анализ оптимального времени и режима постинга', done: false },
+            { text: 'Задача стратегу: анализ оптимального режима постинга', done: false },
           ]
         },
         {
@@ -442,23 +445,14 @@ const data = {
             { text: 'Оффлайн-мероприятия', done: false },
           ]
         },
-        {
-          title: 'Монетизация',
-          priority: 'p3',
-          tasks: [
-            { text: 'Исследовать модели', done: false },
-            { text: 'Опрос в группе', done: false },
-            { text: 'Архитектура free/premium', done: false },
-          ]
-        },
       ]
     },
   ],
 
   services: [
     { name: 'Railway', desc: 'Хостинг бота 24/7, persistent volume', cost: '~$5/мес', paid: true },
-    { name: 'Claude API', desc: 'Стратег-агент', cost: 'По usage', paid: true },
     { name: 'Dataimpulse', desc: 'Residential proxy для yt-dlp', cost: 'Prepaid 5GB', paid: true },
+    { name: 'Claude CLI', desc: 'Стратег-агент (claude --print)', cost: 'Входит в Max', paid: false },
     { name: 'YouTube API v3', desc: 'Поиск видео, метаданные', cost: 'Бесплатно', paid: false },
     { name: 'Telegram API', desc: 'Бот', cost: 'Бесплатно', paid: false },
   ],

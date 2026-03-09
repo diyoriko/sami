@@ -60,7 +60,7 @@ load_exported_vars() {
 
   while IFS= read -r line; do
     case "\$line" in
-      export\ OPENAI_API_KEY=*|export\ STRATEGIST_*|export\ GOOGLE_*)
+      export\ OPENAI_API_KEY=*|export\ STRATEGIST_*|export\ GOOGLE_*|export\ TELEGRAM_*)
         eval "\$line"
         ;;
     esac
@@ -77,12 +77,14 @@ export SAMI_CONTEXT_ROOT="$RUNTIME_CONTEXT_DIR"
 export STRATEGIST_REPORT_DIR="$RUNTIME_REPORT_DIR"
 export STRATEGIST_GENERATOR="\${STRATEGIST_GENERATOR:-claude}"
 
-if [[ -f "\$HOME/.config/sami/strategist.env" ]]; then
-  set -a
-  # shellcheck disable=SC1090
-  source "\$HOME/.config/sami/strategist.env"
-  set +a
-fi
+for _env_file in "\$HOME/.config/sami/strategist.env" "\$HOME/.config/sami/community.env"; do
+  if [[ -f "\$_env_file" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "\$_env_file"
+    set +a
+  fi
+done
 
 load_exported_vars "\$HOME/.zshrc"
 load_exported_vars "\$HOME/.bashrc"

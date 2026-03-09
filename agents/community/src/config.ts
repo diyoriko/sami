@@ -23,6 +23,8 @@ const ConfigSchema = z.object({
   CRON_ANALYTICS_WEEKLY: z.string().default('0 10 * * 0'),   // Sunday 10:00 — weekly dashboard
   ANALYTICS_REPORT_DIR: z.string().default('../../reports/analytics/.internal'),
   ANALYTICS_WEEKLY_DIR: z.string().default('../../reports/analytics'),
+  // Strategist agent
+  CRON_STRATEGIST: z.string().default('30 12 * * *'),           // 12:30 MSK — daily strategist run
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

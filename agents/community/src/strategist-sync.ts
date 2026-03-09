@@ -1,69 +1,56 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { getConfig } from './config';
-import { writeDailyStats, getCompletionCountForDate, getUniqueCompletionUsersForDate } from './db';
+import { getDb, writeDailyStats, getCompletionCountForDate, getUniqueCompletionUsersForDate } from './db';
+import { getLatestPacket, type StrategistPacket } from './strategist';
 
-export interface CommunityPacket {
-  week_focus: 'stretching' | 'strength' | 'mobility' | 'general';
-  content_themes: string[];
-  challenge_active: boolean;
-  challenge_name: string | null;
-  search_keywords: {
-    stretching?: string;
-    strength?: string;
-    mobility?: string;
-  };
-  community_priority: 'activation' | 'retention' | 'waitlist' | 'feedback';
+export type { StrategistPacket as CommunityPacket };
+
+/**
+ * Read the latest COMMUNITY_PACKET.
+ * Primary: from DB (strategist module on Railway).
+ * Fallback: from filesystem (legacy Mac strategist via latest.json).
+ */
+export function readCommunityPacket(): StrategistPacket {
+  // Try DB first (new flow: strategist runs on Railway)
+  const packet = getLatestPacket();
+  if (packet.week_focus !== 'general' || Object.keys(packet.search_keywords).length > 0) {
+    console.log('[sync] loaded community packet from DB');
+    return packet;
+  }
+
+  // Fallback: legacy filesystem path (Mac strategist)
+  return readFromFilesystem() ?? packet;
 }
 
-const DEFAULT_PACKET: CommunityPacket = {
-  week_focus: 'general',
-  content_themes: ['всё тело', 'ежедневная практика'],
-  challenge_active: false,
-  challenge_name: null,
-  search_keywords: {},
-  community_priority: 'activation',
-};
-
-export function readCommunityPacket(): CommunityPacket {
+function readFromFilesystem(): StrategistPacket | null {
   const config = getConfig();
   const latestJsonPath = path.resolve(__dirname, '..', config.STRATEGIST_LATEST_JSON);
 
-  // First try the report directory for the latest report
-  const reportDir = path.resolve(path.dirname(latestJsonPath));
-
   try {
-    if (!fs.existsSync(latestJsonPath)) {
-      console.log('[sync] strategist latest.json not found, using defaults');
-      return DEFAULT_PACKET;
-    }
+    if (!fs.existsSync(latestJsonPath)) return null;
 
     const latest = JSON.parse(fs.readFileSync(latestJsonPath, 'utf-8')) as { report_path?: string };
-    if (!latest.report_path || !fs.existsSync(latest.report_path)) {
-      return DEFAULT_PACKET;
-    }
+    if (!latest.report_path || !fs.existsSync(latest.report_path)) return null;
 
     const reportText = fs.readFileSync(latest.report_path, 'utf-8');
-    const packet = extractCommunityPacket(reportText);
-    console.log('[sync] loaded community packet from strategist report');
-    return packet;
-  } catch (err) {
-    console.warn('[sync] failed to read strategist data, using defaults:', err);
-    return DEFAULT_PACKET;
-  }
-}
+    const match = reportText.match(/\/\/ COMMUNITY_PACKET_START\s*([\s\S]*?)\/\/ COMMUNITY_PACKET_END/);
+    if (!match) return null;
 
-function extractCommunityPacket(reportText: string): CommunityPacket {
-  const match = reportText.match(/\/\/ COMMUNITY_PACKET_START\s*([\s\S]*?)\/\/ COMMUNITY_PACKET_END/);
-  if (!match) return DEFAULT_PACKET;
-
-  try {
-    const json = match[1].trim();
-    const parsed = JSON.parse(json) as Partial<CommunityPacket>;
-    return { ...DEFAULT_PACKET, ...parsed };
+    const parsed = JSON.parse(match[1].trim()) as Partial<StrategistPacket>;
+    console.log('[sync] loaded community packet from filesystem (legacy)');
+    return {
+      week_focus: 'general',
+      content_themes: ['всё тело', 'ежедневная практика'],
+      challenge_active: false,
+      challenge_name: null,
+      search_keywords: {},
+      community_priority: 'activation',
+      ...parsed,
+    };
   } catch (err) {
-    console.warn('[sync] failed to parse community packet JSON:', err);
-    return DEFAULT_PACKET;
+    console.warn('[sync] failed to read filesystem packet:', err);
+    return null;
   }
 }
 

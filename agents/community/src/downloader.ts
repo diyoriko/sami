@@ -45,30 +45,37 @@ export interface DownloadResult {
   cleanup: () => void;
 }
 
+const YT_DLP_CANDIDATES = [
+  '/root/.local/bin/yt-dlp',
+  '/usr/local/bin/yt-dlp',
+  '/opt/homebrew/bin/yt-dlp',
+  '/usr/bin/yt-dlp',
+] as const;
+
+let cachedYtDlpBin: string | null = null;
+
 function findYtDlp(): string {
-  // Try pip-installed locations first (latest version), then nix, then PATH
-  const candidates = [
-    '/root/.local/bin/yt-dlp',
-    '/usr/local/bin/yt-dlp',
-    '/opt/homebrew/bin/yt-dlp',
-    '/usr/bin/yt-dlp',
-  ];
+  if (cachedYtDlpBin) return cachedYtDlpBin;
+
+  const candidates = [...YT_DLP_CANDIDATES];
 
   // Add PATH-discovered location
   try {
-    const fromPath = require('child_process').execFileSync('which', ['yt-dlp'], { encoding: 'utf8' }).trim();
+    const { execFileSync } = require('child_process');
+    const fromPath = execFileSync('which', ['yt-dlp'], { encoding: 'utf8' }).trim();
     if (fromPath && !candidates.includes(fromPath)) {
       candidates.push(fromPath);
     }
   } catch {}
 
-  // Find all working binaries, pick the newest version
+  // Find all working binaries, pick the newest version (semver-safe comparison)
   let bestBin = '';
   let bestVer = '';
+  const { execFileSync } = require('child_process');
   for (const bin of candidates) {
     try {
-      const ver = require('child_process').execFileSync(bin, ['--version'], { encoding: 'utf8' }).trim();
-      if (!bestBin || ver > bestVer) {
+      const ver = execFileSync(bin, ['--version'], { encoding: 'utf8' }).trim();
+      if (!bestBin || ver.localeCompare(bestVer, undefined, { numeric: true }) > 0) {
         bestBin = bin;
         bestVer = ver;
       }
@@ -76,20 +83,30 @@ function findYtDlp(): string {
       continue;
     }
   }
-  if (bestBin) return bestBin;
+  if (bestBin) {
+    cachedYtDlpBin = bestBin;
+    return bestBin;
+  }
   throw new Error('yt-dlp not found');
 }
 
+/** Invalidate cached binary path (call after upgrade) */
+function resetYtDlpCache(): void {
+  cachedYtDlpBin = null;
+}
+
 /** Upgrade yt-dlp via pip at runtime (nix version is frozen/outdated) */
-export function upgradeYtDlp(): void {
+export async function upgradeYtDlp(): Promise<void> {
   try {
-    const out = require('child_process').execFileSync(
+    const { stdout } = await execFileAsync(
       'pip', ['install', '--break-system-packages', '--upgrade', 'yt-dlp'],
-      { encoding: 'utf8', timeout: 60_000 }
+      { timeout: 60_000 }
     );
-    console.log(`[downloader] pip upgrade: ${out.trim().split('\n').pop()}`);
+    resetYtDlpCache();
+    const lastLine = stdout.trim().split('\n').pop() ?? '';
+    console.log(`[downloader] pip upgrade: ${lastLine}`);
   } catch (err: any) {
-    console.warn(`[downloader] pip upgrade failed: ${(err.message || '').slice(0, 200)}`);
+    console.warn(`[downloader] pip upgrade failed (using existing version): ${(err.message || '').slice(0, 200)}`);
   }
 }
 

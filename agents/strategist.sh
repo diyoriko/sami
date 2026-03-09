@@ -56,11 +56,12 @@ emergency_notify() {
 trap emergency_notify EXIT
 
 COMMUNITY_AGENT_URL="${COMMUNITY_AGENT_URL:-https://courageous-happiness-production.up.railway.app}"
-COMMUNITY_REPORT_LOCAL="$PROJECT_ROOT/reports/community/.internal/latest.json"
-ANALYTICS_REPORT_LOCAL="$PROJECT_ROOT/reports/analytics/.internal/latest.json"
+
+# Use INTERNAL_DIR (runtime-safe) for curl downloads — avoids TCC blocks on Documents
+COMMUNITY_REPORT_LOCAL="$INTERNAL_DIR/community-latest.json"
+ANALYTICS_REPORT_LOCAL="$INTERNAL_DIR/analytics-latest.json"
 
 # Fetch fresh metrics from Railway before building prompt
-mkdir -p "$(dirname "$COMMUNITY_REPORT_LOCAL")" "$(dirname "$ANALYTICS_REPORT_LOCAL")"
 if curl -sf --max-time 10 "$COMMUNITY_AGENT_URL/report/community" -o "$COMMUNITY_REPORT_LOCAL" 2>/dev/null; then
   echo "[strategist] fetched community report from Railway"
 else
@@ -593,6 +594,62 @@ STATUS="completed"
 if [[ "$RC" -ne 0 ]]; then
   STATUS="failed"
 fi
+
+# POST COMMUNITY_PACKET to Railway bot (sync strategist → community bot)
+if [[ "$STATUS" == "completed" && -s "$OUT_PATH" ]]; then
+  PACKET_JSON="$(python3 - "$OUT_PATH" <<'PY'
+import json
+import re
+import sys
+from pathlib import Path
+
+report = Path(sys.argv[1]).read_text(encoding="utf-8", errors="ignore")
+
+# Extract COMMUNITY_PACKET
+match = re.search(r"// COMMUNITY_PACKET_START\s*([\s\S]*?)// COMMUNITY_PACKET_END", report)
+if not match:
+    print("{}")
+    sys.exit(0)
+
+try:
+    packet = json.loads(match.group(1).strip())
+except json.JSONDecodeError:
+    print("{}")
+    sys.exit(0)
+
+# Extract summary
+summary_match = re.search(r"^## Резюме\s*\n([\s\S]*?)(?:\n## |\n# |$)", report, re.MULTILINE)
+summary = None
+if summary_match:
+    bullets = [l.strip() for l in summary_match.group(1).split("\n") if l.strip().startswith("- ")][:5]
+    summary = "\n".join(bullets) if bullets else None
+
+payload = {"packet": packet}
+if summary:
+    payload["report"] = {"summary": summary}
+
+print(json.dumps(payload, ensure_ascii=False))
+PY
+)"
+
+  if [[ -n "$PACKET_JSON" && "$PACKET_JSON" != "{}" ]]; then
+    BOT_TOKEN="$(grep -m1 'TELEGRAM_BOT_TOKEN=' "$HOME/.config/sami/community.env" 2>/dev/null | cut -d= -f2-)"
+    if [[ -n "$BOT_TOKEN" ]]; then
+      if curl -sf --max-time 15 \
+        -X POST "$COMMUNITY_AGENT_URL/packet" \
+        -H "Content-Type: application/json" \
+        -H "X-Admin-Token: $BOT_TOKEN" \
+        -d "$PACKET_JSON" >/dev/null 2>&1; then
+        echo "[strategist] COMMUNITY_PACKET posted to Railway" >> "$RAW_OUT_PATH"
+      else
+        echo "[strategist] failed to POST packet to Railway (non-critical)" >> "$RAW_OUT_PATH"
+      fi
+    else
+      echo "[strategist] TELEGRAM_BOT_TOKEN not found, skipping packet POST" >> "$RAW_OUT_PATH"
+    fi
+  fi
+fi
+
 NOTIFICATION_STATUS="$(run_google_sync "$STATUS" "$RC")"
 run_telegram_notify "$STATUS"
 write_latest_json "$STATUS" "$RC" "$NOTIFICATION_STATUS"
