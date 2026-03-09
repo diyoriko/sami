@@ -246,6 +246,14 @@ export function setApprovalMessageId(sessionId: number, messageId: number): void
   getDb().prepare(`UPDATE approval_sessions SET message_id = ? WHERE id = ?`).run(messageId, sessionId);
 }
 
+export function markApprovalPosted(date: string, category: string): number {
+  const result = getDb().prepare(`
+    UPDATE approval_sessions SET status = 'posted', decided_at = datetime('now')
+    WHERE date = ? AND category = ? AND status = 'approved'
+  `).run(date, category);
+  return result.changes;
+}
+
 // --- Post helpers ---
 
 export function recordPost(date: string, category: string, videoId: number, channelMessageId: number): void {

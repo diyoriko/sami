@@ -194,6 +194,9 @@ export function registerBotMenu(bot: Bot): void {
 
     const text = ctx.message.text.trim();
 
+    // Don't intercept bot commands — let them pass through
+    if (text.startsWith('/')) return next();
+
     // Step 1: waiting for YouTube link
     if (state.step === 'waiting_link') {
       const ytId = extractYoutubeId(text);

@@ -3,7 +3,7 @@ import { InputFile } from 'grammy';
 import { getConfig } from './config';
 import {
   getApprovedVideo, recordPost, wasPostedToday, VideoRow,
-  updateVideoRating,
+  updateVideoRating, markApprovalPosted,
 } from './db';
 import { downloadVideo, isYtDlpAvailable } from './downloader';
 import { detectEquipment } from './youtube';
@@ -120,6 +120,7 @@ export async function postVideoToChannel(
         );
         download.cleanup();
         recordPost(date, category, video.id, msg.message_id);
+        markApprovalPosted(date, category);
         console.log(`[poster] posted ${category} as video file, msgId=${msg.message_id}`);
         return 'posted';
       } catch (uploadErr) {
@@ -143,6 +144,7 @@ export async function postVideoToChannel(
       }
     );
     recordPost(date, category, video.id, msg.message_id);
+    markApprovalPosted(date, category);
     console.log(`[poster] posted ${category} as link, msgId=${msg.message_id}`);
     return 'posted';
   } catch (err) {
