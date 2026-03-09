@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as http from 'http';
 import { getConfig } from './config';
-import { getDb } from './db';
+import { getDb, closeDb } from './db';
 import { registerBotMenu } from './bot-menu';
 import { registerModeration } from './moderation';
 import { registerApprovalCallbacks } from './approval';
@@ -142,7 +142,7 @@ async function main(): Promise<void> {
     '/report/analytics': path.resolve(reportBase, config.ANALYTICS_REPORT_DIR, 'latest.json'),
   };
 
-  http.createServer((req, res) => {
+  const httpServer = http.createServer((req, res) => {
     if (req.url === '/health') {
       res.writeHead(200, { 'Content-Type': 'text/plain' });
       res.end('ok');
@@ -186,9 +186,22 @@ async function main(): Promise<void> {
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'unknown endpoint' }));
     }
-  }).listen(port, () => {
+  });
+  httpServer.listen(port, () => {
     console.log(`[http] report server on :${port} — /report/community /report/analytics /packet /health`);
   });
+
+  // Graceful shutdown (Railway sends SIGTERM on redeploy)
+  const shutdown = async (signal: string) => {
+    console.log(`[sami-community] ${signal} received, shutting down...`);
+    try { await bot.stop(); } catch {}
+    httpServer.close();
+    closeDb();
+    console.log('[sami-community] shutdown complete');
+    process.exit(0);
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 
   // Start bot
   console.log('[sami-community] starting bot...');

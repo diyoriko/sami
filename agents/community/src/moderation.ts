@@ -1,21 +1,18 @@
 import { Bot } from 'grammy';
 import { InlineKeyboard } from 'grammy';
 import { getConfig } from './config';
-import { upsertMember, setMemberGoal, addWarning, muteMember, recordCompletion, getCompletionCount, hasUserCompleted, getPostByMessageId } from './db';
+import {
+  upsertMember, setMemberGoal, addWarning, muteMember,
+  recordCompletion, getCompletionCount, hasUserCompleted, getPostByMessageId,
+  saveCaptcha, getCaptcha, deleteCaptcha, getExpiredCaptchas,
+} from './db';
 
 // ─── CAPTCHA ──────────────────────────────────────────────────────────────────
 // Simple math captcha to filter bots. New member is muted until they pass.
 // Wrong answer or timeout (2 min) → kick.
+// State is persisted in SQLite — survives bot restarts.
 
-interface PendingCaptcha {
-  userId: number;
-  chatId: number | string;
-  answer: number;
-  firstName: string;
-  timeoutHandle: ReturnType<typeof setTimeout>;
-}
-
-const pendingCaptchas = new Map<number, PendingCaptcha>(); // userId → captcha
+const CAPTCHA_TIMEOUT_MS = 2 * 60 * 1000;
 
 function generateCaptcha(): { question: string; answer: number; options: number[] } {
   const a = Math.floor(Math.random() * 9) + 1;
@@ -62,10 +59,41 @@ function isSpam(text: string): boolean {
   return SPAM_PATTERNS.some(re => re.test(text));
 }
 
+// ─── EXPIRED CAPTCHA CLEANUP ────────────────────────────────────────────────
+
+/** Kick users with expired captchas. Called periodically and on startup. */
+export async function cleanupExpiredCaptchas(bot: Bot): Promise<void> {
+  const config = getConfig();
+  const expired = getExpiredCaptchas();
+  for (const captcha of expired) {
+    try {
+      await bot.api.banChatMember(captcha.chat_id, captcha.telegram_user_id);
+      await bot.api.unbanChatMember(captcha.chat_id, captcha.telegram_user_id);
+    } catch {}
+    try {
+      if (captcha.captcha_message_id) {
+        await bot.api.deleteMessage(captcha.chat_id, captcha.captcha_message_id);
+      }
+    } catch {}
+    try {
+      await bot.api.sendMessage(
+        captcha.chat_id,
+        `⏱ ${captcha.first_name} не ответил на проверку и был исключён. Он может вернуться в любой момент.`
+      );
+    } catch {}
+    deleteCaptcha(captcha.telegram_user_id);
+  }
+}
+
 // ─── REGISTER ────────────────────────────────────────────────────────────────
 
 export function registerModeration(bot: Bot): void {
   const config = getConfig();
+
+  // Periodic cleanup of expired captchas (every 30s)
+  setInterval(() => cleanupExpiredCaptchas(bot).catch(err => {
+    console.error('[moderation] captcha cleanup failed:', err);
+  }), 30_000);
 
   // --- New member: mute + send captcha ---
   bot.on('chat_member', async (ctx) => {
@@ -111,28 +139,9 @@ export function registerModeration(bot: Bot): void {
       return;
     }
 
-    // Kick if no answer in 2 minutes
-    const timeoutHandle = setTimeout(async () => {
-      pendingCaptchas.delete(user.id);
-      try {
-        await ctx.api.banChatMember(chatId, user.id);
-        await ctx.api.unbanChatMember(chatId, user.id); // ban+unban = kick (can rejoin)
-      } catch {}
-      try {
-        await ctx.api.deleteMessage(chatId, captchaMsg.message_id);
-      } catch {}
-      try {
-        await ctx.reply(`⏱ ${firstName} не ответил на проверку и был исключён. Он может вернуться в любой момент.`);
-      } catch {}
-    }, 2 * 60 * 1000);
-
-    pendingCaptchas.set(user.id, {
-      userId: user.id,
-      chatId,
-      answer,
-      firstName,
-      timeoutHandle,
-    });
+    // Persist captcha state in SQLite
+    const expiresAt = new Date(Date.now() + CAPTCHA_TIMEOUT_MS);
+    saveCaptcha(user.id, chatId, answer, firstName, captchaMsg.message_id, expiresAt);
   });
 
   // --- Captcha answer ---
@@ -147,14 +156,14 @@ export function registerModeration(bot: Bot): void {
       return;
     }
 
-    const captcha = pendingCaptchas.get(targetUserId);
+    const captcha = getCaptcha(targetUserId);
     if (!captcha) {
       await ctx.answerCallbackQuery('Проверка уже завершена');
       return;
     }
 
-    clearTimeout(captcha.timeoutHandle);
-    pendingCaptchas.delete(targetUserId);
+    // Remove from DB immediately (no double-processing)
+    deleteCaptcha(targetUserId);
 
     if (chosen !== captcha.answer) {
       // Wrong answer → kick (can rejoin)
@@ -162,8 +171,8 @@ export function registerModeration(bot: Bot): void {
         await ctx.editMessageText(`❌ Неверно. Ты можешь вернуться и попробовать снова.`);
       } catch {}
       try {
-        await ctx.api.banChatMember(captcha.chatId, targetUserId);
-        await ctx.api.unbanChatMember(captcha.chatId, targetUserId);
+        await ctx.api.banChatMember(captcha.chat_id, targetUserId);
+        await ctx.api.unbanChatMember(captcha.chat_id, targetUserId);
       } catch {}
       await ctx.answerCallbackQuery('Неверно');
       return;
@@ -172,7 +181,7 @@ export function registerModeration(bot: Bot): void {
     // Correct → unrestrict + show goal quiz
     try {
       await ctx.api.restrictChatMember(
-        captcha.chatId,
+        captcha.chat_id,
         targetUserId,
         {
           can_send_messages: true,

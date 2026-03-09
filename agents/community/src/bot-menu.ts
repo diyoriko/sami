@@ -15,7 +15,11 @@ import {
   updateUgcSubmission,
   getUgcSubmission,
   deleteUgcSubmission,
+  saveUgcState,
+  getUgcState,
+  deleteUgcState,
   type UgcSubmission,
+  type UgcStep,
 } from './db';
 
 const PAGE_SIZE = 5;
@@ -41,14 +45,8 @@ function mainKeyboard(isAdmin = false): Keyboard {
   return kb.resized().persistent();
 }
 
-// --- UGC conversation state (in-memory, keyed by userId) ---
-
-interface UgcState {
-  step: 'waiting_link' | 'waiting_category' | 'waiting_difficulty' | 'waiting_title';
-  submissionId?: number;
-}
-
-const ugcStates = new Map<number, UgcState>();
+// UGC conversation state is persisted in SQLite (survives bot restarts).
+// See db.ts: saveUgcState, getUgcState, deleteUgcState
 
 function extractYoutubeId(url: string): string | null {
   const patterns = [
@@ -71,7 +69,7 @@ export function registerBotMenu(bot: Bot): void {
   // /start in private chat — show menu
   bot.command('start', async (ctx) => {
     if (ctx.chat.type !== 'private') return;
-    ugcStates.delete(ctx.from!.id);
+    deleteUgcState(ctx.from!.id);
     await ctx.reply(
       'Привет! Я бот Sami.\n\nВыбери действие:',
       { reply_markup: mainKeyboard(isAdmin(ctx.from!.id)) }
@@ -81,7 +79,7 @@ export function registerBotMenu(bot: Bot): void {
   // --- "Мои тренировки" button ---
   bot.hears('Мои тренировки', async (ctx) => {
     if (ctx.chat.type !== 'private') return;
-    ugcStates.delete(ctx.from!.id);
+    deleteUgcState(ctx.from!.id);
     await sendMyWorkouts(ctx, ctx.from!.id, 0);
   });
 
@@ -167,7 +165,7 @@ export function registerBotMenu(bot: Bot): void {
   // --- "Предложить тренировку" button ---
   bot.hears('Предложить тренировку', async (ctx) => {
     if (ctx.chat.type !== 'private') return;
-    ugcStates.set(ctx.from!.id, { step: 'waiting_link' });
+    saveUgcState(ctx.from!.id, 'waiting_link');
     await ctx.reply(
       'Отправь ссылку на YouTube-видео с тренировкой.\n\n_Отмена: /cancel_',
       { parse_mode: 'Markdown' }
@@ -177,11 +175,11 @@ export function registerBotMenu(bot: Bot): void {
   // /cancel — abort UGC flow
   bot.command('cancel', async (ctx) => {
     if (ctx.chat.type !== 'private') return;
-    const state = ugcStates.get(ctx.from!.id);
-    if (state?.submissionId) {
-      deleteUgcSubmission(state.submissionId);
+    const state = getUgcState(ctx.from!.id);
+    if (state?.submission_id) {
+      deleteUgcSubmission(state.submission_id);
     }
-    ugcStates.delete(ctx.from!.id);
+    deleteUgcState(ctx.from!.id);
     await ctx.reply('Отменено.', { reply_markup: mainKeyboard(isAdmin(ctx.from!.id)) });
   });
 
@@ -189,7 +187,7 @@ export function registerBotMenu(bot: Bot): void {
   bot.on('message:text', async (ctx, next) => {
     if (ctx.chat.type !== 'private') return next();
     const userId = ctx.from!.id;
-    const state = ugcStates.get(userId);
+    const state = getUgcState(userId);
     if (!state) return next();
 
     const text = ctx.message.text.trim();
@@ -206,8 +204,7 @@ export function registerBotMenu(bot: Bot): void {
       }
       const videoUrl = `https://www.youtube.com/watch?v=${ytId}`;
       const subId = createUgcSubmission(userId, ctx.from!.username ?? null, videoUrl, ytId);
-      state.submissionId = subId;
-      state.step = 'waiting_category';
+      saveUgcState(userId, 'waiting_category', subId);
 
       const kb = new InlineKeyboard()
         .text('Стретчинг', `ugc_cat:${subId}:stretching`)
@@ -224,10 +221,10 @@ export function registerBotMenu(bot: Bot): void {
         await ctx.reply('Название должно быть от 3 до 200 символов.');
         return;
       }
-      updateUgcSubmission(state.submissionId!, { title: text, status: 'pending' });
-      ugcStates.delete(userId);
+      updateUgcSubmission(state.submission_id!, { title: text, status: 'pending' });
+      deleteUgcState(userId);
 
-      const sub = getUgcSubmission(state.submissionId!);
+      const sub = getUgcSubmission(state.submission_id!);
       if (!sub) return;
 
       // Send to admin for review
@@ -248,14 +245,14 @@ export function registerBotMenu(bot: Bot): void {
     const subId = parseInt(ctx.match[1]);
     const category = ctx.match[2];
     const userId = ctx.from!.id;
-    const state = ugcStates.get(userId);
-    if (!state || state.submissionId !== subId) {
+    const state = getUgcState(userId);
+    if (!state || state.submission_id !== subId) {
       await ctx.answerCallbackQuery('Сессия устарела');
       return;
     }
     await ctx.answerCallbackQuery();
     updateUgcSubmission(subId, { category });
-    state.step = 'waiting_difficulty';
+    saveUgcState(userId, 'waiting_difficulty', subId);
 
     const kb = new InlineKeyboard()
       .text('Начинающий', `ugc_diff:${subId}:beginner`)
@@ -274,14 +271,14 @@ export function registerBotMenu(bot: Bot): void {
     const subId = parseInt(ctx.match[1]);
     const difficulty = ctx.match[2];
     const userId = ctx.from!.id;
-    const state = ugcStates.get(userId);
-    if (!state || state.submissionId !== subId) {
+    const state = getUgcState(userId);
+    if (!state || state.submission_id !== subId) {
       await ctx.answerCallbackQuery('Сессия устарела');
       return;
     }
     await ctx.answerCallbackQuery();
     updateUgcSubmission(subId, { difficulty });
-    state.step = 'waiting_title';
+    saveUgcState(userId, 'waiting_title', subId);
 
     try {
       await ctx.editMessageText('Как назвать тренировку? Напиши короткое название.');

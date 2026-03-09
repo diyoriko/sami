@@ -3,7 +3,7 @@ import { InputFile } from 'grammy';
 import { getConfig } from './config';
 import {
   getApprovedVideo, recordPost, wasPostedToday, VideoRow,
-  updateVideoRating, markApprovalPosted,
+  updateVideoRating, markApprovalPosted, withTransaction,
 } from './db';
 import { downloadVideo, isYtDlpAvailable } from './downloader';
 import { detectEquipment } from './youtube';
@@ -67,10 +67,6 @@ async function formatCaption(video: VideoRow): Promise<string> {
   return lines.join('\n');
 }
 
-async function formatLinkPost(video: VideoRow): Promise<string> {
-  return await formatCaption(video);
-}
-
 export type PostResult = 'posted' | 'skipped' | 'no_video' | 'error';
 
 export async function postVideoToChannel(
@@ -94,11 +90,10 @@ export async function postVideoToChannel(
   }
 
   const caption = await formatCaption(video);
-
   const keyboard = new InlineKeyboard()
     .text('Я сделал(а)', `done:${video.id}`);
 
-  // Try to download and post as video file (works without VPN in Russia)
+  // Try to download and post as video file
   if (isYtDlpAvailable()) {
     try {
       console.log(`[poster] downloading ${category} video: ${video.video_url}`);
@@ -119,36 +114,51 @@ export async function postVideoToChannel(
           }
         );
         download.cleanup();
-        recordPost(date, category, video.id, msg.message_id);
-        markApprovalPosted(date, category);
-        console.log(`[poster] posted ${category} as video file, msgId=${msg.message_id}`);
+
+        // Atomic: record post + mark approval as posted in one transaction
+        withTransaction(() => {
+          recordPost(date, category, video.id, msg.message_id, 'video');
+          markApprovalPosted(date, category);
+        });
+
+        console.log(`[poster] posted ${category} as VIDEO file, msgId=${msg.message_id}`);
         return 'posted';
       } catch (uploadErr) {
         download.cleanup();
-        console.warn(`[poster] video upload failed, falling back to link:`, uploadErr);
+        console.error(`[poster] VIDEO UPLOAD FAILED for ${category} (${video.youtube_id}):`, uploadErr);
+        // Fall through to link fallback
       }
     } catch (downloadErr) {
-      console.warn(`[poster] download failed, falling back to link:`, downloadErr);
+      console.error(`[poster] DOWNLOAD FAILED for ${category} (${video.youtube_id}):`, downloadErr);
+      // Fall through to link fallback
     }
+  } else {
+    console.warn(`[poster] yt-dlp not available, falling back to link for ${category}`);
   }
 
   // Fallback: post as text + YouTube link
   try {
+    console.warn(`[poster] FALLBACK: posting ${category} as TEXT LINK (video upload failed)`);
     const msg = await bot.api.sendMessage(
       config.TELEGRAM_CHANNEL_ID,
-      await formatLinkPost(video),
+      await formatCaption(video),
       {
         parse_mode: 'Markdown',
         link_preview_options: { is_disabled: true },
         reply_markup: keyboard,
       }
     );
-    recordPost(date, category, video.id, msg.message_id);
-    markApprovalPosted(date, category);
-    console.log(`[poster] posted ${category} as link, msgId=${msg.message_id}`);
+
+    // Atomic: record as link post + mark approval
+    withTransaction(() => {
+      recordPost(date, category, video.id, msg.message_id, 'link');
+      markApprovalPosted(date, category);
+    });
+
+    console.warn(`[poster] posted ${category} as LINK (degraded), msgId=${msg.message_id}`);
     return 'posted';
   } catch (err) {
-    console.error(`[poster] failed to post ${category}:`, err);
+    console.error(`[poster] COMPLETE FAILURE for ${category} on ${date}:`, err);
     return 'error';
   }
 }

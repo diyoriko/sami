@@ -18,6 +18,10 @@
     --p3: #8b949e;
     --done: #238636;
     --done-bg: rgba(35,134,54,0.15);
+    --deployed: #a371f7;
+    --deployed-bg: rgba(163,113,247,0.15);
+    --pending: #d29922;
+    --pending-bg: rgba(210,153,34,0.15);
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -69,7 +73,7 @@
 
   .stats {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 12px;
     margin-bottom: 32px;
   }
@@ -134,6 +138,7 @@
   .badge-active { background: rgba(88,166,255,0.15); color: var(--accent); }
   .badge-planned { background: rgba(139,148,158,0.15); color: var(--text-muted); }
   .badge-done { background: var(--done-bg); color: var(--done); }
+  .badge-deployed { background: var(--deployed-bg); color: var(--deployed); }
 
   .sprint-body {
     padding: 0 20px 16px;
@@ -179,6 +184,10 @@
     background: rgba(255,255,255,0.03);
   }
 
+  .task.has-detail {
+    cursor: pointer;
+  }
+
   .task-check {
     width: 18px;
     height: 18px;
@@ -209,8 +218,127 @@
     text-decoration-color: rgba(139,148,158,0.4);
   }
 
+  .task-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .task-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .task-text {
+    flex: 1;
+  }
+
   .task-text strong {
     font-weight: 600;
+  }
+
+  .deploy-tag {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .deploy-deployed {
+    background: var(--deployed-bg);
+    color: var(--deployed);
+  }
+
+  .deploy-pending {
+    background: var(--pending-bg);
+    color: var(--pending);
+  }
+
+  .task-detail {
+    display: none;
+    margin-top: 6px;
+    padding: 8px 12px;
+    background: rgba(255,255,255,0.02);
+    border-left: 2px solid var(--border);
+    border-radius: 0 4px 4px 0;
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+
+  .task-detail.open {
+    display: block;
+  }
+
+  .expand-icon {
+    font-size: 10px;
+    color: var(--text-muted);
+    transition: transform 0.15s;
+    flex-shrink: 0;
+  }
+
+  .task.expanded .expand-icon {
+    transform: rotate(90deg);
+  }
+
+  /* Release sections */
+  .release {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+
+  .release-header {
+    padding: 14px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .release-header:hover {
+    background: rgba(255,255,255,0.03);
+  }
+
+  .release-title {
+    font-size: 15px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .release-date {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+
+  .release-body {
+    padding: 0 20px 14px;
+  }
+
+  .release-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 5px 12px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .release-item::before {
+    content: '\2713';
+    color: var(--done);
+    font-weight: 700;
+    font-size: 12px;
+    margin-top: 2px;
+    flex-shrink: 0;
   }
 
   .services {
@@ -267,7 +395,8 @@
     transform: rotate(-90deg);
   }
 
-  .collapsed .sprint-body {
+  .collapsed .sprint-body,
+  .collapsed .release-body {
     display: none;
   }
 
@@ -285,6 +414,214 @@
     border-radius: 2px;
     transition: width 0.3s;
   }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    margin: 24px 0 12px;
+  }
+
+  /* === Agents Map === */
+  .agents-map {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 16px;
+    position: relative;
+  }
+
+  .agents-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 20px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .agent-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    position: relative;
+    transition: border-color 0.2s;
+  }
+
+  .agent-card:hover {
+    border-color: var(--accent);
+  }
+
+  .agent-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .agent-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  .agent-name {
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .agent-platform {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .agent-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+  }
+
+  .agent-status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+
+  .status-active .agent-status-dot { background: var(--p2); animation: pulse 2s infinite; }
+  .status-active { background: rgba(63,185,80,0.1); color: var(--p2); }
+  .status-cron .agent-status-dot { background: var(--accent); }
+  .status-cron { background: rgba(88,166,255,0.1); color: var(--accent); }
+
+  .agent-skills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 10px;
+  }
+
+  .skill-tag {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.05);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+
+  .agent-schedule {
+    font-size: 12px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .agent-schedule::before {
+    content: '';
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 6v6l4 2'/%3E%3C/svg%3E") no-repeat center;
+    flex-shrink: 0;
+  }
+
+  /* Connection arrows */
+  .agents-connections {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .connection-legend {
+    display: flex;
+    gap: 16px;
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .legend-line {
+    width: 24px;
+    height: 2px;
+    border-radius: 1px;
+  }
+
+  .data-flows {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .data-flows-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  .flow-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .flow-from, .flow-to {
+    font-weight: 600;
+    color: var(--text);
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.05);
+  }
+
+  .flow-arrow {
+    color: var(--accent);
+    font-size: 10px;
+  }
+
+  .flow-label {
+    flex: 1;
+  }
+
+  .flow-type {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    flex-shrink: 0;
+  }
+
+  .flow-http { background: rgba(88,166,255,0.15); color: var(--accent); }
+  .flow-file { background: rgba(63,185,80,0.15); color: var(--p2); }
+  .flow-telegram { background: rgba(163,113,247,0.15); color: var(--deployed); }
+  .flow-cron { background: rgba(210,153,34,0.15); color: var(--pending); }
 </style>
 </head>
 <body>
@@ -295,89 +632,368 @@
 </header>
 
 <div class="stats" id="stats"></div>
+<div id="agents"></div>
 <div id="content"></div>
 <div class="services" id="services"></div>
 
 <script>
-const BACKLOG_PATH = 'COMMUNITY_TASKS.md';
-const REFRESH_INTERVAL = 5000;
-
 const data = {
-  done: [
-    'Канал + группа + бот, Railway 24/7, автодеплой, persistent volume',
-    'YouTube Data API v3 + yt-dlp (видео файлом, cookies, мониторинг)',
-    'Approval flow: поиск -> выбор -> публикация',
-    'Модерация: math captcha, мут, auto-delete, /report',
-    'Автоперевод EN->RU, очистка кликбейта',
-    'Расписание: 07:30/12:00/19:00 (автопостинг отключён)',
-    'Стратег на Claude Sonnet 4.6, 12:30 МСК',
-    'Analytics: ежедневно + еженедельно + при старте',
-    'Формат поста: теги, рейтинг, автор, "Я сделал(а)"',
-    'Completions: БД, дедупликация, метрики',
-    'Рейтинг видео: views + likes + channel + completions',
-    'Persistent menu: Мои тренировки, Предложить, admin',
-    'UGC: ссылка -> категория -> сложность -> модерация',
-    '"Мои тренировки": список UGC со статусами',
-    'Тесты: vitest, 36 тестов',
-    'Residential proxy (Dataimpulse, 5GB)',
-    'Мониторинг: DM после 3 фейлов',
-    '/post перехват + очередь (09.03)',
-    'yt-dlp async upgrade + кэш бинаря (10.03)',
-    'Стратег Mac: TCC + env + curl fix (10.03)',
-    'POST /packet: стратег → бот синхронизация (10.03)',
-    'Teletype: чистка мёртвых агентов (10.03)',
+  releases: [
+    {
+      version: 'v0.1.0',
+      date: '08.03.2026',
+      status: 'deployed',
+      items: [
+        'Канал + группа + бот, Railway 24/7, автодеплой, persistent volume',
+        'YouTube Data API v3 + yt-dlp (видео файлом, cookies, мониторинг)',
+        'Approval flow: поиск -> выбор -> публикация',
+        'Модерация: math captcha, мут, auto-delete, /report',
+        'Автоперевод EN->RU, очистка кликбейта',
+        'Расписание: 07:30/12:00/19:00 (автопостинг отключён)',
+        'Стратег на Claude Sonnet 4.6, 12:30 МСК',
+        'Analytics: ежедневно + еженедельно + при старте',
+        'Формат поста: теги, рейтинг, автор, "Я сделал(а)"',
+        'Completions: БД, дедупликация, метрики',
+        'Рейтинг видео: views + likes + channel + completions',
+        'Persistent menu: Мои тренировки, Предложить, admin',
+        'UGC: ссылка -> категория -> сложность -> модерация',
+        '"Мои тренировки": список UGC со статусами',
+        'Тесты: vitest, 36 тестов',
+        'Residential proxy (Dataimpulse, 5GB)',
+        'Мониторинг: DM после 3 фейлов',
+      ],
+    },
+    {
+      version: 'v0.2.0',
+      date: '10.03.2026',
+      status: 'deployed',
+      items: [
+        '/post перехват UGC-хэндлером',
+        'Очередь не очищается после публикации — fix',
+        'yt-dlp: async upgrade при старте, кэш бинаря, semver-сравнение',
+        'Стратег Mac: TCC fix, env vars, curl paths',
+        'Стратег -> бот: POST /packet endpoint, COMMUNITY_PACKET в SQLite',
+        'Teletype: удалены мёртвые агенты (codex hourly, catchup)',
+      ],
+    },
   ],
 
   sprints: [
     {
-      name: 'Sprint 2 — Стабильность и polish (v0.2.0)',
+      name: 'Sprint 1 — Живой бэклог',
+      status: 'planned',
+      groups: [
+        {
+          title: 'Бэклог как сервис',
+          priority: 'p1',
+          tasks: [
+            {
+              text: 'API эндпоинты в Community Bot: GET /api/backlog, GET /api/agents',
+              done: false,
+              detail: 'Бэклог, агенты, флоу, сервисы хранятся в SQLite. Бот отдаёт JSON. backlog.html делает fetch() вместо хардкода в const data.',
+            },
+            {
+              text: 'SQLite-схема: tasks, sprints, agents, flows, releases',
+              done: false,
+              detail: 'Миграция текущего JS-объекта data в таблицы. Релизы, спринты, группы, задачи — всё в БД.',
+            },
+            {
+              text: 'backlog.html: fetch() при открытии',
+              done: false,
+              detail: 'Убрать хардкод const data. При загрузке — запрос к Railway API, рендер из ответа. Fallback на последний кэш в localStorage.',
+            },
+            {
+              text: 'Автообновление статусов из агентов',
+              done: false,
+              detail: 'Стратег обновляет бэклог через COMMUNITY_PACKET. Бот помечает задачи done при деплое. Analytics пушит метрики.',
+            },
+            {
+              text: 'Admin-команды для бэклога в Telegram',
+              done: false,
+              detail: 'Управление задачами через бота: добавить, закрыть, переприоритизировать. Без необходимости редактировать HTML.',
+            },
+          ]
+        },
+      ]
+    },
+    {
+      name: 'Sprint 2 — Стабильность и polish',
       status: 'active',
       groups: [
         {
-          title: 'Ждут деплоя',
+          title: 'Публикация видео',
           priority: 'p0',
           tasks: [
-            { text: 'Видео постится текстом — async upgradeYtDlp fix', done: false },
-            { text: 'Дубликат поста — проверить wasPostedToday + force', done: false },
+            {
+              text: 'Видео постится текстом, не файлом (4+ случаев)',
+              done: false,
+              deploy: 'pending',
+              detail: 'async upgradeYtDlp задеплоен в v0.2.0, но проблема повторяется (09.03: стретчинг chilelavida — дубль, один с видео, второй без). Нужна глубокая диагностика: fallback при ошибке загрузки, retry, логирование причины.',
+            },
+            {
+              text: 'Дубликат поста — одно видео дважды',
+              done: false,
+              detail: 'Корень: CHECK constraint в approval_sessions не допускает статус "posted" — UPDATE молча не обновляет, видео остаётся "approved", повторная публикация при следующем вызове.',
+            },
+            {
+              text: 'Атомарная публикация',
+              done: false,
+              detail: 'sendVideo + recordPost + markApprovalPosted не в транзакции. Краш между шагами = потеря данных или дубликат. Обернуть в BEGIN/COMMIT с rollback.',
+            },
+            {
+              text: 'Все 3 категории — ошибка (09.03, 23:38)',
+              done: false,
+              detail: 'Скриншот: "Стретчинг — ошибка, Силовая — ошибка, Мобильность — ошибка". Нет логирования причины каждого фейла — невозможно диагностировать без доступа к Railway.',
+            },
+          ]
+        },
+        {
+          title: 'Потеря состояния при рестарте',
+          priority: 'p0',
+          tasks: [
+            {
+              text: 'Капча в памяти (Map) — пользователи навсегда замьючены',
+              done: false,
+              detail: 'При редеплое Railway все pending-капчи теряются. Пользователь, проходящий капчу в момент деплоя, остаётся замьюченным навсегда. Перенести в SQLite с TTL.',
+            },
+            {
+              text: 'UGC-диалог в памяти (Map) — потеря прогресса',
+              done: false,
+              detail: 'При рестарте пользователь теряет весь прогресс заполнения UGC. Перенести в SQLite: ugc_submissions + conversation_step.',
+            },
+          ]
+        },
+        {
+          title: 'Graceful shutdown',
+          priority: 'p0',
+          tasks: [
+            {
+              text: 'Обработка SIGTERM при редеплое',
+              done: false,
+              detail: 'Railway шлёт SIGTERM, бот обрывает in-flight запросы. Добавить хэндлер: drain HTTP сервер, остановить grammy bot, закрыть SQLite соединение.',
+            },
           ]
         },
         {
           title: 'Нейминг кнопки',
           priority: 'p1',
           tasks: [
-            { text: '"Я сделал(а)" -> переименовать', done: false },
+            {
+              text: '"Я сделал(а)" -> переименовать',
+              done: false,
+              detail: 'Варианты: "Сделано", "Выполнено", "Готово". Выбрать по тону бренда (спокойно, конкретно).',
+            },
           ]
         },
         {
           title: 'Монетизация (влияет на UX)',
           priority: 'p1',
           tasks: [
-            { text: 'Исследовать модели (задача стратегу)', done: false },
-            { text: 'Опрос в группе', done: false },
-            { text: 'Архитектура free/premium в боте', done: false },
+            {
+              text: 'Исследовать модели монетизации',
+              done: false,
+              detail: 'Задача стратегу: premium-контент, программы, партнёрства. Рекомендация с учётом влияния на UX сообщества. Приоритет высокий — от выбора модели зависит архитектура бота.',
+            },
+            {
+              text: 'Опрос в группе',
+              done: false,
+              detail: 'После исследования стратега — создать опрос в "Сами Daily" для валидации выбранной модели.',
+            },
+            {
+              text: 'Архитектура free/premium в боте',
+              done: false,
+              detail: 'Разделение контента и функций на бесплатный и premium уровни. Зависит от результата исследования.',
+            },
           ]
         },
         {
           title: 'Исследование автопостинга',
           priority: 'p1',
           tasks: [
-            { text: 'Задача стратегу: анализ оптимального режима постинга', done: false },
+            {
+              text: 'Анализ оптимального режима постинга',
+              done: false,
+              detail: 'Задача стратегу: нужен ли автопостинг по расписанию (07:30/12:00/19:00) или ручная публикация лучше. Сейчас автопостинг отключён, админ публикует вручную.',
+            },
+          ]
+        },
+        {
+          title: 'Стратег — обогащение данных',
+          priority: 'p1',
+          tasks: [
+            {
+              text: 'Расширить analytics-latest.json',
+              done: false,
+              detail: 'Top-5 видео по completions, retention (вернулись вчера и сегодня), время публикации vs completions, completions по категориям. Сейчас стратег видит только 7 чисел.',
+            },
+            {
+              text: 'Заполнить community-latest.json',
+              done: false,
+              detail: 'Сейчас пустой ("report not generated yet"). Нужно: история постов за неделю с метриками (views, completions, forwards), активные пользователи.',
+            },
+            {
+              text: 'Ликвидировать галлюцинации в ресерче',
+              done: false,
+              detail: 'Стратег ссылается на несуществующие источники (Telemetr.io, Telegram Creator Hub) — у него нет интернета. Либо дать веб-доступ, либо собирать дайджест конкурентов скриптом.',
+            },
+          ]
+        },
+        {
+          title: 'Стратег — память и feedback loop',
+          priority: 'p1',
+          tasks: [
+            {
+              text: 'Передавать последние 3-5 резюме прошлых отчётов',
+              done: false,
+              detail: 'Сейчас стратег каждый день начинает с нуля. Нужно: включать в промпт резюме последних отчётов, чтобы сохранялась преемственность.',
+            },
+            {
+              text: 'Трекер экспериментов',
+              done: false,
+              detail: 'JSON/SQLite: что стратег предложил, что внедрено, результат. Стратег читает при генерации — видит, работают ли его идеи.',
+            },
+            {
+              text: 'Лог решений владельца',
+              done: false,
+              detail: 'Стратег должен знать, что было отклонено/принято и почему (например: "UGC отложен до 50 подписчиков"). Без этого повторяет одни и те же рекомендации.',
+            },
+          ]
+        },
+        {
+          title: 'Стратег — веб-доступ и реальный ресерч',
+          priority: 'p1',
+          tasks: [
+            {
+              text: 'Включить веб-поиск для стратега',
+              done: false,
+              detail: 'STRATEGIST_ENABLE_WEB_SEARCH=1 уже есть как env var, но отключён. Или: предварительный дайджест конкурентов скриптом в файл контекста.',
+            },
+            {
+              text: 'Парсинг конкурентов: TGStat/Telemetr.io',
+              done: false,
+              detail: 'Автоматический сбор данных по fitness/wellness каналам РФ. Реальные цифры вместо галлюцинаций.',
+            },
+            {
+              text: 'Бенчмарки по размеру канала',
+              done: false,
+              detail: 'Средние метрики для каналов 0-100, 100-1000, 1000+ подписчиков. Чтобы стратег ставил реалистичные цели.',
+            },
+          ]
+        },
+        {
+          title: 'Стратег — агентность',
+          priority: 'p1',
+          tasks: [
+            {
+              text: 'COMMUNITY_PACKET v2: конкретные действия',
+              done: false,
+              detail: 'Стратег формирует не только отчёт, но и действия: создать опрос с вариантами X/Y/Z, текст welcome-сообщения, A/B варианты названий постов.',
+            },
+            {
+              text: 'Бот выполняет действия из пакета',
+              done: false,
+              detail: 'Бот умеет: создать опрос в группе, изменить welcome-текст, запустить A/B тест названий. По инструкции из COMMUNITY_PACKET.',
+            },
+            {
+              text: 'Feedback: бот -> стратег',
+              done: false,
+              detail: 'Бот отправляет стратегу результат: опрос создан, N голосов, итог. Стратег видит эффект своих решений.',
+            },
+          ]
+        },
+        {
+          title: 'Наблюдаемость и алертинг',
+          priority: 'p1',
+          tasks: [
+            {
+              text: 'Алерт с первого фейла постинга',
+              done: false,
+              detail: 'Сейчас DM админу только после 3 подряд. Первый фейл должен уведомлять с причиной: download failed / upload failed / timeout.',
+            },
+            {
+              text: 'Различать "пост с видео" и "пост текстом" в аналитике',
+              done: false,
+              detail: 'Fallback на текстовую ссылку молчит. Невозможно понять масштаб проблемы. Добавить post_type в posts таблицу.',
+            },
+            {
+              text: 'Structured logging с correlation ID',
+              done: false,
+              detail: 'Один ID на весь путь: поиск -> одобрение -> скачивание -> публикация. Замена console.log на структурированный логгер.',
+            },
+          ]
+        },
+        {
+          title: 'Защита от внешних API',
+          priority: 'p1',
+          tasks: [
+            {
+              text: 'Timeout на YouTube API fetch',
+              done: false,
+              detail: 'Сейчас без таймаута — запрос может висеть бесконечно, блокируя approval flow в 19:00.',
+            },
+            {
+              text: 'Circuit breaker для YouTube',
+              done: false,
+              detail: 'После N фейлов перестать долбить API, использовать кэшированные видео, уведомить админа.',
+            },
+            {
+              text: 'Rate limiting на callback-кнопки',
+              done: false,
+              detail: '"Я сделал(а)" можно спамить, искусственно накручивая счётчик completions. Добавить throttle.',
+            },
+          ]
+        },
+        {
+          title: 'Целостность данных',
+          priority: 'p1',
+          tasks: [
+            {
+              text: 'Soft delete вместо DELETE',
+              done: false,
+              detail: 'Добавить deleted_at во все таблицы. Сейчас UGC, баны, отклонения удаляются безвозвратно — нет аудита.',
+            },
+            {
+              text: 'Отдельный API-ключ для стратега',
+              done: false,
+              detail: '/packet авторизуется TELEGRAM_BOT_TOKEN. Утечка одного = контроль над всем. Добавить STRATEGIST_API_KEY.',
+            },
+            {
+              text: 'Трекинг активности пользователей',
+              done: false,
+              detail: 'members таблица не хранит last_activity_at, completions_total, статус. Невозможно найти churned.',
+            },
           ]
         },
         {
           title: 'Формат постов',
           priority: 'p1',
           tasks: [
-            { text: 'Теги каждый на отдельной строке', done: false },
-            { text: 'Автор: "YouTube" со ссылкой внутри слова', done: false },
+            {
+              text: 'Теги каждый на отдельной строке',
+              done: false,
+              detail: 'Сейчас теги через пробел в одну строку. Нужно: каждый тег на новой строке для читаемости.',
+            },
+            {
+              text: 'Автор: "YouTube" со ссылкой внутри слова',
+              done: false,
+              detail: 'Текущий формат: "Автор: Name (ссылка)". Целевой: "Автор: YouTube" где "YouTube" — кликабельная ссылка на канал.',
+            },
           ]
         },
         {
           title: 'Admin UX',
           priority: 'p1',
           tasks: [
-            { text: 'Deploy notification: очеловечить', done: false },
-            { text: 'Аналитика DM: понятный формат', done: false },
+            {
+              text: 'Deploy notification: очеловечить',
+              done: false,
+              detail: 'Не показывать raw commit hash, Co-Authored-By и технические детали. Показать версию, краткое описание изменений.',
+            },
+            {
+              text: 'Аналитика DM: понятный формат',
+              done: false,
+              detail: 'Сейчас сообщение выглядит как лог. Нужен человекочитаемый формат: ключевые метрики, тренды, без технического мусора.',
+            },
           ]
         },
       ]
@@ -390,27 +1006,60 @@ const data = {
           title: 'UGC — доработки',
           priority: 'p1',
           tasks: [
-            { text: 'Загрузка видеофайла (основной флоу)', done: false },
-            { text: 'Доп. поля: длительность, мышцы, инвентарь', done: false },
-            { text: 'Автор в посте при публикации UGC', done: false },
+            {
+              text: 'Загрузка видеофайла (основной флоу)',
+              done: false,
+              detail: 'Сейчас UGC только через YouTube-ссылку. Основной флоу: загрузка видеофайла напрямую, YouTube как опция.',
+            },
+            {
+              text: 'Доп. поля: длительность, мышцы, инвентарь',
+              done: false,
+              detail: 'При загрузке UGC — запрашивать длительность, целевые группы мышц, необходимый инвентарь. Для фильтрации и рекомендаций.',
+            },
+            {
+              text: 'Автор в посте при публикации UGC',
+              done: false,
+              detail: 'Указывать имя/никнейм автора UGC-тренировки в посте при публикации в канал.',
+            },
           ]
         },
         {
           title: 'Фильтрация видео',
           priority: 'p1',
           tasks: [
-            { text: 'Кнопка "Фильтры" в persistent menu', done: false },
-            { text: 'Параметры: вид, длительность, уровень', done: false },
-            { text: 'Пресеты: Новичок, Утро, После работы, Быстрая', done: false },
-            { text: 'Бот отправляет подходящие видео', done: false },
-            { text: 'Индексация видео в БД', done: false },
+            {
+              text: 'Кнопка "Фильтры" в persistent menu',
+              done: false,
+            },
+            {
+              text: 'Параметры: вид, длительность, уровень',
+              done: false,
+            },
+            {
+              text: 'Пресеты: Новичок, Утро, После работы, Быстрая',
+              done: false,
+              detail: 'Быстрый выбор без настройки фильтров. Каждый пресет — предустановленная комбинация параметров.',
+            },
+            {
+              text: 'Бот отправляет подходящие видео',
+              done: false,
+            },
+            {
+              text: 'Индексация видео в БД',
+              done: false,
+              detail: 'Все опубликованные видео в БД с полными метаданными: категория, длительность, сложность, мышцы, инвентарь.',
+            },
           ]
         },
         {
           title: 'Рейтинг',
           priority: 'p2',
           tasks: [
-            { text: 'Пересчёт при росте completions', done: false },
+            {
+              text: 'Пересчёт при росте completions',
+              done: false,
+              detail: 'Рейтинг пересчитывается при каждом новом выполнении. Формула: 0.4*views + 0.3*likes + 0.2*channel + 0.1*completions.',
+            },
           ]
         },
       ]
@@ -423,30 +1072,91 @@ const data = {
           title: 'Welcome-поток',
           priority: 'p1',
           tasks: [
-            { text: 'Авто-сообщение после капчи с тренировкой дня', done: false },
-            { text: 'Привязка к расписанию', done: false },
+            {
+              text: 'Авто-сообщение после капчи с тренировкой дня',
+              done: false,
+              detail: 'Новый участник проходит капчу -> бот отправляет "Вот сегодняшняя тренировка" со ссылкой на актуальный пост.',
+            },
+            {
+              text: 'Привязка к расписанию',
+              done: false,
+              detail: 'Welcome-сообщение привязано к актуальному расписанию: утро — стретчинг, день — силовая, вечер — мобильность.',
+            },
           ]
         },
         {
           title: 'Рубрики',
           priority: 'p2',
           tasks: [
-            { text: '#ритуал_недели (пн)', done: false },
-            { text: '#механика (ср)', done: false },
-            { text: '#прогресс_пятницы (пт)', done: false },
+            { text: '#ритуал_недели (пн)', done: false, detail: 'Одна практика-фокус на неделю.' },
+            { text: '#механика (ср)', done: false, detail: 'Разбор одного упражнения: техника, частые ошибки, прогрессии.' },
+            { text: '#прогресс_пятницы (пт)', done: false, detail: 'Итоги недели, признание активных участников.' },
           ]
         },
         {
           title: 'Growth',
           priority: 'p2',
           tasks: [
-            { text: 'Buddy invite после 3 выполнений', done: false },
+            { text: 'Buddy invite после 3 выполнений', done: false, detail: 'После 3-го выполнения тренировки бот предлагает пригласить друга.' },
             { text: 'Cross-promotion с микро-тренерами', done: false },
             { text: 'Оффлайн-мероприятия', done: false },
           ]
         },
       ]
     },
+  ],
+
+  agents: [
+    {
+      id: 'strategist',
+      name: 'Strategist',
+      icon: 'S',
+      color: '#a371f7',
+      platform: 'launchd Mac',
+      model: 'Claude Sonnet 4.6',
+      status: 'cron',
+      statusLabel: '12:30 МСК',
+      schedule: 'Ежедневно 12:30 МСК',
+      skills: ['Анализ метрик', 'Рекомендации', 'COMMUNITY_PACKET', 'Отчёты'],
+      entry: 'agents/strategist.sh',
+    },
+    {
+      id: 'community',
+      name: 'Community Bot',
+      icon: 'C',
+      color: '#58a6ff',
+      platform: 'Railway 24/7',
+      model: null,
+      status: 'active',
+      statusLabel: 'Online',
+      schedule: '19:00 поиск, посты вручную',
+      skills: ['YouTube поиск', 'Публикация видео', 'Модерация', 'UGC', 'Completions', 'Persistent menu'],
+      entry: 'agents/community/',
+    },
+    {
+      id: 'analytics',
+      name: 'Analytics',
+      icon: 'A',
+      color: '#3fb950',
+      platform: 'Модуль в Community',
+      model: null,
+      status: 'cron',
+      statusLabel: 'Cron',
+      schedule: 'При старте + 00:30 + вс 10:00',
+      skills: ['Ежедневная сводка', 'Недельный дашборд', 'Catch-up при старте'],
+      entry: 'agents/community/analytics/',
+    },
+  ],
+
+  flows: [
+    { from: 'Strategist', to: 'Community', label: 'COMMUNITY_PACKET (ключевые слова, действия)', type: 'http', protocol: 'POST /packet' },
+    { from: 'Strategist', to: 'Community', label: 'Запрос отчётов', type: 'http', protocol: 'GET /report/*' },
+    { from: 'Strategist', to: 'Admin', label: 'Ежедневный отчёт', type: 'telegram', protocol: 'DM' },
+    { from: 'Community', to: 'Telegram', label: 'Посты в канал @sami_workouts', type: 'telegram', protocol: 'Bot API' },
+    { from: 'Community', to: 'Admin', label: 'DM: фейлы, аналитика, деплой', type: 'telegram', protocol: 'DM' },
+    { from: 'Community', to: 'YouTube', label: 'Поиск видео, скачивание (yt-dlp)', type: 'http', protocol: 'API + yt-dlp' },
+    { from: 'Analytics', to: 'Community', label: 'Метрики в SQLite + latest.json', type: 'file', protocol: 'SQLite / JSON' },
+    { from: 'Analytics', to: 'Admin', label: 'Сводка в DM', type: 'telegram', protocol: 'DM' },
   ],
 
   services: [
@@ -463,42 +1173,127 @@ function getPriorityColor(p) {
   return map[p] || 'var(--text-muted)';
 }
 
+function toggleDetail(el) {
+  const task = el.closest('.task');
+  const detail = task.querySelector('.task-detail');
+  if (!detail) return;
+  task.classList.toggle('expanded');
+  detail.classList.toggle('open');
+}
+
 function render() {
-  // Stats
+  // Counts
+  const totalDeployed = data.releases.reduce((s, r) => s + r.items.length, 0);
   const totalOpen = data.sprints.reduce((s, sp) => s + sp.groups.reduce((g, gr) => g + gr.tasks.filter(t => !t.done).length, 0), 0);
-  const totalDone = data.done.length;
   const p0Count = data.sprints.reduce((s, sp) => s + sp.groups.filter(g => g.priority === 'p0').reduce((g, gr) => g + gr.tasks.filter(t => !t.done).length, 0), 0);
+  const pendingDeploy = data.sprints.reduce((s, sp) => s + sp.groups.reduce((g, gr) => g + gr.tasks.filter(t => t.deploy === 'pending').length, 0), 0);
   const sprintCount = data.sprints.length;
 
   document.getElementById('stats').innerHTML = `
-    <div class="stat"><div class="stat-value" style="color:var(--done)">${totalDone}</div><div class="stat-label">Сделано</div></div>
+    <div class="stat"><div class="stat-value" style="color:var(--deployed)">${totalDeployed}</div><div class="stat-label">Задеплоено</div></div>
     <div class="stat"><div class="stat-value">${totalOpen}</div><div class="stat-label">Открыто</div></div>
-    <div class="stat"><div class="stat-value" style="color:var(--p0)">${p0Count}</div><div class="stat-label">P0 критичных</div></div>
+    <div class="stat"><div class="stat-value" style="color:var(--p0)">${p0Count}</div><div class="stat-label">P0</div></div>
+    <div class="stat"><div class="stat-value" style="color:var(--pending)">${pendingDeploy}</div><div class="stat-label">Ждут деплоя</div></div>
     <div class="stat"><div class="stat-value">${sprintCount}</div><div class="stat-label">Спринтов</div></div>
   `;
 
-  // Sprints
-  let html = '';
+  // --- Agents Map ---
+  let agentsHtml = '<div class="section-label">Агенты и связи</div>';
+  agentsHtml += '<div class="agents-map">';
+  agentsHtml += '<div class="agents-grid">';
 
-  // Done section
-  html += `
-    <div class="sprint done-section collapsed" onclick="this.classList.toggle('collapsed')">
-      <div class="sprint-header">
-        <span class="sprint-title">Сделано (${data.done.length})</span>
-        <span class="collapse-icon">&#9660;</span>
-      </div>
-      <div class="sprint-body">
-        ${data.done.map(t => `
-          <div class="task task-done">
-            <div class="task-check"></div>
-            <span class="task-text">${t}</span>
+  for (const agent of data.agents) {
+    const statusClass = agent.status === 'active' ? 'status-active' : 'status-cron';
+    agentsHtml += `
+      <div class="agent-card" data-agent="${agent.id}">
+        <div class="agent-header">
+          <div class="agent-icon" style="background:${agent.color}22;color:${agent.color};border:1px solid ${agent.color}44">${agent.icon}</div>
+          <div>
+            <div class="agent-name">${agent.name}</div>
+            <div class="agent-platform">${agent.platform}${agent.model ? ' &middot; ' + agent.model : ''}</div>
           </div>
-        `).join('')}
+        </div>
+        <div class="agent-status ${statusClass}">
+          <span class="agent-status-dot"></span>
+          ${agent.statusLabel}
+        </div>
+        <div class="agent-skills">
+          ${agent.skills.map(s => `<span class="skill-tag">${s}</span>`).join('')}
+        </div>
+        <div class="agent-schedule">${agent.schedule}</div>
       </div>
+    `;
+  }
+
+  agentsHtml += '</div>'; // agents-grid
+
+  // Data flows
+  agentsHtml += '<div class="data-flows">';
+  agentsHtml += '<div class="data-flows-title">Потоки данных</div>';
+
+  for (const flow of data.flows) {
+    const typeClass = 'flow-' + flow.type;
+    const typeLabel = { http: 'HTTP', file: 'File', telegram: 'TG', cron: 'Cron' }[flow.type] || flow.type;
+    agentsHtml += `
+      <div class="flow-row">
+        <span class="flow-from">${flow.from}</span>
+        <span class="flow-arrow">&#9654;</span>
+        <span class="flow-to">${flow.to}</span>
+        <span class="flow-label">${flow.label}</span>
+        <span class="flow-type ${typeClass}">${flow.protocol}</span>
+      </div>
+    `;
+  }
+
+  agentsHtml += '</div>'; // data-flows
+
+  // Legend
+  agentsHtml += `
+    <div class="connection-legend">
+      <div class="legend-item"><span class="legend-line" style="background:var(--accent)"></span> HTTP</div>
+      <div class="legend-item"><span class="legend-line" style="background:var(--p2)"></span> File/DB</div>
+      <div class="legend-item"><span class="legend-line" style="background:var(--deployed)"></span> Telegram</div>
     </div>
   `;
 
-  // Active sprints
+  agentsHtml += '</div>'; // agents-map
+  document.getElementById('agents').innerHTML = agentsHtml;
+
+  let html = '';
+
+  // --- Releases ---
+  html += '<div class="section-label">Релизы</div>';
+
+  for (const release of data.releases) {
+    const statusBadge = release.status === 'deployed'
+      ? '<span class="sprint-badge badge-deployed">Задеплоен</span>'
+      : '<span class="sprint-badge badge-active">В работе</span>';
+
+    html += `
+      <div class="release collapsed" onclick="this.classList.toggle('collapsed')">
+        <div class="release-header">
+          <div class="release-title">
+            ${release.version}
+            <span class="release-date">${release.date}</span>
+            ${statusBadge}
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="font-size:13px;color:var(--text-muted)">${release.items.length} задач</span>
+            <span class="collapse-icon">&#9660;</span>
+          </div>
+        </div>
+        <div class="release-body">
+          ${release.items.map(item => `
+            <div class="release-item">${item}</div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  // --- Sprints ---
+  html += '<div class="section-label">Спринты</div>';
+
   for (const sprint of data.sprints) {
     const badgeClass = sprint.status === 'active' ? 'badge-active' : 'badge-planned';
     const badgeText = sprint.status === 'active' ? 'В работе' : 'Планируется';
@@ -528,12 +1323,29 @@ function render() {
                 <span class="priority-dot" style="background:${getPriorityColor(g.priority)}"></span>
                 ${g.priority.toUpperCase()}: ${g.title}
               </div>
-              ${g.tasks.map(t => `
-                <div class="task ${t.done ? 'task-done' : ''}">
-                  <div class="task-check"></div>
-                  <span class="task-text">${t.text}</span>
-                </div>
-              `).join('')}
+              ${g.tasks.map(t => {
+                const hasDetail = !!t.detail;
+                const deployTag = t.deploy === 'pending'
+                  ? '<span class="deploy-tag deploy-pending">ждёт деплоя</span>'
+                  : t.deploy === 'deployed'
+                  ? '<span class="deploy-tag deploy-deployed">задеплоено</span>'
+                  : '';
+                const expandIcon = hasDetail ? '<span class="expand-icon">&#9654;</span>' : '';
+
+                return `
+                  <div class="task ${t.done ? 'task-done' : ''} ${hasDetail ? 'has-detail' : ''}" ${hasDetail ? 'onclick="toggleDetail(event.target)"' : ''}>
+                    <div class="task-check"></div>
+                    <div class="task-content">
+                      <div class="task-row">
+                        ${expandIcon}
+                        <span class="task-text">${t.text}</span>
+                        ${deployTag}
+                      </div>
+                      ${hasDetail ? `<div class="task-detail">${t.detail}</div>` : ''}
+                    </div>
+                  </div>
+                `;
+              }).join('')}
             </div>
           `).join('')}
         </div>
@@ -561,7 +1373,6 @@ function render() {
 }
 
 render();
-setInterval(render, REFRESH_INTERVAL);
 </script>
 </body>
 </html>

@@ -16,12 +16,27 @@ export function getDb(): Database.Database {
   return _db;
 }
 
+export function closeDb(): void {
+  if (_db) {
+    _db.close();
+    _db = null;
+  }
+}
+
+/** Run multiple DB operations atomically. Rolls back on error. */
+export function withTransaction<T>(fn: () => T): T {
+  const db = getDb();
+  return db.transaction(fn)();
+}
+
 function migrate(db: Database.Database): void {
   // Migrations for older schemas
   try { db.exec('ALTER TABLE videos ADD COLUMN view_count INTEGER DEFAULT 0'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE videos ADD COLUMN rating REAL DEFAULT 0'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE videos ADD COLUMN like_ratio REAL DEFAULT 0'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE videos ADD COLUMN channel_subscribers INTEGER DEFAULT 0'); } catch { /* already exists */ }
+  // Add post_type to posts table (video|link)
+  try { db.exec(`ALTER TABLE posts ADD COLUMN post_type TEXT DEFAULT 'video'`); } catch { /* already exists */ }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS videos (
@@ -59,7 +74,7 @@ function migrate(db: Database.Database): void {
       date TEXT NOT NULL,  -- YYYY-MM-DD
       category TEXT NOT NULL,
       video_id INTEGER REFERENCES videos(id),
-      status TEXT CHECK(status IN ('pending','approved','rejected')) DEFAULT 'pending',
+      status TEXT DEFAULT 'pending',
       message_id INTEGER,  -- Telegram message ID in admin DM
       created_at TEXT DEFAULT (datetime('now')),
       decided_at TEXT
@@ -71,7 +86,9 @@ function migrate(db: Database.Database): void {
       category TEXT NOT NULL,
       video_id INTEGER REFERENCES videos(id),
       channel_message_id INTEGER,
-      posted_at TEXT DEFAULT (datetime('now'))
+      post_type TEXT DEFAULT 'video',
+      posted_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(date, category, video_id)
     );
 
     CREATE TABLE IF NOT EXISTS checkins (
@@ -138,7 +155,83 @@ function migrate(db: Database.Database): void {
       posts_today INTEGER DEFAULT 0,
       collected_at TEXT DEFAULT (datetime('now'))
     );
+
+    -- Captcha state: survives bot restarts
+    CREATE TABLE IF NOT EXISTS pending_captchas (
+      telegram_user_id INTEGER PRIMARY KEY,
+      chat_id TEXT NOT NULL,
+      answer INTEGER NOT NULL,
+      first_name TEXT NOT NULL,
+      captcha_message_id INTEGER,
+      expires_at TEXT NOT NULL
+    );
+
+    -- UGC conversation state: survives bot restarts
+    CREATE TABLE IF NOT EXISTS ugc_conversation_state (
+      telegram_user_id INTEGER PRIMARY KEY,
+      step TEXT NOT NULL,
+      submission_id INTEGER,
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    -- Index for expired captcha cleanup
+    CREATE INDEX IF NOT EXISTS idx_captcha_expires ON pending_captchas(expires_at);
   `);
+}
+
+// --- Captcha state (persistent) ---
+
+export interface CaptchaRow {
+  telegram_user_id: number;
+  chat_id: string;
+  answer: number;
+  first_name: string;
+  captcha_message_id: number | null;
+  expires_at: string;
+}
+
+export function saveCaptcha(userId: number, chatId: number | string, answer: number, firstName: string, captchaMessageId: number, expiresAt: Date): void {
+  getDb().prepare(`
+    INSERT OR REPLACE INTO pending_captchas (telegram_user_id, chat_id, answer, first_name, captcha_message_id, expires_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(userId, String(chatId), answer, firstName, captchaMessageId, expiresAt.toISOString());
+}
+
+export function getCaptcha(userId: number): CaptchaRow | null {
+  return getDb().prepare(`SELECT * FROM pending_captchas WHERE telegram_user_id = ?`).get(userId) as CaptchaRow | null;
+}
+
+export function deleteCaptcha(userId: number): void {
+  getDb().prepare(`DELETE FROM pending_captchas WHERE telegram_user_id = ?`).run(userId);
+}
+
+export function getExpiredCaptchas(): CaptchaRow[] {
+  return getDb().prepare(`SELECT * FROM pending_captchas WHERE expires_at <= datetime('now')`).all() as CaptchaRow[];
+}
+
+// --- UGC conversation state (persistent) ---
+
+export type UgcStep = 'waiting_link' | 'waiting_category' | 'waiting_difficulty' | 'waiting_title';
+
+export interface UgcConversationRow {
+  telegram_user_id: number;
+  step: UgcStep;
+  submission_id: number | null;
+}
+
+export function saveUgcState(userId: number, step: UgcStep, submissionId?: number): void {
+  getDb().prepare(`
+    INSERT OR REPLACE INTO ugc_conversation_state (telegram_user_id, step, submission_id, updated_at)
+    VALUES (?, ?, ?, datetime('now'))
+  `).run(userId, step, submissionId ?? null);
+}
+
+export function getUgcState(userId: number): UgcConversationRow | null {
+  return getDb().prepare(`SELECT * FROM ugc_conversation_state WHERE telegram_user_id = ?`).get(userId) as UgcConversationRow | null;
+}
+
+export function deleteUgcState(userId: number): void {
+  getDb().prepare(`DELETE FROM ugc_conversation_state WHERE telegram_user_id = ?`).run(userId);
 }
 
 // --- Video helpers ---
@@ -256,10 +349,11 @@ export function markApprovalPosted(date: string, category: string): number {
 
 // --- Post helpers ---
 
-export function recordPost(date: string, category: string, videoId: number, channelMessageId: number): void {
-  getDb().prepare(`
-    INSERT INTO posts (date, category, video_id, channel_message_id) VALUES (?, ?, ?, ?)
-  `).run(date, category, videoId, channelMessageId);
+export function recordPost(date: string, category: string, videoId: number, channelMessageId: number, postType: 'video' | 'link' = 'video'): number {
+  const result = getDb().prepare(`
+    INSERT INTO posts (date, category, video_id, channel_message_id, post_type) VALUES (?, ?, ?, ?, ?)
+  `).run(date, category, videoId, channelMessageId, postType);
+  return Number(result.lastInsertRowid);
 }
 
 export function wasPostedToday(date: string, category: string): boolean {
