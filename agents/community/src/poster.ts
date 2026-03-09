@@ -91,7 +91,7 @@ export async function postVideoToChannel(
 
   const caption = await formatCaption(video);
   const keyboard = new InlineKeyboard()
-    .text('Я сделал(а)', `done:${video.id}`);
+    .text('Я сделаль', `done:${video.id}`);
 
   // Try to download and post as video file
   if (isYtDlpAvailable()) {

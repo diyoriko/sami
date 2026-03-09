@@ -101,19 +101,28 @@ async function sendTelegramMessage(token, chatId, text, parseMode = "Markdown") 
 // Summary extraction
 // ---------------------------------------------------------------------------
 
-async function extractSummary(reportPath) {
+async function extractSections(reportPath) {
   try {
     const content = await fs.readFile(reportPath, "utf8");
-    const match = content.match(/^##\s+Резюме\s*\n([\s\S]*?)(?:\n##\s+|\n#\s+|$)/m);
-    if (!match) return null;
-    const bullets = match[1]
-      .split("\n")
-      .map((l) => l.trim())
-      .filter((l) => l.startsWith("- "))
-      .slice(0, 5);
-    return bullets.length > 0 ? bullets.join("\n") : null;
+
+    const extract = (heading, limit = 5) => {
+      const re = new RegExp(`^##\\s+${heading}\\s*\\n([\\s\\S]*?)(?:\\n##\\s+|\\n#\\s+|$)`, "m");
+      const match = content.match(re);
+      if (!match) return null;
+      const bullets = match[1]
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l.startsWith("- "))
+        .slice(0, limit);
+      return bullets.length > 0 ? bullets.join("\n") : null;
+    };
+
+    return {
+      summary: extract("Резюме"),
+      focus: extract("Фокус дня", 3),
+    };
   } catch {
-    return null;
+    return { summary: null, focus: null };
   }
 }
 
@@ -155,32 +164,42 @@ async function main() {
   const reportPath = args.report ? path.resolve(args.report) : "";
   const reportFile = reportPath ? path.basename(reportPath) : "";
 
-  // Build summary
+  // Build sections from report
   let summary = args.summary || "";
-  if (!summary && reportPath) {
-    summary = (await extractSummary(reportPath)) || "";
+  let focusText = "";
+  if (reportPath) {
+    const sections = await extractSections(reportPath);
+    if (!summary && sections.summary) {
+      summary = sections.summary;
+    }
+    if (sections.focus) {
+      focusText = sections.focus;
+    }
   }
 
-  // Build message
+  // Build message — human-readable
   const emoji = AGENT_EMOJI[agent] || "🤖";
   const statusEmoji = status === "completed" ? "✅" : status === "failed" ? "❌" : "⏳";
+  const dateStr = new Date().toLocaleDateString("ru-RU", {
+    timeZone: "Europe/Moscow",
+    day: "numeric",
+    month: "long",
+  });
 
   const lines = [
-    `${emoji} *SAMI ${agent.charAt(0).toUpperCase() + agent.slice(1)}* ${statusEmoji}`,
-    "",
+    `${emoji} *Стратег — ${dateStr}* ${statusEmoji}`,
   ];
 
   if (summary) {
-    lines.push(summary);
     lines.push("");
+    lines.push(summary);
   }
 
-  if (reportFile) {
-    lines.push(`📄 \`${reportFile}\``);
+  if (focusText) {
+    lines.push("");
+    lines.push("*Фокус дня:*");
+    lines.push(focusText);
   }
-
-  const timestamp = new Date().toLocaleString("ru-RU", { timeZone: "Europe/Moscow" });
-  lines.push(`🕐 ${timestamp} МСК`);
 
   const text = lines.join("\n");
 

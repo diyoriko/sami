@@ -31,8 +31,8 @@ describe('post format vision compliance', () => {
     expect(posterSource).toContain('ratingStr');
   });
 
-  it('button text is "Я сделал(а)"', () => {
-    expect(posterSource).toContain("'Я сделал(а)'");
+  it('button text is "Я сделаль"', () => {
+    expect(posterSource).toContain("'Я сделаль'");
   });
 
   it('has YouTube link labeled "оригинал"', () => {
@@ -59,7 +59,7 @@ describe('moderation done button', () => {
 
   it('handles done callback pattern', () => {
     expect(modSource).toContain("done:(\\d+)");
-    expect(modSource).toContain('Я сделал(а) · ${count}');
+    expect(modSource).toContain('Я сделаль · ${count}');
     expect(modSource).toContain('hasUserCompleted');
   });
 });

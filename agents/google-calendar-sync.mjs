@@ -177,43 +177,70 @@ async function uploadReportToPublicPaste({ reportPath }) {
   };
 }
 
-async function extractReportSummary(reportPath) {
+async function extractReportSections(reportPath) {
   const content = await fs.readFile(reportPath, "utf8");
-  const summaryMatch = content.match(/^##\s+Резюме\s*\n([\s\S]*?)(?:\n##\s+|\n#\s+|$)/m);
-  if (!summaryMatch) {
-    return [];
-  }
 
-  return summaryMatch[1]
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith("- "))
-    .slice(0, 7);
+  const extract = (heading) => {
+    const re = new RegExp(`^##\\s+${heading}\\s*\\n([\\s\\S]*?)(?:\\n##\\s+|\\n#\\s+|$)`, "m");
+    const match = content.match(re);
+    if (!match) return [];
+    return match[1]
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.startsWith("- "))
+      .slice(0, 5);
+  };
+
+  return {
+    summary: extract("Резюме"),
+    focus: extract("Фокус дня"),
+  };
+}
+
+function formatDate(isoString) {
+  try {
+    return new Date(isoString).toLocaleDateString("ru-RU", {
+      timeZone: "Europe/Moscow",
+      day: "numeric",
+      month: "long",
+    });
+  } catch {
+    return isoString.slice(0, 10);
+  }
 }
 
 async function buildTaskBody({ status, timestamp, exitCode, reportFile, reportPath, reportUrl }) {
-  const lines = [
-    `Strategist status: ${status}`,
-    `Exit code: ${exitCode}`,
-    `Timestamp (UTC): ${timestamp}`,
-    `Report file: ${reportFile}`,
-    `Local path: ${reportPath}`,
-  ];
-  const summary = await extractReportSummary(reportPath);
+  const dateStr = formatDate(timestamp);
+  const sections = await extractReportSections(reportPath);
 
-  if (summary.length > 0) {
+  const statusLabel = status === "completed" ? "Готов" : status === "failed" ? "Ошибка" : status;
+
+  const lines = [];
+
+  if (sections.summary.length > 0) {
+    lines.push("Главное:");
+    lines.push(...sections.summary);
+  }
+
+  if (sections.focus.length > 0) {
     lines.push("");
-    lines.push("Резюме:");
-    lines.push(...summary);
+    lines.push("Фокус дня:");
+    lines.push(...sections.focus);
   }
 
   if (reportUrl) {
     lines.push("");
-    lines.push(`Result link: ${reportUrl}`);
+    lines.push(`Полный отчёт: ${reportUrl}`);
+  }
+
+  if (status === "failed") {
+    lines.push("");
+    lines.push(`Статус: ошибка (код ${exitCode})`);
+    lines.push(`Лог: ${reportPath}`);
   }
 
   return {
-    title: `SAMI Strategist: ${status}`,
+    title: `Стратег ${dateStr} — ${statusLabel}`,
     notes: lines.join("\n"),
     due: timestamp,
     status: "needsAction",

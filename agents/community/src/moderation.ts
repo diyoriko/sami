@@ -223,7 +223,7 @@ export function registerModeration(bot: Bot): void {
 
     try {
       await ctx.editMessageText(
-        `${response}\n\n_Нажми «Я сделал(а)» под видео, когда закончишь тренировку._`,
+        `${response}\n\n_Нажми «Я сделаль» под видео, когда закончишь тренировку._`,
         { parse_mode: 'Markdown' }
       );
     } catch {}
@@ -333,7 +333,7 @@ export function registerModeration(bot: Bot): void {
     // Update button text with new count
     try {
       const keyboard = new InlineKeyboard()
-        .text(`Я сделал(а) · ${count}`, `done:${videoId}`);
+        .text(`Я сделаль · ${count}`, `done:${videoId}`);
       await ctx.editMessageReplyMarkup({ reply_markup: keyboard });
     } catch {
       // might fail if message is too old, that's ok
