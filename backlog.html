@@ -698,6 +698,15 @@ function parseMarkdown(md) {
       continue;
     }
 
+    // Version header in "Сделано": **v0.2.1 (10.03):**
+    if (section === 'done') {
+      const versionMatch = line.match(/^\*\*(v[\d.]+)\s*\(([^)]+)\):\*\*/);
+      if (versionMatch) {
+        releases.push({ version: versionMatch[1], date: versionMatch[2], status: 'deployed', items: [] });
+        continue;
+      }
+    }
+
     const taskMatch = line.match(/^- \[([ x])\]\s+(.+)/);
     if (taskMatch) {
       const done = taskMatch[1] === 'x';
@@ -710,10 +719,7 @@ function parseMarkdown(md) {
       }
 
       if (section === 'done') {
-        if (!releases.length || !releases[releases.length - 1]._open) {
-          releases.push({ version: 'v0.1.0', date: '', status: 'deployed', items: [], _open: true });
-        }
-        releases[releases.length - 1].items.push(text);
+        if (releases.length) releases[releases.length - 1].items.push(text);
       } else if (currentGroup) {
         currentTask = { text, done };
         if (detail) currentTask.detail = detail;
@@ -727,7 +733,6 @@ function parseMarkdown(md) {
     }
   }
 
-  releases.forEach(r => delete r._open);
   return { releases, sprints };
 }
 

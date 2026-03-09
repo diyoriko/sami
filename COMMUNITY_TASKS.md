@@ -6,6 +6,7 @@
 
 ## Сделано
 
+**v0.1.0 (08.03):**
 - [x] Канал + группа + бот, Railway 24/7, автодеплой, persistent volume
 - [x] YouTube Data API v3 + yt-dlp (видео файлом, cookies из env, мониторинг ошибок)
 - [x] Approval flow: поиск -> 1 видео на категорию -> кнопки выбора
@@ -23,34 +24,31 @@
 - [x] Тесты: vitest, 36 тестов
 - [x] Residential proxy (Dataimpulse, 5GB)
 - [x] Мониторинг: DM админу после 3 фейлов
-- [x] /post перехват UGC-хэндлером (09.03)
-- [x] Очередь не очищается после публикации (09.03)
-- [x] yt-dlp: async upgrade при старте, кэш бинаря, semver-сравнение (10.03)
-- [x] Стратег Mac: TCC fix, env vars, curl paths (10.03)
-- [x] Стратег → бот: POST /packet endpoint, COMMUNITY_PACKET в SQLite (10.03)
-- [x] Teletype: удалены мёртвые агенты (codex hourly, catchup)
+
+**v0.2.0 (10.03):**
+- [x] /post перехват UGC-хэндлером
+- [x] Очередь не очищается после публикации
+- [x] yt-dlp: async upgrade при старте, кэш бинаря, semver-сравнение
+- [x] Стратег Mac: TCC fix, env vars, curl paths
+- [x] Стратег → бот: POST /packet endpoint, COMMUNITY_PACKET в SQLite
+
+**v0.2.1 (10.03):**
+- [x] Дубликат поста: CHECK constraint убран, UNIQUE(date, category, video_id)
+- [x] Атомарная публикация: withTransaction() вокруг recordPost + markApprovalPosted
+- [x] post_type трекинг: различаем video/link в posts таблице
+- [x] Капча в SQLite: pending_captchas таблица, periodic cleanup каждые 30с
+- [x] UGC-диалог в SQLite: ugc_conversation_state таблица
+- [x] Graceful shutdown: SIGTERM → bot.stop() + httpServer.close() + closeDb()
+
+**v0.2.2 (10.03):**
+- [x] Дубликат видео+текст: отделить DB-ошибку от upload-ошибки в poster.ts
+- [x] backlog.html: auto-fetch COMMUNITY_TASKS.md с GitHub, парсинг MD, кэш в localStorage
 
 ---
 
-## SPRINT 2 — стабильность и polish (v0.2.0)
+## SPRINT 2 — стабильность и polish
 
-Статус: **деплой**
-
-### P0: Публикация видео
-
-- [x] **Дубликат поста** — CHECK constraint убран, UNIQUE(date, category, video_id) добавлен (v0.2.1)
-- [x] **Атомарная публикация** — withTransaction() вокруг recordPost + markApprovalPosted (v0.2.1)
-- [x] **post_type трекинг** — различаем video/link в posts таблице (v0.2.1)
-- [x] **Дубликат видео+текст** — sendVideo проходит, но DB-транзакция падает, catch запускает текстовый fallback. Фикс: отделить DB-ошибку от upload-ошибки (v0.2.2)
-
-### P0: Потеря состояния при рестарте
-
-- [x] **Капча в SQLite** — pending_captchas таблица, periodic cleanup каждые 30с (v0.2.1)
-- [x] **UGC-диалог в SQLite** — ugc_conversation_state таблица (v0.2.1)
-
-### P0: Graceful shutdown
-
-- [x] **SIGTERM handler** — bot.stop() + httpServer.close() + closeDb() (v0.2.1)
+Статус: **в работе** | P0: done | Текущая версия: v0.2.2
 
 ### P1: Нейминг кнопки
 
@@ -86,9 +84,6 @@
 - [ ] Недельный дашборд: читабельный формат с трендами
 - [ ] Deploy notification: очеловечить, не показывать raw commit / Co-Authored-By
 
-**Отдельно:**
-- [ ] **Ликвидировать галлюцинации в ресерче:** стратег ссылается на несуществующие источники (Telemetr.io, Telegram Creator Hub). Либо дать веб-доступ, либо собирать дайджест конкурентов скриптом и класть в контекст
-
 ### P1: Стратег — память и feedback loop
 
 - [ ] **Передавать последние 3-5 резюме прошлых отчётов** в промпт стратега (чтобы не начинал с нуля каждый день)
@@ -97,6 +92,7 @@
 
 ### P1: Стратег — веб-доступ и реальный ресерч
 
+- [ ] **Ликвидировать галлюцинации в ресерче** — стратег ссылается на несуществующие источники (Telemetr.io, Telegram Creator Hub). Либо дать веб-доступ, либо собирать дайджест конкурентов скриптом
 - [ ] Включить веб-поиск для стратега (STRATEGIST_ENABLE_WEB_SEARCH=1 или предварительный дайджест)
 - [ ] Парсинг конкурентов: TGStat/Telemetr.io данные по fitness/wellness каналам РФ — автоматический сбор в файл контекста
 - [ ] Бенчмарки: средние метрики для каналов 0-100, 100-1000, 1000+ подписчиков
