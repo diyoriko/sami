@@ -756,436 +756,490 @@ async function fetchBacklog() {
 // --- Static data (not in markdown) ---
 
 const staticData = {
-  releases: [
+  "releases": [
     {
-      version: 'v0.1.0',
-      date: '08.03.2026',
-      status: 'deployed',
-      items: [
-        'Канал + группа + бот, Railway 24/7, автодеплой, persistent volume',
-        'YouTube Data API v3 + yt-dlp (видео файлом, cookies, мониторинг)',
-        'Approval flow: поиск -> выбор -> публикация',
-        'Модерация: math captcha, мут, auto-delete, /report',
-        'Автоперевод EN->RU, очистка кликбейта',
-        'Расписание: 07:30/12:00/19:00 (автопостинг отключён)',
-        'Стратег на Claude Sonnet 4.6, 12:30 МСК',
-        'Analytics: ежедневно + еженедельно + при старте',
-        'Формат поста: теги, рейтинг, автор, "Я сделал(а)"',
-        'Completions: БД, дедупликация, метрики',
-        'Рейтинг видео: views + likes + channel + completions',
-        'Persistent menu: Мои тренировки, Предложить, admin',
-        'UGC: ссылка -> категория -> сложность -> модерация',
-        '"Мои тренировки": список UGC со статусами',
-        'Тесты: vitest, 36 тестов',
-        'Residential proxy (Dataimpulse, 5GB)',
-        'Мониторинг: DM после 3 фейлов',
-      ],
-    },
-    {
-      version: 'v0.2.0',
-      date: '10.03.2026',
-      status: 'deployed',
-      items: [
-        '/post перехват UGC-хэндлером',
-        'Очередь не очищается после публикации — fix',
-        'yt-dlp: async upgrade при старте, кэш бинаря, semver-сравнение',
-        'Стратег Mac: TCC fix, env vars, curl paths',
-        'Стратег -> бот: POST /packet endpoint, COMMUNITY_PACKET в SQLite',
-      ],
-    },
-    {
-      version: 'v0.2.1',
-      date: '10.03.2026',
-      status: 'deployed',
-      items: [
-        'Дубликат поста: UNIQUE(date, category, video_id)',
-        'Атомарная публикация: withTransaction()',
-        'post_type трекинг: video/link в posts',
-        'Капча в SQLite: pending_captchas таблица',
-        'UGC-диалог в SQLite: ugc_conversation_state',
-        'Graceful shutdown: SIGTERM handler',
-      ],
-    },
-    {
-      version: 'v0.2.2',
-      date: '10.03.2026',
-      status: 'deployed',
-      items: [
-        'Дубликат видео+текст: отделить DB-ошибку от upload-ошибки',
-        'backlog.html: auto-fetch COMMUNITY_TASKS.md с GitHub',
-      ],
-    },
-  ],
-
-  sprints: [
-    {
-      name: 'Sprint 1 — Живой бэклог',
-      status: 'planned',
-      groups: [
-        {
-          title: 'Бэклог как сервис',
-          priority: 'p1',
-          tasks: [
-            {
-              text: 'API эндпоинты в Community Bot: GET /api/backlog, GET /api/agents',
-              done: false,
-              detail: 'Бэклог, агенты, флоу, сервисы хранятся в SQLite. Бот отдаёт JSON. backlog.html делает fetch() вместо хардкода в const data.',
-            },
-            {
-              text: 'SQLite-схема: tasks, sprints, agents, flows, releases',
-              done: false,
-              detail: 'Миграция текущего JS-объекта data в таблицы. Релизы, спринты, группы, задачи — всё в БД.',
-            },
-            {
-              text: 'backlog.html: fetch() при открытии',
-              done: false,
-              detail: 'Убрать хардкод const data. При загрузке — запрос к Railway API, рендер из ответа. Fallback на последний кэш в localStorage.',
-            },
-            {
-              text: 'Автообновление статусов из агентов',
-              done: false,
-              detail: 'Стратег обновляет бэклог через COMMUNITY_PACKET. Бот помечает задачи done при деплое. Analytics пушит метрики.',
-            },
-            {
-              text: 'Admin-команды для бэклога в Telegram',
-              done: false,
-              detail: 'Управление задачами через бота: добавить, закрыть, переприоритизировать. Без необходимости редактировать HTML.',
-            },
-          ]
-        },
+      "version": "v0.1.0",
+      "date": "08.03",
+      "status": "deployed",
+      "items": [
+        "Канал + группа + бот, Railway 24/7, автодеплой, persistent volume",
+        "YouTube Data API v3 + yt-dlp (видео файлом, cookies из env, мониторинг ошибок)",
+        "Approval flow: поиск -> 1 видео на категорию -> кнопки выбора",
+        "Модерация: math captcha, мут, auto-delete ссылок, /report",
+        "Автоперевод EN->RU, очистка кликбейта/капса, кириллический hype-strip",
+        "Расписание: 07:30 стретчинг, 12:00 силовая, 19:00 мобильность (крон определён, автопостинг отключён)",
+        "Стратег на Claude Sonnet 4.6, ежедневно 12:30",
+        "Analytics: 00:30 ежедневно + вс 10:00 + при старте",
+        "Формат поста: моно-теги, рейтинг, автор + оригинал, \"Я сделал(а)\" с live-счётчиком",
+        "Completions: запись в БД, дедупликация, метрики в аналитике",
+        "Рейтинг видео: 0.4*views + 0.3*likes + 0.2*channel + 0.1*completions",
+        "Persistent menu: \"Мои тренировки\", \"Предложить тренировку\", admin-кнопки",
+        "UGC: YouTube-ссылка -> категория -> сложность -> название -> модерация -> уведомление",
+        "\"Мои тренировки\": список загруженных пользователем тренировок со статусами",
+        "Тесты: vitest, 36 тестов",
+        "Residential proxy (Dataimpulse, 5GB)",
+        "Мониторинг: DM админу после 3 фейлов"
       ]
     },
     {
-      name: 'Sprint 2 — Стабильность и polish',
-      status: 'active',
-      groups: [
-        {
-          title: 'Стратег — launchd',
-          priority: 'p0',
-          tasks: [
-            { text: 'PATH: ~/.local/bin для claude CLI', done: true },
-            { text: 'Синхронизация контекста с TCC fallback', done: true },
-            { text: 'Обновление runtime скриптов', done: true },
-            { text: 'Reports dir в ~/Library/Application Support/', done: true },
-          ]
-        },
-        {
-          title: 'Публикация видео',
-          priority: 'p0',
-          tasks: [
-            { text: 'Дубликат поста: UNIQUE(date, category, video_id)', done: true },
-            { text: 'Атомарная публикация: withTransaction()', done: true },
-            { text: 'post_type трекинг: video/link', done: true },
-          ]
-        },
-        {
-          title: 'Потеря состояния при рестарте',
-          priority: 'p0',
-          tasks: [
-            { text: 'Капча в SQLite: pending_captchas', done: true },
-            { text: 'UGC-диалог в SQLite: ugc_conversation_state', done: true },
-          ]
-        },
-        {
-          title: 'Graceful shutdown',
-          priority: 'p0',
-          tasks: [
-            { text: 'SIGTERM: bot.stop() + httpServer.close() + closeDb()', done: true },
-          ]
-        },
-        {
-          title: 'Нейминг кнопки',
-          priority: 'p1',
-          tasks: [
-            { text: '"Я сделал(а)" -> "Я сделаль"', done: true },
-          ]
-        },
-        {
-          title: 'Видимость очереди',
-          priority: 'p1',
-          tasks: [
-            { text: 'Кнопка "Статус" — очередь по категориям', done: true },
-            { text: 'Расширить "Статус" — полная панель админа', done: true, detail: 'Подписчики, группа, UGC в ожидании, стратег, uptime.' },
-          ]
-        },
-        {
-          title: 'Монетизация',
-          priority: 'p1',
-          tasks: [
-            { text: 'Задача стратегу: исследовать модели', done: true },
-            { text: 'Опрос в группе', done: false, detail: 'Отложено — мало участников.' },
-            { text: 'Архитектура free/premium', done: false, detail: 'Отложено — мало участников.' },
-          ]
-        },
-        {
-          title: 'Исследование автопостинга',
-          priority: 'p1',
-          tasks: [
-            { text: 'Задача стратегу: анализ режима постинга', done: true, detail: 'Добавлено в STRATEGIST_BRIEF.md как исследование.' },
-          ]
-        },
-        {
-          title: 'Аудит параметров поиска видео',
-          priority: 'p1',
-          tasks: [
-            { text: 'Ревизия youtube.ts: запросы, скоринг, фильтры, penalty/bonus', done: false, detail: 'Синхронизировать с брифом, брендом, ЦА и текущим состоянием.' },
-          ]
-        },
-        {
-          title: 'Аналитика — метрики + формат DM',
-          priority: 'p1',
-          tasks: [
-            { text: 'Top-5 видео, retention, категории, breakdown, cumulative', done: true },
-            { text: 'analytics-latest.json + community-latest.json для стратега', done: true },
-            { text: 'Ежедневная + недельная аналитика: человечный формат', done: true },
-            { text: 'Deploy notification: очищен от мусора', done: true },
-          ]
-        },
-        {
-          title: 'Стратег — память и feedback loop',
-          priority: 'p1',
-          tasks: [
-            { text: 'Передавать последние 3-5 резюме прошлых отчётов', done: true, detail: 'recent-summaries.md генерируется перед каждым запуском.' },
-          ]
-        },
-        {
-          title: 'Стратег → Google Tasks',
-          priority: 'p1',
-          tasks: [
-            { text: 'Выжимка в описании таски', done: true, detail: 'Резюме + Фокус дня + Решения + Эксперименты + ссылка на отчёт.' },
-          ]
-        },
-        {
-          title: 'Социальные профили участников',
-          priority: 'p1',
-          tasks: [
-            { text: 'Статус/рейтинг участника', done: false, detail: 'Мягкая механика: выполненные тренировки, реакции на UGC, сохранения. Уровни: новичок → практик → наставник.' },
-            { text: 'Публичный профиль', done: false, detail: 'Список видео участника + интересы из welcome quiz.' },
-            { text: 'Просмотр профилей друг друга', done: false, detail: 'Кнопка "Профиль" в боте.' },
-          ]
-        },
-        {
-          title: 'Стратег — веб-доступ',
-          priority: 'p1',
-          tasks: [
-            {
-              text: 'Ликвидировать галлюцинации в ресерче',
-              done: false,
-              detail: 'Стратег ссылается на несуществующие источники. Нужен веб-доступ или дайджест.',
-            },
-          ]
-        },
-        {
-          title: 'Наблюдаемость',
-          priority: 'p1',
-          tasks: [
-            { text: 'Алерт с первого фейла постинга', done: true },
-            { text: 'Structured logging с correlation ID', done: true, detail: 'logger.ts, критический путь с correlation ID.' },
-          ]
-        },
-        {
-          title: 'Защита от внешних API',
-          priority: 'p1',
-          tasks: [
-            { text: 'Timeout на YouTube API fetch (15с)', done: true },
-            { text: 'Circuit breaker для YouTube', done: true },
-            { text: 'Rate limiting на callback-кнопки', done: true },
-          ]
-        },
-        {
-          title: 'Целостность данных',
-          priority: 'p1',
-          tasks: [
-            { text: 'Soft delete вместо DELETE', done: true, detail: 'deleted_at для approval_sessions и ugc_submissions. Captcha/UGC state — hard delete.' },
-            { text: 'Отдельный API-ключ для стратега', done: true },
-            { text: 'Трекинг активности пользователей', done: true },
-          ]
-        },
-        {
-          title: 'Формат постов',
-          priority: 'p1',
-          tasks: [
-            { text: 'Теги каждый на отдельной строке', done: true },
-            { text: 'Автор со ссылкой внутри имени канала', done: true },
-          ]
-        },
-        {
-          title: 'backlog.html — синхронизация',
-          priority: 'p1',
-          tasks: [
-            { text: 'backlog.html не отражает реальный бэклог', done: false, detail: 'file:// не может fetch GitHub (CORS). staticData рассинхрон. Нужен надёжный механизм: либо Railway API, либо автогенерация staticData при коммите.' },
-          ]
-        },
+      "version": "v0.2.0",
+      "date": "10.03",
+      "status": "deployed",
+      "items": [
+        "/post перехват UGC-хэндлером",
+        "Очередь не очищается после публикации",
+        "yt-dlp: async upgrade при старте, кэш бинаря, semver-сравнение",
+        "Стратег Mac: TCC fix, env vars, curl paths",
+        "Стратег → бот: POST /packet endpoint, COMMUNITY_PACKET в SQLite"
       ]
     },
     {
-      name: 'Sprint 3 — UGC и фильтрация',
-      status: 'planned',
-      groups: [
-        {
-          title: 'UGC — доработки',
-          priority: 'p1',
-          tasks: [
-            {
-              text: 'Загрузка видеофайла (основной флоу)',
-              done: false,
-              detail: 'Сейчас UGC только через YouTube-ссылку. Основной флоу: загрузка видеофайла напрямую, YouTube как опция.',
-            },
-            {
-              text: 'Доп. поля: длительность, мышцы, инвентарь',
-              done: false,
-              detail: 'При загрузке UGC — запрашивать длительность, целевые группы мышц, необходимый инвентарь. Для фильтрации и рекомендаций.',
-            },
-            {
-              text: 'Автор в посте при публикации UGC',
-              done: false,
-              detail: 'Указывать имя/никнейм автора UGC-тренировки в посте при публикации в канал.',
-            },
-          ]
-        },
-        {
-          title: 'Фильтрация видео',
-          priority: 'p1',
-          tasks: [
-            {
-              text: 'Кнопка "Фильтры" в persistent menu',
-              done: false,
-            },
-            {
-              text: 'Параметры: вид, длительность, уровень',
-              done: false,
-            },
-            {
-              text: 'Пресеты: Новичок, Утро, После работы, Быстрая',
-              done: false,
-              detail: 'Быстрый выбор без настройки фильтров. Каждый пресет — предустановленная комбинация параметров.',
-            },
-            {
-              text: 'Бот отправляет подходящие видео',
-              done: false,
-            },
-            {
-              text: 'Индексация видео в БД',
-              done: false,
-              detail: 'Все опубликованные видео в БД с полными метаданными: категория, длительность, сложность, мышцы, инвентарь.',
-            },
-          ]
-        },
-        {
-          title: 'Рейтинг',
-          priority: 'p2',
-          tasks: [
-            {
-              text: 'Пересчёт при росте completions',
-              done: false,
-              detail: 'Рейтинг пересчитывается при каждом новом выполнении. Формула: 0.4*views + 0.3*likes + 0.2*channel + 0.1*completions.',
-            },
-          ]
-        },
+      "version": "v0.2.1",
+      "date": "10.03",
+      "status": "deployed",
+      "items": [
+        "Дубликат поста: CHECK constraint убран, UNIQUE(date, category, video_id)",
+        "Атомарная публикация: withTransaction() вокруг recordPost + markApprovalPosted",
+        "post_type трекинг: различаем video/link в posts таблице",
+        "Капча в SQLite: pending_captchas таблица, periodic cleanup каждые 30с",
+        "UGC-диалог в SQLite: ugc_conversation_state таблица",
+        "Graceful shutdown: SIGTERM → bot.stop() + httpServer.close() + closeDb()"
       ]
     },
     {
-      name: 'Sprint 4 — Вовлечение и рост',
-      status: 'planned',
-      groups: [
-        {
-          title: 'Welcome-поток',
-          priority: 'p1',
-          tasks: [
-            {
-              text: 'Авто-сообщение после капчи с тренировкой дня',
-              done: false,
-              detail: 'Новый участник проходит капчу -> бот отправляет "Вот сегодняшняя тренировка" со ссылкой на актуальный пост.',
-            },
-            {
-              text: 'Привязка к расписанию',
-              done: false,
-              detail: 'Welcome-сообщение привязано к актуальному расписанию: утро — стретчинг, день — силовая, вечер — мобильность.',
-            },
-          ]
-        },
-        {
-          title: 'Рубрики',
-          priority: 'p2',
-          tasks: [
-            { text: '#ритуал_недели (пн)', done: false, detail: 'Одна практика-фокус на неделю.' },
-            { text: '#механика (ср)', done: false, detail: 'Разбор одного упражнения: техника, частые ошибки, прогрессии.' },
-            { text: '#прогресс_пятницы (пт)', done: false, detail: 'Итоги недели, признание активных участников.' },
-          ]
-        },
-        {
-          title: 'Growth',
-          priority: 'p2',
-          tasks: [
-            { text: 'Buddy invite после 3 выполнений', done: false, detail: 'После 3-го выполнения тренировки бот предлагает пригласить друга.' },
-            { text: 'Cross-promotion с микро-тренерами', done: false },
-            { text: 'Оффлайн-мероприятия', done: false },
-          ]
-        },
+      "version": "v0.2.2",
+      "date": "10.03",
+      "status": "deployed",
+      "items": [
+        "Дубликат видео+текст: отделить DB-ошибку от upload-ошибки в poster.ts",
+        "backlog.html: auto-fetch COMMUNITY_TASKS.md с GitHub, парсинг MD, кэш в localStorage"
       ]
     },
-  ],
-
-  agents: [
     {
-      id: 'strategist',
-      name: 'Strategist',
-      icon: 'S',
-      color: '#a371f7',
-      platform: 'launchd Mac',
-      model: 'Claude Sonnet 4.6',
-      status: 'cron',
-      statusLabel: '12:30 МСК',
-      schedule: 'Ежедневно 12:30 МСК',
-      skills: ['Анализ метрик', 'Рекомендации', 'COMMUNITY_PACKET', 'Отчёты'],
-      entry: 'agents/strategist.sh',
+      "version": "v0.2.3",
+      "date": "10.03",
+      "status": "deployed",
+      "items": [
+        "P0: Стратег launchd — PATH fix (`~/.local/bin`), контекст-синхронизация, TCC fallback",
+        "\"Я сделал(а)\" → \"Я сделаль\"",
+        "Админ-панель \"Статус\": подписчики, UGC в ожидании, стратег, uptime",
+        "Задача стратегу: монетизация + автопостинг → STRATEGIST_BRIEF.md",
+        "Аналитика: retention, completions по категориям, top-5 видео, cumulative, breakdown видео/ссылки",
+        "analytics-latest.json + community-latest.json для стратега",
+        "DM формат: ежедневная + недельная аналитика + deploy notification",
+        "Формат постов: теги на отдельных строках, автор как ссылка",
+        "Structured logging: logger.ts с correlation ID, все модули мигрированы",
+        "Алерт с первого фейла загрузки",
+        "Timeout + circuit breaker на YouTube API, rate limiting на кнопки",
+        "Soft delete для approval_sessions и ugc_submissions",
+        "Отдельный API-ключ для стратега (STRATEGIST_API_KEY)",
+        "Трекинг активности: members.last_activity_at + completions_total",
+        "Стратег: память — recent-summaries.md (последние 5 резюме)",
+        "Стратег: Google Tasks/Calendar sync убран → только Telegram DM",
+        "Стратег DM обогащён: Резюме + Фокус дня + Решения + Эксперименты + ссылка"
+      ]
     },
     {
-      id: 'community',
-      name: 'Community Bot',
-      icon: 'C',
-      color: '#58a6ff',
-      platform: 'Railway 24/7',
-      model: null,
-      status: 'active',
-      statusLabel: 'Online',
-      schedule: '19:00 поиск, посты вручную',
-      skills: ['YouTube поиск', 'Публикация видео', 'Модерация', 'UGC', 'Completions', 'Persistent menu'],
-      entry: 'agents/community/',
+      "version": "v0.2.4",
+      "date": "10.03",
+      "status": "deployed",
+      "items": [
+        "Очередь \"Статус\": фильтр сегодня/завтра, auto-cleanup >2 дней, дедупликация при refresh",
+        "Аудит поиска видео: scoring weights и duration range в config.ts (конфигурируемые)",
+        "backlog.html синхронизирован через agents/sync-backlog-html.mjs",
+        "Стратег: experiments.json + owner-decisions.json в контексте",
+        "Стратег: промпт обновлён — учитывает эксперименты и решения владельца"
+      ]
+    }
+  ],
+  "sprints": [
+    {
+      "name": "Sprint 2 — стабильность и polish",
+      "status": "planned",
+      "groups": [
+        {
+          "title": "Очередь в \"Статус\" — только сегодня/завтра",
+          "priority": "p1",
+          "tasks": [
+            {
+              "text": "Фильтровать очередь по дате",
+              "done": true
+            },
+            {
+              "text": "Очистка старых сессий",
+              "done": true
+            },
+            {
+              "text": "Дедупликация в очереди",
+              "done": true
+            }
+          ]
+        },
+        {
+          "title": "Аудит параметров поиска видео",
+          "priority": "p1",
+          "tasks": [
+            {
+              "text": "Ревизия youtube.ts",
+              "done": true
+            }
+          ]
+        },
+        {
+          "title": "Автоматизация синхронизации бэклога",
+          "priority": "p1",
+          "tasks": [
+            {
+              "text": "Стратег → обновляет backlog.html",
+              "done": true
+            },
+            {
+              "text": "Стратег → обновляет COMMUNITY_TASKS.md",
+              "done": false
+            },
+            {
+              "text": "Бот → обновляет бэклог после деплоя",
+              "done": false
+            }
+          ]
+        },
+        {
+          "title": "backlog.html — синхронизация с реальностью",
+          "priority": "p1",
+          "tasks": [
+            {
+              "text": "backlog.html актуализирован",
+              "done": true
+            }
+          ]
+        },
+        {
+          "title": "Стратег — память и feedback loop",
+          "priority": "p1",
+          "tasks": [
+            {
+              "text": "Трекер экспериментов:",
+              "done": true
+            },
+            {
+              "text": "Лог решений владельца:",
+              "done": true
+            }
+          ]
+        },
+        {
+          "title": "Монетизация",
+          "priority": "p2",
+          "tasks": [
+            {
+              "text": "Опрос в группе (когда будет достаточно участников)",
+              "done": false
+            },
+            {
+              "text": "Архитектура: бесплатный/premium в боте",
+              "done": false
+            }
+          ]
+        }
+      ]
     },
     {
-      id: 'analytics',
-      name: 'Analytics',
-      icon: 'A',
-      color: '#3fb950',
-      platform: 'Модуль в Community',
-      model: null,
-      status: 'cron',
-      statusLabel: 'Cron',
-      schedule: 'При старте + 00:30 + вс 10:00',
-      skills: ['Ежедневная сводка', 'Недельный дашборд', 'Catch-up при старте'],
-      entry: 'agents/community/analytics/',
+      "name": "Sprint 3 — UGC, фильтрация и профили",
+      "status": "planned",
+      "groups": [
+        {
+          "title": "Социальные профили участников",
+          "priority": "p1",
+          "tasks": [
+            {
+              "text": "Статус/рейтинг участника",
+              "done": false
+            },
+            {
+              "text": "Публичный профиль",
+              "done": false
+            },
+            {
+              "text": "Просмотр профилей",
+              "done": false
+            }
+          ]
+        },
+        {
+          "title": "UGC — доработки",
+          "priority": "p1",
+          "tasks": [
+            {
+              "text": "Основной флоу: загрузка видеофайла (не только YouTube-ссылка)",
+              "done": false
+            },
+            {
+              "text": "Дополнительные поля: длительность, группы мышц, инвентарь",
+              "done": false
+            },
+            {
+              "text": "При публикации UGC: автор указывается в посте",
+              "done": false
+            }
+          ]
+        },
+        {
+          "title": "Фильтрация видео через бота",
+          "priority": "p1",
+          "tasks": [
+            {
+              "text": "Кнопка \"Фильтры\" в persistent menu",
+              "done": false
+            },
+            {
+              "text": "Параметры: вид тренировки, длительность, уровень",
+              "done": false
+            },
+            {
+              "text": "Быстрые пресеты: \"Новичок\", \"Утро\", \"После работы\", \"Быстрая\"",
+              "done": false
+            },
+            {
+              "text": "Бот отправляет подходящие видео со ссылками на посты",
+              "done": false
+            },
+            {
+              "text": "Индексация: все видео в БД с полными метаданными",
+              "done": false
+            }
+          ]
+        },
+        {
+          "title": "Рейтинг — доработка",
+          "priority": "p2",
+          "tasks": [
+            {
+              "text": "Пересчёт рейтинга при росте completions",
+              "done": false
+            }
+          ]
+        }
+      ]
     },
+    {
+      "name": "Sprint 4 — вовлечение и рост",
+      "status": "planned",
+      "groups": [
+        {
+          "title": "Welcome-поток",
+          "priority": "p1",
+          "tasks": [
+            {
+              "text": "Авто-сообщение после капчи: \"Вот сегодняшняя тренировка -> [ссылка]\"",
+              "done": false
+            },
+            {
+              "text": "Привязать к актуальному расписанию",
+              "done": false
+            }
+          ]
+        },
+        {
+          "title": "Стратег — веб-доступ и реальный ресерч",
+          "priority": "p1",
+          "tasks": [
+            {
+              "text": "Ликвидировать галлюцинации",
+              "done": false
+            },
+            {
+              "text": "Включить веб-поиск для стратега (STRATEGIST_ENABLE_WEB_SEARCH=1 или предварительный дайджест)",
+              "done": false
+            },
+            {
+              "text": "Парсинг конкурентов: TGStat данные по fitness/wellness каналам РФ",
+              "done": false
+            },
+            {
+              "text": "Бенчмарки: средние метрики для каналов 0-100, 100-1000, 1000+",
+              "done": false
+            }
+          ]
+        },
+        {
+          "title": "Стратег — агентность (действия, а не только текст)",
+          "priority": "p1",
+          "tasks": [
+            {
+              "text": "COMMUNITY_PACKET v2: стратег формирует конкретные действия (опрос, welcome-текст, A/B варианты)",
+              "done": false
+            },
+            {
+              "text": "Бот выполняет действия из пакета: создать опрос, изменить welcome-текст",
+              "done": false
+            },
+            {
+              "text": "Feedback: бот отправляет стратегу результат (опрос создан, N голосов, результат)",
+              "done": false
+            }
+          ]
+        },
+        {
+          "title": "Рубрики",
+          "priority": "p2",
+          "tasks": [
+            {
+              "text": "#ритуал_недели (пн) — одна практика-фокус",
+              "done": false
+            },
+            {
+              "text": "#механика (ср) — разбор упражнения",
+              "done": false
+            },
+            {
+              "text": "#прогресс_пятницы (пт) — итоги, признание активных",
+              "done": false
+            }
+          ]
+        },
+        {
+          "title": "Growth",
+          "priority": "p2",
+          "tasks": [
+            {
+              "text": "Buddy invite после 3-го выполнения",
+              "done": false
+            },
+            {
+              "text": "Cross-promotion с микро-тренерами",
+              "done": false
+            },
+            {
+              "text": "Оффлайн-мероприятия",
+              "done": false
+            }
+          ]
+        }
+      ]
+    }
   ],
-
-  flows: [
-    { from: 'Strategist', to: 'Community', label: 'COMMUNITY_PACKET (ключевые слова, действия)', type: 'http', protocol: 'POST /packet' },
-    { from: 'Strategist', to: 'Community', label: 'Запрос отчётов', type: 'http', protocol: 'GET /report/*' },
-    { from: 'Strategist', to: 'Admin', label: 'Ежедневный отчёт', type: 'telegram', protocol: 'DM' },
-    { from: 'Community', to: 'Telegram', label: 'Посты в канал @sami_workouts', type: 'telegram', protocol: 'Bot API' },
-    { from: 'Community', to: 'Admin', label: 'DM: фейлы, аналитика, деплой', type: 'telegram', protocol: 'DM' },
-    { from: 'Community', to: 'YouTube', label: 'Поиск видео, скачивание (yt-dlp)', type: 'http', protocol: 'API + yt-dlp' },
-    { from: 'Analytics', to: 'Community', label: 'Метрики в SQLite + latest.json', type: 'file', protocol: 'SQLite / JSON' },
-    { from: 'Analytics', to: 'Admin', label: 'Сводка в DM', type: 'telegram', protocol: 'DM' },
+  "agents": [
+    {
+      "id": "strategist",
+      "name": "Strategist",
+      "icon": "🧠",
+      "color": "#6366f1",
+      "platform": "launchd Mac",
+      "model": "Claude Sonnet 4.6",
+      "status": "active",
+      "statusLabel": "Active",
+      "schedule": "12:30 МСК ежедневно",
+      "skills": [
+        "strategy",
+        "research",
+        "planning"
+      ],
+      "entry": "agents/strategist.sh"
+    },
+    {
+      "id": "community",
+      "name": "Community Bot",
+      "icon": "📢",
+      "color": "#22c55e",
+      "platform": "Railway 24/7",
+      "model": "—",
+      "status": "active",
+      "statusLabel": "Active",
+      "schedule": "19:00 поиск, посты вручную",
+      "skills": [
+        "video-search",
+        "posting",
+        "moderation",
+        "ugc"
+      ],
+      "entry": "agents/community/"
+    },
+    {
+      "id": "analytics",
+      "name": "Analytics",
+      "icon": "📊",
+      "color": "#eab308",
+      "platform": "Railway (модуль в community)",
+      "model": "—",
+      "status": "active",
+      "statusLabel": "Active",
+      "schedule": "00:30 ежедневно + вс 10:00 + при старте",
+      "skills": [
+        "metrics",
+        "reporting"
+      ],
+      "entry": "agents/community/src/analytics.ts"
+    }
   ],
-
-  services: [
-    { name: 'Railway', desc: 'Хостинг бота 24/7, persistent volume', cost: '~$5/мес', paid: true },
-    { name: 'Dataimpulse', desc: 'Residential proxy для yt-dlp', cost: 'Prepaid 5GB', paid: true },
-    { name: 'Claude CLI', desc: 'Стратег-агент (claude --print)', cost: 'Входит в Max', paid: false },
-    { name: 'YouTube API v3', desc: 'Поиск видео, метаданные', cost: 'Бесплатно', paid: false },
-    { name: 'Telegram API', desc: 'Бот', cost: 'Бесплатно', paid: false },
+  "flows": [
+    {
+      "from": "strategist",
+      "to": "community",
+      "label": "COMMUNITY_PACKET",
+      "type": "http",
+      "protocol": "POST /packet"
+    },
+    {
+      "from": "community",
+      "to": "strategist",
+      "label": "community-latest.json",
+      "type": "http",
+      "protocol": "GET /report/community"
+    },
+    {
+      "from": "analytics",
+      "to": "strategist",
+      "label": "analytics-latest.json",
+      "type": "http",
+      "protocol": "GET /report/analytics"
+    },
+    {
+      "from": "strategist",
+      "to": "admin",
+      "label": "Telegram DM",
+      "type": "telegram",
+      "protocol": "sendMessage"
+    },
+    {
+      "from": "community",
+      "to": "channel",
+      "label": "Видео-посты",
+      "type": "telegram",
+      "protocol": "sendVideo"
+    }
   ],
+  "services": [
+    {
+      "name": "Railway",
+      "desc": "Хостинг бота 24/7",
+      "cost": "~$5/мес",
+      "paid": true
+    },
+    {
+      "name": "Dataimpulse",
+      "desc": "Residential proxy для yt-dlp",
+      "cost": "Prepaid 5GB",
+      "paid": true
+    },
+    {
+      "name": "Claude CLI",
+      "desc": "Стратег-агент",
+      "cost": "Подписка Max",
+      "paid": true
+    },
+    {
+      "name": "YouTube API v3",
+      "desc": "Поиск видео",
+      "cost": "Бесплатно (10K/day)",
+      "paid": false
+    },
+    {
+      "name": "Telegram Bot API",
+      "desc": "Бот",
+      "cost": "Бесплатно",
+      "paid": false
+    }
+  ]
 };
 
 // Merged data — populated on load

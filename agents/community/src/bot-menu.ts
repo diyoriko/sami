@@ -98,9 +98,10 @@ export function registerBotMenu(bot: Bot): void {
   // --- Admin buttons ---
   bot.hears('Статус', async (ctx) => {
     if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
-    const { todayMsk } = await import('./dates');
+    const { todayMsk, tomorrowMsk } = await import('./dates');
     const { getPostCountForDate, getCompletionCountForDate, getUniqueCompletionUsersForDate, getApprovalQueue } = await import('./db');
     const date = todayMsk();
+    const tomorrow = tomorrowMsk();
     const posts = getPostCountForDate(date);
     const completions = getCompletionCountForDate(date);
     const users = getUniqueCompletionUsersForDate(date);
@@ -137,7 +138,7 @@ export function registerBotMenu(bot: Bot): void {
       pending: '⏳',
     };
 
-    const queue = getApprovalQueue();
+    const queue = getApprovalQueue(date, tomorrow);
     let queueText = '';
     if (queue.length > 0) {
       const grouped = new Map<string, typeof queue>();

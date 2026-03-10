@@ -163,16 +163,23 @@ function scoreViewCount(viewCount: number): number {
 }
 
 function scoreDuration(seconds: number): number {
-  // SAMI audience (25-45): 8-20 min sweet spot
-  if (seconds >= 480 && seconds <= 1200) return 100;
-  if (seconds >= 300 && seconds < 480) return 65;
-  if (seconds > 1200 && seconds <= 1500) return 70;
-  if (seconds > 1500 && seconds <= 1800) return 40;
+  const config = getConfig();
+  const idealMin = config.VIDEO_IDEAL_MIN;
+  const idealMax = config.VIDEO_IDEAL_MAX;
+  if (seconds >= idealMin && seconds <= idealMax) return 100;
+  if (seconds >= 300 && seconds < idealMin) return 65;
+  if (seconds > idealMax && seconds <= idealMax + 300) return 70;
+  if (seconds > idealMax + 300 && seconds <= config.VIDEO_MAX_DURATION) return 40;
   return 15;
 }
 
 export function computeTotalScore(brandScore: number, viewScore: number, durationScore: number): number {
-  return Math.round(brandScore * 0.50 + viewScore * 0.35 + durationScore * 0.15);
+  const config = getConfig();
+  return Math.round(
+    brandScore * config.SCORE_BRAND_WEIGHT +
+    viewScore * config.SCORE_VIEW_WEIGHT +
+    durationScore * config.SCORE_DURATION_WEIGHT
+  );
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -336,13 +343,13 @@ export async function searchVideos(
 
   for (const item of items) {
     const videoId = item.id.videoId;
-    if (wasPostedRecently(videoId, 30)) continue;
+    if (wasPostedRecently(videoId, config.VIDEO_RECENCY_DAYS)) continue;
 
     const detail = detailMap.get(videoId);
     if (!detail) continue;
 
     const { seconds, label } = parseDuration(detail.contentDetails.duration);
-    if (seconds < 240 || seconds > 1800) continue;
+    if (seconds < config.VIDEO_MIN_DURATION || seconds > config.VIDEO_MAX_DURATION) continue;
 
     const viewCount = parseInt(detail.statistics.viewCount ?? '0', 10);
     const likeCount = parseInt(detail.statistics.likeCount ?? '0', 10);

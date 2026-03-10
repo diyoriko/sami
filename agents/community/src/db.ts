@@ -365,18 +365,50 @@ export interface QueueItem {
   video_url: string;
 }
 
-export function getApprovalQueue(): QueueItem[] {
+export function getApprovalQueue(fromDate?: string, toDate?: string): QueueItem[] {
+  const conditions = [`a.status IN ('approved', 'pending')`, `a.deleted_at IS NULL`];
+  const params: string[] = [];
+
+  if (fromDate) {
+    conditions.push(`a.date >= ?`);
+    params.push(fromDate);
+  }
+  if (toDate) {
+    conditions.push(`a.date <= ?`);
+    params.push(toDate);
+  }
+
   return getDb().prepare(`
     SELECT a.date, a.category, a.status, v.title, v.video_url
     FROM approval_sessions a
     JOIN videos v ON v.id = a.video_id
-    WHERE a.status IN ('approved', 'pending') AND a.deleted_at IS NULL
+    WHERE ${conditions.join(' AND ')}
     ORDER BY a.date ASC, CASE a.category
       WHEN 'stretching' THEN 1
       WHEN 'strength' THEN 2
       WHEN 'mobility' THEN 3
       ELSE 4 END
-  `).all() as QueueItem[];
+  `).all(...params) as QueueItem[];
+}
+
+/** Soft-delete old pending/approved sessions older than N days. */
+export function cleanupOldApprovalSessions(olderThanDays: number = 2): number {
+  const result = getDb().prepare(`
+    UPDATE approval_sessions SET deleted_at = datetime('now')
+    WHERE date < date('now', '-' || ? || ' days')
+      AND status IN ('pending', 'approved')
+      AND deleted_at IS NULL
+  `).run(olderThanDays);
+  return result.changes;
+}
+
+/** Soft-delete pending sessions for a (date, category) pair — used before creating replacement. */
+export function softDeletePendingSessions(date: string, category: string): number {
+  const result = getDb().prepare(`
+    UPDATE approval_sessions SET deleted_at = datetime('now')
+    WHERE date = ? AND category = ? AND status = 'pending' AND deleted_at IS NULL
+  `).run(date, category);
+  return result.changes;
 }
 
 export interface RecentPost {

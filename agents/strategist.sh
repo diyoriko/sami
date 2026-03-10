@@ -20,8 +20,6 @@ RAW_OUT_PATH="$INTERNAL_DIR/run-$STAMP_LOCAL.log"
 LATEST_JSON="$INTERNAL_DIR/latest.json"
 LATEST_MD="$INTERNAL_DIR/latest.md"
 LOG_PATH="$INTERNAL_DIR/strategist.log"
-LATEST_NOTIFICATION_JSON="$INTERNAL_DIR/latest-notification.json"
-GOOGLE_SYNC_SCRIPT="${SAMI_AGENTS_DIR:-$SCRIPT_DIR}/google-calendar-sync.mjs"
 TELEGRAM_NOTIFY_SCRIPT="${SAMI_AGENTS_DIR:-$SCRIPT_DIR}/telegram-notify.mjs"
 OPENAI_RUNNER_SCRIPT="${SAMI_AGENTS_DIR:-$SCRIPT_DIR}/strategist-openai.mjs"
 
@@ -75,30 +73,26 @@ fi
 
 RECENT_SUMMARIES="$INTERNAL_DIR/recent-summaries.md"
 
+EXPERIMENTS_JSON="$INTERNAL_DIR/experiments.json"
+OWNER_DECISIONS_JSON="$INTERNAL_DIR/owner-decisions.json"
+
 CONTEXT_FILES=(
   "$CONTEXT_ROOT/STRATEGIST_BRIEF.md"
   "$CONTEXT_ROOT/COMMUNITY_TASKS.md"
   "$COMMUNITY_REPORT_LOCAL"
   "$ANALYTICS_REPORT_LOCAL"
   "$RECENT_SUMMARIES"
+  "$EXPERIMENTS_JSON"
+  "$OWNER_DECISIONS_JSON"
 )
 
 write_latest_json() {
   local status="$1"
   local code="$2"
-  local notification_status="$3"
-  python3 - "$LATEST_JSON" "$STAMP_UTC" "$status" "$code" "$OUT_PATH" "$REPORT_NAME" "$LATEST_NOTIFICATION_JSON" "$notification_status" <<'PY'
+  python3 - "$LATEST_JSON" "$STAMP_UTC" "$status" "$code" "$OUT_PATH" "$REPORT_NAME" <<'PY'
 import json
 import sys
 from pathlib import Path
-
-notification_path = Path(sys.argv[7])
-notification = None
-if notification_path.exists():
-    try:
-        notification = json.loads(notification_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        notification = None
 
 Path(sys.argv[1]).write_text(
     json.dumps(
@@ -108,14 +102,6 @@ Path(sys.argv[1]).write_text(
             "exit_code": int(sys.argv[4]),
             "report_path": sys.argv[5],
             "report_file": sys.argv[6],
-            "notification_status": sys.argv[8],
-            "notification_path": sys.argv[7],
-            "report_url": (notification or {}).get("report_url"),
-            "task_url": ((notification or {}).get("task") or {}).get("webViewLink"),
-            "task_id": ((notification or {}).get("task") or {}).get("id"),
-            "calendar_event_url": ((notification or {}).get("calendar") or {}).get("htmlLink"),
-            "calendar_event_id": ((notification or {}).get("calendar") or {}).get("id"),
-            "drive_file_url": ((notification or {}).get("drive") or {}).get("webViewLink"),
         },
         ensure_ascii=False,
         indent=2,
@@ -128,19 +114,11 @@ PY
 write_latest_md() {
   local status="$1"
   local code="$2"
-  python3 - "$LATEST_MD" "$STAMP_UTC" "$status" "$code" "$OUT_PATH" "$LATEST_NOTIFICATION_JSON" <<'PY'
-import json
+  python3 - "$LATEST_MD" "$STAMP_UTC" "$status" "$code" "$OUT_PATH" <<'PY'
 import sys
 from pathlib import Path
 
 latest_md = Path(sys.argv[1])
-notification_path = Path(sys.argv[6])
-notification = {}
-if notification_path.exists():
-    try:
-        notification = json.loads(notification_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        notification = {}
 
 lines = [
     "# Sami Strategist Report",
@@ -150,20 +128,6 @@ lines = [
     f"- Exit code: {sys.argv[4]}",
     f"- Report: {sys.argv[5]}",
 ]
-
-report_url = notification.get("report_url")
-task = notification.get("task") or {}
-calendar = notification.get("calendar") or {}
-if report_url:
-    lines.append(f"- Result link: {report_url}")
-if task.get("webViewLink"):
-    lines.append(f"- Google Task: {task['webViewLink']}")
-if calendar.get("htmlLink"):
-    lines.append(f"- Calendar event: {calendar['htmlLink']}")
-if notification.get("status"):
-    lines.append(f"- Notification: {notification['status']}")
-if notification.get("reason"):
-    lines.append(f"- Notification reason: {notification['reason']}")
 
 latest_md.write_text("\n".join(lines) + "\n", encoding="utf-8")
 PY
@@ -242,113 +206,6 @@ EOF
     } > "$tmp_path"
     mv "$tmp_path" "$OUT_PATH"
   fi
-}
-
-run_google_sync() {
-  local status="$1"
-  local code="$2"
-  local sync_status="skipped"
-
-  rm -f "$LATEST_NOTIFICATION_JSON"
-
-  if [[ "$DRY_RUN" == "1" && "$NOTIFY_ON_DRY_RUN" != "1" ]]; then
-    python3 - "$LATEST_NOTIFICATION_JSON" <<'PY'
-import json
-import sys
-from pathlib import Path
-
-Path(sys.argv[1]).write_text(
-    json.dumps(
-        {
-            "status": "skipped",
-            "reason": "dry_run_notifications_disabled",
-        },
-        ensure_ascii=False,
-        indent=2,
-    ),
-    encoding="utf-8",
-)
-PY
-    printf '[strategist] calendar sync skipped: dry-run notifications disabled\n' >> "$RAW_OUT_PATH"
-    printf '%s\n' "$sync_status"
-    return 0
-  fi
-
-  if [[ ! -f "$GOOGLE_SYNC_SCRIPT" ]]; then
-    python3 - "$LATEST_NOTIFICATION_JSON" <<'PY'
-import json
-import sys
-from pathlib import Path
-
-Path(sys.argv[1]).write_text(
-    json.dumps(
-        {
-            "status": "skipped",
-            "reason": "google_sync_script_missing",
-        },
-        ensure_ascii=False,
-        indent=2,
-    ),
-    encoding="utf-8",
-)
-PY
-    printf '[strategist] calendar sync skipped: script missing\n' >> "$RAW_OUT_PATH"
-    printf '%s\n' "$sync_status"
-    return 0
-  fi
-
-  if ! command -v node >/dev/null 2>&1; then
-    python3 - "$LATEST_NOTIFICATION_JSON" <<'PY'
-import json
-import sys
-from pathlib import Path
-
-Path(sys.argv[1]).write_text(
-    json.dumps(
-        {
-            "status": "skipped",
-            "reason": "node_missing",
-        },
-        ensure_ascii=False,
-        indent=2,
-    ),
-    encoding="utf-8",
-)
-PY
-    printf '[strategist] calendar sync skipped: node missing\n' >> "$RAW_OUT_PATH"
-    printf '%s\n' "$sync_status"
-    return 0
-  fi
-
-  if node "$GOOGLE_SYNC_SCRIPT" \
-    --report "$OUT_PATH" \
-    --report-file "$REPORT_NAME" \
-    --status "$status" \
-    --exit-code "$code" \
-    --timestamp "$STAMP_UTC" \
-    --output "$LATEST_NOTIFICATION_JSON" >> "$RAW_OUT_PATH" 2>&1; then
-    sync_status="$(python3 - "$LATEST_NOTIFICATION_JSON" <<'PY'
-import json
-import sys
-from pathlib import Path
-
-payload = {}
-path = Path(sys.argv[1])
-if path.exists():
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        payload = {}
-
-print(payload.get("status", "completed"))
-PY
-)"
-  else
-    sync_status="failed"
-    printf '[strategist] calendar sync failed\n' >> "$RAW_OUT_PATH"
-  fi
-
-  printf '%s\n' "$sync_status"
 }
 
 run_telegram_notify() {
@@ -447,6 +304,11 @@ prompt = f"""Ты стратегический агент проекта Sami. �
 5. ## Решения — 3 решения для владельца проекта
 6. ## Ресерч — 3 внешних инсайта с источниками
 
+ВАЖНО — контекст памяти:
+- В контексте есть experiments.json — трекер активных экспериментов. Обновляй статус в разделе "Эксперименты".
+- В контексте есть owner-decisions.json — решения владельца. НЕ предлагай то, что уже отклонено. Учитывай принятые решения.
+- В контексте есть recent-summaries.md — резюме прошлых отчётов. Не повторяй одни и те же рекомендации.
+
 Также включи (кратко, по 2-3 пункта):
 - Позиционирование и ICP
 - Контентные рубрики
@@ -483,9 +345,8 @@ if [[ "$DRY_RUN" == "1" ]]; then
 - Timestamp (UTC): $STAMP_UTC
 - Mode: dry-run
 EOF
-  NOTIFICATION_STATUS="$(run_google_sync "dry_run" 0)"
   run_telegram_notify "dry_run"
-  write_latest_json "dry_run" 0 "$NOTIFICATION_STATUS"
+  write_latest_json "dry_run" 0
   write_latest_md "dry_run" 0
   echo "[$STAMP_UTC] status=dry_run report=$OUT_PATH" >> "$LOG_PATH"
   exit 0
@@ -692,9 +553,8 @@ PY
   fi
 fi
 
-NOTIFICATION_STATUS="$(run_google_sync "$STATUS" "$RC")"
 run_telegram_notify "$STATUS"
-write_latest_json "$STATUS" "$RC" "$NOTIFICATION_STATUS"
+write_latest_json "$STATUS" "$RC"
 write_latest_md "$STATUS" "$RC"
 echo "[$STAMP_UTC] status=$STATUS code=$RC report=$OUT_PATH" >> "$LOG_PATH"
 _emergency_notified=1

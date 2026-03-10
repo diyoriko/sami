@@ -7,6 +7,7 @@ import {
   getApprovalSessionByMessageId,
   getApprovalSessionById,
   setApprovalStatus,
+  softDeletePendingSessions,
 } from './db';
 import { searchAllCategories, searchVideos, detectEquipment, Category, ScoredVideo } from './youtube';
 import { rewriteTitle, formatChannelName } from './translate';
@@ -255,6 +256,8 @@ export function registerApprovalCallbacks(bot: Bot): void {
 
     const v = videos[0];
     const videoId = upsertVideo(v);
+    // Soft-delete the old pending session before creating replacement
+    softDeletePendingSessions(session.date, session.category);
     const newSessionId = createApprovalSession(session.date, session.category as Category, videoId);
     const text = await formatApprovalMessage(v, session.category as Category);
     const keyboard = new InlineKeyboard()

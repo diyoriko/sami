@@ -87,7 +87,7 @@ git add . && git commit -m "..." && git push origin main
 - Генератор: `claude --print --model claude-sonnet-4-6` (дефолт)
 - launchd plist: `com.sami.strategist`
 - Runtime: `~/Library/Application Support/Sami/agents/`
-- Google Calendar sync включён, Drive upload выключен
+- Уведомления: только Telegram DM (Google Calendar/Tasks sync убран)
 - Бриф: `STRATEGIST_BRIEF.md`
 - Расписание: 12:30 МСК ежедневно
 

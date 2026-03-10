@@ -26,6 +26,17 @@ const ConfigSchema = z.object({
   // Strategist agent
   CRON_STRATEGIST: z.string().default('30 12 * * *'),           // 12:30 MSK — daily strategist run
   STRATEGIST_API_KEY: z.string().optional(),                     // separate key for /packet endpoint
+  // Video search scoring weights (0-1, must sum to 1)
+  SCORE_BRAND_WEIGHT: z.string().transform(Number).default('0.50'),
+  SCORE_VIEW_WEIGHT: z.string().transform(Number).default('0.35'),
+  SCORE_DURATION_WEIGHT: z.string().transform(Number).default('0.15'),
+  // Video duration range (seconds)
+  VIDEO_MIN_DURATION: z.string().transform(Number).default('240'),   // 4 min
+  VIDEO_MAX_DURATION: z.string().transform(Number).default('1800'),  // 30 min
+  VIDEO_IDEAL_MIN: z.string().transform(Number).default('480'),      // 8 min (sweet spot start)
+  VIDEO_IDEAL_MAX: z.string().transform(Number).default('1200'),     // 20 min (sweet spot end)
+  // Recency window — skip videos posted within last N days
+  VIDEO_RECENCY_DAYS: z.string().transform(Number).default('30'),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

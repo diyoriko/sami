@@ -120,9 +120,11 @@ async function extractSections(reportPath) {
     return {
       summary: extract("Резюме"),
       focus: extract("Фокус дня", 3),
+      decisions: extract("Решения", 3),
+      experiments: extract("Эксперименты", 3),
     };
   } catch {
-    return { summary: null, focus: null };
+    return { summary: null, focus: null, decisions: null, experiments: null };
   }
 }
 
@@ -167,6 +169,8 @@ async function main() {
   // Build sections from report
   let summary = args.summary || "";
   let focusText = "";
+  let decisionsText = "";
+  let experimentsText = "";
   if (reportPath) {
     const sections = await extractSections(reportPath);
     if (!summary && sections.summary) {
@@ -175,7 +179,16 @@ async function main() {
     if (sections.focus) {
       focusText = sections.focus;
     }
+    if (sections.decisions) {
+      decisionsText = sections.decisions;
+    }
+    if (sections.experiments) {
+      experimentsText = sections.experiments;
+    }
   }
+
+  // Report URL (passed via --report-url or env)
+  const reportUrl = args["report-url"] || process.env.STRATEGIST_REPORT_PUBLIC_URL || "";
 
   // Build message — human-readable
   const emoji = AGENT_EMOJI[agent] || "🤖";
@@ -199,6 +212,23 @@ async function main() {
     lines.push("");
     lines.push("*Фокус дня:*");
     lines.push(focusText);
+  }
+
+  if (decisionsText) {
+    lines.push("");
+    lines.push("*Решения:*");
+    lines.push(decisionsText);
+  }
+
+  if (experimentsText) {
+    lines.push("");
+    lines.push("*Эксперименты:*");
+    lines.push(experimentsText);
+  }
+
+  if (reportUrl) {
+    lines.push("");
+    lines.push(`[Полный отчёт](${reportUrl})`);
   }
 
   const text = lines.join("\n");

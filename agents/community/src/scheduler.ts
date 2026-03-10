@@ -78,6 +78,17 @@ export function startScheduler(bot: Bot): void {
 
   log.info('all cron jobs registered (community + analytics)');
 
+  // Cleanup old approval sessions on startup
+  setTimeout(() => {
+    try {
+      const { cleanupOldApprovalSessions } = require('./db');
+      const cleaned = cleanupOldApprovalSessions(2);
+      if (cleaned > 0) log.info(`cleaned up ${cleaned} old approval sessions`);
+    } catch (err) {
+      log.error('cleanup approval sessions failed', { error: String(err) });
+    }
+  }, 1000);
+
   // Catch-up on startup: run analytics immediately so latest.json is always available
   setTimeout(async () => {
     try {
