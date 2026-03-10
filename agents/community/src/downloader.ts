@@ -3,8 +3,10 @@ import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { createLogger } from './logger';
 
 const execFileAsync = promisify(execFile);
+const log = createLogger('downloader');
 
 const MAX_SIZE_BYTES = 45 * 1024 * 1024; // 45MB — Telegram Bot API limit is 50MB
 const COOKIES_PATH = process.env.YT_COOKIES_PATH || '/data/cookies.txt';
@@ -26,9 +28,9 @@ export function initCookies(): void {
     // Write to /tmp if /data doesn't exist (local dev)
     const target = fs.existsSync(path.dirname(COOKIES_PATH)) ? COOKIES_PATH : path.join(os.tmpdir(), 'yt-cookies.txt');
     fs.writeFileSync(target, decoded);
-    console.log(`[downloader] cookies written to ${target} (${decoded.split('\n').length} lines)`);
+    log.info(`cookies written to ${target}`, { lines: decoded.split('\n').length });
   } catch (err) {
-    console.warn('[downloader] failed to decode YT_COOKIES_B64:', err);
+    log.warn('failed to decode YT_COOKIES_B64', { error: String(err) });
   }
 }
 
@@ -104,9 +106,9 @@ export async function upgradeYtDlp(): Promise<void> {
     );
     resetYtDlpCache();
     const lastLine = stdout.trim().split('\n').pop() ?? '';
-    console.log(`[downloader] pip upgrade: ${lastLine}`);
+    log.info(`pip upgrade: ${lastLine}`);
   } catch (err: any) {
-    console.warn(`[downloader] pip upgrade failed (using existing version): ${(err.message || '').slice(0, 200)}`);
+    log.warn(`pip upgrade failed (using existing version)`, { error: (err.message || '').slice(0, 200) });
   }
 }
 
@@ -116,9 +118,9 @@ export function logYtDlpStatus(): void {
     const ver = require('child_process').execFileSync(bin, ['--version'], { encoding: 'utf8' }).trim();
     const proxy = process.env.YT_PROXY ? 'yes' : 'no';
     const cookies = fs.existsSync(COOKIES_PATH) ? 'yes' : (fs.existsSync(path.join(os.tmpdir(), 'yt-cookies.txt')) ? 'yes (tmp)' : 'no');
-    console.log(`[downloader] yt-dlp: ${bin} (${ver}), proxy: ${proxy}, cookies: ${cookies}`);
+    log.info(`yt-dlp: ${bin} (${ver}), proxy: ${proxy}, cookies: ${cookies}`);
   } catch {
-    console.warn('[downloader] yt-dlp NOT found — will post YouTube links as fallback');
+    log.warn('yt-dlp NOT found — will post YouTube links as fallback');
   }
 }
 
@@ -195,7 +197,7 @@ async function probeVideoMeta(filePath: string): Promise<VideoMeta> {
       duration: info.format?.duration ? Math.round(Number(info.format.duration)) : undefined,
     };
   } catch (err) {
-    console.warn('[downloader] ffprobe failed, posting without video meta:', err);
+    log.warn('ffprobe failed, posting without video meta', { error: String(err) });
     return {};
   }
 }
@@ -248,7 +250,7 @@ export async function downloadVideo(youtubeUrl: string, youtubeId: string): Prom
       break;
     } catch (err: any) {
       lastError = err.stderr || err.message || String(err);
-      console.warn(`[downloader] attempt failed: ${lastError.slice(0, 200)}`);
+      log.warn(`attempt failed: ${lastError.slice(0, 200)}`);
     }
   }
   if (!succeeded) {

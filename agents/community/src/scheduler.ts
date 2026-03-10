@@ -1,6 +1,7 @@
 import * as cron from 'node-cron';
 import { Bot } from 'grammy';
 import { getConfig } from './config';
+import { createLogger } from './logger';
 import { postVideoToChannel } from './poster';
 import { runApprovalFlow } from './approval';
 import { readCommunityPacket, writeCommunityReport } from './strategist-sync';
@@ -8,6 +9,8 @@ import { runDailyAnalytics, runWeeklyAnalytics } from './analytics';
 
 import { notifyAdmin } from './notify-admin';
 import { todayMsk, tomorrowMsk, currentWeekMsk, moscowHour } from './dates';
+
+const log = createLogger('scheduler');
 
 let newMembersToday = 0;
 
@@ -18,11 +21,11 @@ export function incrementNewMembers(): void {
 export function startScheduler(bot: Bot): void {
   const config = getConfig();
 
-  console.log('[scheduler] starting cron jobs...');
+  log.info('starting cron jobs...');
 
   // 19:00 — search videos for TOMORROW & send approval to admin
   cron.schedule(config.CRON_SEARCH_VIDEOS, async () => {
-    console.log('[scheduler] running video search & approval flow');
+    log.info('running video search & approval flow');
     try {
       const packet = readCommunityPacket();
       const date = tomorrowMsk();
@@ -32,7 +35,7 @@ export function startScheduler(bot: Bot): void {
         mobility: packet.search_keywords?.mobility,
       });
     } catch (err) {
-      console.error('[scheduler] video search failed:', err);
+      log.error('video search failed', { error: String(err) });
       await notifyAdmin(bot, 'Community', `Поиск видео упал:\n\`${String(err)}\``);
     }
   }, { timezone: 'Europe/Moscow' });
@@ -41,7 +44,7 @@ export function startScheduler(bot: Bot): void {
 
   // 23:55 — write daily report for strategist
   cron.schedule('55 23 * * *', () => {
-    console.log('[scheduler] writing daily community report');
+    log.info('writing daily community report');
     writeCommunityReport(todayMsk(), newMembersToday);
     newMembersToday = 0;
   }, { timezone: 'Europe/Moscow' });
@@ -50,22 +53,22 @@ export function startScheduler(bot: Bot): void {
 
   // 00:30 — daily analytics: collect Telegram stats, DM admin
   cron.schedule(config.CRON_ANALYTICS_DAILY, async () => {
-    console.log('[scheduler] running daily analytics');
+    log.info('running daily analytics');
     try {
       await runDailyAnalytics(bot, todayMsk());
     } catch (err) {
-      console.error('[scheduler] daily analytics failed:', err);
+      log.error('daily analytics failed', { error: String(err) });
       await notifyAdmin(bot, 'Analytics', `Ежедневная аналитика упала:\n\`${String(err)}\``);
     }
   }, { timezone: 'Europe/Moscow' });
 
   // Sunday 10:00 — weekly analytics dashboard
   cron.schedule(config.CRON_ANALYTICS_WEEKLY, async () => {
-    console.log('[scheduler] running weekly analytics');
+    log.info('running weekly analytics');
     try {
       await runWeeklyAnalytics(bot, currentWeekMsk());
     } catch (err) {
-      console.error('[scheduler] weekly analytics failed:', err);
+      log.error('weekly analytics failed', { error: String(err) });
       await notifyAdmin(bot, 'Analytics', `Недельный дашборд упал:\n\`${String(err)}\``);
     }
   }, { timezone: 'Europe/Moscow' });
@@ -73,15 +76,15 @@ export function startScheduler(bot: Bot): void {
   // Strategist runs on Mac (claude --print, Max subscription) and POSTs packet to /packet endpoint.
   // If ANTHROPIC_API_KEY is set, can also run locally on Railway (future option).
 
-  console.log('[scheduler] all cron jobs registered (community + analytics)');
+  log.info('all cron jobs registered (community + analytics)');
 
   // Catch-up on startup: run analytics immediately so latest.json is always available
   setTimeout(async () => {
     try {
-      console.log('[scheduler] catch-up: running analytics on startup');
+      log.info('catch-up: running analytics on startup');
       await runDailyAnalytics(bot, todayMsk());
     } catch (err) {
-      console.error('[scheduler] catch-up analytics failed:', err);
+      log.error('catch-up analytics failed', { error: String(err) });
     }
   }, 3000);
 
@@ -93,7 +96,7 @@ export function startScheduler(bot: Bot): void {
       const row = db.prepare('SELECT COUNT(*) as cnt FROM approval_sessions WHERE date = ?').get(date) as { cnt: number };
       if (row.cnt === 0) {
         if (moscowHour() >= 19) {
-          console.log('[scheduler] catch-up: no approval sessions for tomorrow, running video search now');
+          log.info('catch-up: no approval sessions for tomorrow, running video search now');
           const packet = readCommunityPacket();
           await runApprovalFlow(bot, date, {
             stretching: packet.search_keywords?.stretching,
@@ -103,7 +106,7 @@ export function startScheduler(bot: Bot): void {
         }
       }
     } catch (err) {
-      console.error('[scheduler] catch-up check failed:', err);
+      log.error('catch-up check failed', { error: String(err) });
     }
   }, 5000);
 }

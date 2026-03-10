@@ -3,6 +3,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as http from 'http';
 import { getConfig } from './config';
+import { createLogger } from './logger';
+
+const log = createLogger('sami-community');
 import { getDb, closeDb } from './db';
 import { registerBotMenu } from './bot-menu';
 import { registerModeration } from './moderation';
@@ -17,7 +20,7 @@ async function main(): Promise<void> {
   // Init DB
   getDb();
   migrateStrategist();
-  console.log('[sami-community] database ready');
+  log.info('database ready');
 
   // Upgrade yt-dlp to latest, init cookies, log status
   await upgradeYtDlp();
@@ -34,7 +37,7 @@ async function main(): Promise<void> {
     const resolved = path.resolve(__dirname, '..', dir);
     fs.mkdirSync(resolved, { recursive: true });
   }
-  console.log('[sami-community] report directories ready');
+  log.info('report directories ready');
 
   // Init bot
   const bot = new Bot(config.TELEGRAM_BOT_TOKEN);
@@ -189,26 +192,26 @@ async function main(): Promise<void> {
     }
   });
   httpServer.listen(port, () => {
-    console.log(`[http] report server on :${port} — /report/community /report/analytics /packet /health`);
+    createLogger('http').info(`report server on :${port} — /report/community /report/analytics /packet /health`);
   });
 
   // Graceful shutdown (Railway sends SIGTERM on redeploy)
   const shutdown = async (signal: string) => {
-    console.log(`[sami-community] ${signal} received, shutting down...`);
+    log.info(`${signal} received, shutting down...`);
     try { await bot.stop(); } catch {}
     httpServer.close();
     closeDb();
-    console.log('[sami-community] shutdown complete');
+    log.info('shutdown complete');
     process.exit(0);
   };
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
 
   // Start bot
-  console.log('[sami-community] starting bot...');
+  log.info('starting bot...');
   await bot.start({
     onStart: async (botInfo) => {
-      console.log(`[sami-community] bot @${botInfo.username} is running`);
+      log.info(`bot @${botInfo.username} is running`);
 
       // Set bot commands menu for private chats
       await bot.api.setMyCommands(
@@ -256,7 +259,7 @@ async function main(): Promise<void> {
 }
 
 main().catch(async (err) => {
-  console.error('[sami-community] fatal error:', err);
+  log.error('fatal error', { error: String(err) });
   // Try to alert admin before dying
   try {
     const token = process.env.TELEGRAM_BOT_TOKEN;

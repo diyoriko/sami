@@ -182,6 +182,10 @@ function migrate(db: Database.Database): void {
   // Post-create migrations for existing DBs (columns added in CREATE TABLE for new DBs)
   try { db.exec('ALTER TABLE members ADD COLUMN last_activity_at TEXT'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE members ADD COLUMN completions_total INTEGER DEFAULT 0'); } catch { /* already exists */ }
+
+  // Soft delete columns
+  try { db.exec('ALTER TABLE ugc_submissions ADD COLUMN deleted_at TEXT'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE approval_sessions ADD COLUMN deleted_at TEXT'); } catch { /* already exists */ }
 }
 
 // --- Captcha state (persistent) ---
@@ -310,44 +314,45 @@ export function getApprovedVideo(date: string, category: string): VideoRow | nul
   return db.prepare(`
     SELECT v.* FROM approval_sessions a
     JOIN videos v ON v.id = a.video_id
-    WHERE a.date = ? AND a.category = ? AND a.status = 'approved'
+    WHERE a.date = ? AND a.category = ? AND a.status = 'approved' AND a.deleted_at IS NULL
     ORDER BY a.decided_at DESC LIMIT 1
   `).get(date, category) as VideoRow | null;
 }
 
 export function setApprovalStatus(sessionId: number, status: 'approved' | 'rejected' | 'pending'): void {
   getDb().prepare(`
-    UPDATE approval_sessions SET status = ?, decided_at = datetime('now') WHERE id = ?
+    UPDATE approval_sessions SET status = ?, decided_at = datetime('now') WHERE id = ? AND deleted_at IS NULL
   `).run(status, sessionId);
 }
 
 export function getApprovalSessionByMessageId(messageId: number): { id: number; video_id: number; category: string; date: string } | null {
   return getDb().prepare(`
-    SELECT id, video_id, category, date FROM approval_sessions WHERE message_id = ?
+    SELECT id, video_id, category, date FROM approval_sessions WHERE message_id = ? AND deleted_at IS NULL
   `).get(messageId) as { id: number; video_id: number; category: string; date: string } | null;
 }
 
 export function getApprovalSessionById(sessionId: number): { id: number; video_id: number; category: string; date: string } | null {
   return getDb().prepare(`
-    SELECT id, video_id, category, date FROM approval_sessions WHERE id = ?
+    SELECT id, video_id, category, date FROM approval_sessions WHERE id = ? AND deleted_at IS NULL
   `).get(sessionId) as { id: number; video_id: number; category: string; date: string } | null;
 }
 
 export function resetApprovalSessions(date: string): number {
   const result = getDb().prepare(`
-    DELETE FROM approval_sessions WHERE date = ?
+    UPDATE approval_sessions SET deleted_at = datetime('now')
+    WHERE date = ? AND deleted_at IS NULL
   `).run(date);
   return result.changes;
 }
 
 export function setApprovalMessageId(sessionId: number, messageId: number): void {
-  getDb().prepare(`UPDATE approval_sessions SET message_id = ? WHERE id = ?`).run(messageId, sessionId);
+  getDb().prepare(`UPDATE approval_sessions SET message_id = ? WHERE id = ? AND deleted_at IS NULL`).run(messageId, sessionId);
 }
 
 export function markApprovalPosted(date: string, category: string): number {
   const result = getDb().prepare(`
     UPDATE approval_sessions SET status = 'posted', decided_at = datetime('now')
-    WHERE date = ? AND category = ? AND status = 'approved'
+    WHERE date = ? AND category = ? AND status = 'approved' AND deleted_at IS NULL
   `).run(date, category);
   return result.changes;
 }
@@ -365,7 +370,7 @@ export function getApprovalQueue(): QueueItem[] {
     SELECT a.date, a.category, a.status, v.title, v.video_url
     FROM approval_sessions a
     JOIN videos v ON v.id = a.video_id
-    WHERE a.status IN ('approved', 'pending')
+    WHERE a.status IN ('approved', 'pending') AND a.deleted_at IS NULL
     ORDER BY a.date ASC, CASE a.category
       WHEN 'stretching' THEN 1
       WHEN 'strength' THEN 2
@@ -774,27 +779,27 @@ export function updateUgcSubmission(id: number, fields: Partial<Pick<UgcSubmissi
     sets.push(`decided_at = datetime('now')`);
   }
   values.push(id);
-  getDb().prepare(`UPDATE ugc_submissions SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+  getDb().prepare(`UPDATE ugc_submissions SET ${sets.join(', ')} WHERE id = ? AND deleted_at IS NULL`).run(...values);
 }
 
 export function getUgcSubmission(id: number): UgcSubmission | null {
-  return (getDb().prepare(`SELECT * FROM ugc_submissions WHERE id = ?`).get(id) as UgcSubmission | undefined) ?? null;
+  return (getDb().prepare(`SELECT * FROM ugc_submissions WHERE id = ? AND deleted_at IS NULL`).get(id) as UgcSubmission | undefined) ?? null;
 }
 
 export function getUserDraftSubmission(userId: number): UgcSubmission | null {
   return getDb().prepare(
-    `SELECT * FROM ugc_submissions WHERE telegram_user_id = ? AND status = 'draft' ORDER BY created_at DESC LIMIT 1`
+    `SELECT * FROM ugc_submissions WHERE telegram_user_id = ? AND status = 'draft' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1`
   ).get(userId) as UgcSubmission | null;
 }
 
 export function deleteUgcSubmission(id: number): void {
-  getDb().prepare(`DELETE FROM ugc_submissions WHERE id = ?`).run(id);
+  getDb().prepare(`UPDATE ugc_submissions SET deleted_at = datetime('now') WHERE id = ?`).run(id);
 }
 
 export function getUserSubmissions(userId: number, limit: number, offset: number): UgcSubmission[] {
   return getDb().prepare(`
     SELECT * FROM ugc_submissions
-    WHERE telegram_user_id = ? AND status != 'draft'
+    WHERE telegram_user_id = ? AND status != 'draft' AND deleted_at IS NULL
     ORDER BY created_at DESC
     LIMIT ? OFFSET ?
   `).all(userId, limit, offset) as UgcSubmission[];
@@ -802,7 +807,23 @@ export function getUserSubmissions(userId: number, limit: number, offset: number
 
 export function getUserSubmissionTotal(userId: number): number {
   const row = getDb().prepare(
-    `SELECT COUNT(*) as cnt FROM ugc_submissions WHERE telegram_user_id = ? AND status != 'draft'`
+    `SELECT COUNT(*) as cnt FROM ugc_submissions WHERE telegram_user_id = ? AND status != 'draft' AND deleted_at IS NULL`
   ).get(userId) as { cnt: number };
   return row.cnt;
+}
+
+// --- Dashboard helpers ---
+
+export function getPendingUgcCount(): number {
+  const row = getDb().prepare(
+    `SELECT COUNT(*) as cnt FROM ugc_submissions WHERE status = 'pending' AND deleted_at IS NULL`
+  ).get() as { cnt: number };
+  return row.cnt;
+}
+
+export function getLastStrategistTimestamp(): string | null {
+  const row = getDb().prepare(
+    `SELECT created_at FROM strategist_packets ORDER BY created_at DESC LIMIT 1`
+  ).get() as { created_at: string } | undefined;
+  return row?.created_at ?? null;
 }

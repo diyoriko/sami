@@ -10,6 +10,9 @@ import {
 } from './db';
 import { searchAllCategories, searchVideos, detectEquipment, Category, ScoredVideo } from './youtube';
 import { rewriteTitle, formatChannelName } from './translate';
+import { createLogger, generateCorrelationId } from './logger';
+
+const log = createLogger('approval');
 
 const CATEGORY_EMOJI: Record<Category, string> = {
   stretching: '🧘',
@@ -91,7 +94,7 @@ async function sendApprovalCard(
       }
     } catch (err: any) {
       if (parseMode === 'Markdown' && err?.description?.includes("can't parse entities")) {
-        console.warn(`[approval] Markdown parse failed, retrying plain text`);
+        log.warn('Markdown parse failed, retrying plain text');
         continue;
       }
       throw err;
@@ -103,10 +106,15 @@ async function sendApprovalCard(
 export async function runApprovalFlow(
   bot: Bot,
   date: string,
-  customKeywords?: { stretching?: string; strength?: string; mobility?: string }
+  customKeywords?: { stretching?: string; strength?: string; mobility?: string },
+  correlationId?: string,
 ): Promise<void> {
+  const cid = correlationId ?? generateCorrelationId();
+  const flowLog = log.withCorrelation(cid);
   const config = getConfig();
   const categories: Category[] = ['stretching', 'strength', 'mobility'];
+
+  flowLog.info('starting approval flow', { date, hasCustomKeywords: !!customKeywords });
 
   await bot.api.sendMessage(
     config.TELEGRAM_ADMIN_USER_ID,
@@ -115,8 +123,9 @@ export async function runApprovalFlow(
 
   let allVideos: Awaited<ReturnType<typeof searchAllCategories>>;
   try {
-    allVideos = await searchAllCategories(customKeywords);
+    allVideos = await searchAllCategories(customKeywords, cid);
   } catch (err) {
+    flowLog.error('search failed', { error: String(err) });
     await bot.api.sendMessage(
       config.TELEGRAM_ADMIN_USER_ID,
       `❌ Ошибка поиска видео: ${String(err)}`
@@ -150,7 +159,7 @@ export async function runApprovalFlow(
       setApprovalMessageId(sessionId, msg.message_id);
       totalFound++;
     } catch (err) {
-      console.error(`[approval] failed to send for ${category}:`, err);
+      flowLog.error(`failed to send for ${category}`, { error: String(err) });
     }
 
     await new Promise(r => setTimeout(r, 300));
@@ -227,10 +236,14 @@ export function registerApprovalCallbacks(bot: Bot): void {
 
     await ctx.answerCallbackQuery('Ищу другое...');
 
+    const refreshLog = log.withCorrelation();
+    refreshLog.info('refresh requested', { category: session.category, sessionId });
+
     let videos: ScoredVideo[];
     try {
-      videos = await searchVideos(session.category as Category, 1);
+      videos = await searchVideos(session.category as Category, 1, undefined, refreshLog.correlationId);
     } catch (err) {
+      refreshLog.error('refresh search failed', { error: String(err) });
       await ctx.api.sendMessage(config.TELEGRAM_ADMIN_USER_ID, `❌ Ошибка поиска замены для ${session.category}: ${String(err)}`);
       return;
     }
@@ -252,7 +265,7 @@ export function registerApprovalCallbacks(bot: Bot): void {
       const msg = await sendApprovalCard(ctx.api, config.TELEGRAM_ADMIN_USER_ID, v.thumbnail_url, text, keyboard);
       setApprovalMessageId(newSessionId, msg.message_id);
     } catch (err) {
-      console.error('[approval] refresh send failed:', err);
+      refreshLog.error('refresh send failed', { error: String(err) });
     }
   });
 

@@ -8,6 +8,9 @@
 
 import { Bot, Keyboard, InlineKeyboard } from 'grammy';
 import { getConfig } from './config';
+import { createLogger } from './logger';
+
+const log = createLogger('bot-menu');
 import {
   getUserSubmissions,
   getUserSubmissionTotal,
@@ -18,6 +21,8 @@ import {
   saveUgcState,
   getUgcState,
   deleteUgcState,
+  getPendingUgcCount,
+  getLastStrategistTimestamp,
   type UgcSubmission,
   type UgcStep,
 } from './db';
@@ -100,6 +105,28 @@ export function registerBotMenu(bot: Bot): void {
     const completions = getCompletionCountForDate(date);
     const users = getUniqueCompletionUsersForDate(date);
 
+    // Subscriber & group member counts
+    let subscriberCount = '?';
+    let groupMemberCount = '?';
+    try {
+      subscriberCount = String(await ctx.api.getChatMemberCount(config.TELEGRAM_CHANNEL_ID));
+    } catch { /* API error — show ? */ }
+    try {
+      groupMemberCount = String(await ctx.api.getChatMemberCount(config.TELEGRAM_GROUP_ID));
+    } catch { /* API error — show ? */ }
+
+    // Pending UGC
+    const pendingUgc = getPendingUgcCount();
+
+    // Last strategist report
+    const lastStrategist = getLastStrategistTimestamp();
+    const strategistLine = lastStrategist
+      ? `Последний отчёт стратега: ${lastStrategist.replace('T', ' ').slice(0, 16)}`
+      : 'Стратег: нет данных';
+
+    // Uptime
+    const uptimeStr = formatUptime(process.uptime());
+
     const CATEGORY_RU: Record<string, string> = {
       stretching: 'стретчинг',
       strength: 'силовая',
@@ -135,7 +162,18 @@ export function registerBotMenu(bot: Bot): void {
     }
 
     await ctx.reply(
-      `*Sami — статус*\n\nДата: ${date}\nПостов: ${posts}\nВыполнений: ${completions} (${users} чел.)${queueText}`,
+      [
+        `*Sami — статус*`,
+        ``,
+        `Дата: ${date}`,
+        `Подписчиков: ${subscriberCount} | Группа: ${groupMemberCount}`,
+        `Постов: ${posts}`,
+        `Выполнений: ${completions} (${users} чел.)`,
+        `UGC на модерации: ${pendingUgc}`,
+        strategistLine,
+        `Аптайм: ${uptimeStr}`,
+        queueText,
+      ].join('\n'),
       { parse_mode: 'Markdown' }
     );
   });
@@ -372,7 +410,7 @@ export function registerBotMenu(bot: Bot): void {
     }
   });
 
-  console.log('[bot-menu] handlers registered');
+  log.info('handlers registered');
 }
 
 // --- Helpers ---
@@ -471,8 +509,19 @@ async function sendUgcToAdmin(bot: Bot, sub: UgcSubmission): Promise<void> {
     });
     updateUgcSubmission(sub.id, { admin_message_id: msg.message_id });
   } catch (err) {
-    console.error('[bot-menu] failed to send UGC to admin:', err);
+    log.error('failed to send UGC to admin', { error: String(err) });
   }
+}
+
+function formatUptime(seconds: number): string {
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const parts: string[] = [];
+  if (d > 0) parts.push(`${d}д`);
+  if (h > 0) parts.push(`${h}ч`);
+  parts.push(`${m}м`);
+  return parts.join(' ');
 }
 
 function escapeMarkdown(text: string): string {

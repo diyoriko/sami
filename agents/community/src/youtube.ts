@@ -12,6 +12,9 @@
 
 import { getConfig } from './config';
 import { wasPostedRecently, VideoRow } from './db';
+import { createLogger } from './logger';
+
+const log = createLogger('youtube');
 
 export type Category = 'stretching' | 'strength' | 'mobility';
 
@@ -300,7 +303,8 @@ export type ScoredVideo = Omit<VideoRow, 'id'> & {
 export async function searchVideos(
   category: Category,
   count = 3,
-  customQuery?: string
+  customQuery?: string,
+  correlationId?: string,
 ): Promise<ScoredVideo[]> {
   const config = getConfig();
   const queries = customQuery ? [customQuery] : CATEGORY_QUERIES[category];
@@ -387,18 +391,22 @@ export async function searchVideos(
 }
 
 export async function searchAllCategories(
-  keywords?: { stretching?: string; strength?: string; mobility?: string }
+  keywords?: { stretching?: string; strength?: string; mobility?: string },
+  correlationId?: string,
 ): Promise<Record<Category, ScoredVideo[]>> {
+  const searchLog = correlationId ? log.withCorrelation(correlationId) : log;
   const categories: Category[] = ['stretching', 'strength', 'mobility'];
   const result = {} as Record<Category, ScoredVideo[]>;
 
   for (const cat of categories) {
     try {
-      result[cat] = await searchVideos(cat, 3, keywords?.[cat]);
+      result[cat] = await searchVideos(cat, 3, keywords?.[cat], correlationId);
       const top = result[cat][0];
-      console.log(`[youtube] ${cat}: ${result[cat].length} found, best="${top?.title}" score=${top?.total_score} brand=${top?.brand_score}`);
+      searchLog.info(`${cat}: ${result[cat].length} found`, {
+        best: top?.title, score: top?.total_score, brand: top?.brand_score,
+      });
     } catch (err) {
-      console.error(`[youtube] error searching ${cat}:`, err);
+      searchLog.error(`error searching ${cat}`, { error: String(err) });
       result[cat] = [];
     }
     await new Promise(r => setTimeout(r, 500));

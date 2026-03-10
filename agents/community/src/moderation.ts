@@ -1,6 +1,9 @@
 import { Bot } from 'grammy';
 import { InlineKeyboard } from 'grammy';
 import { getConfig } from './config';
+import { createLogger } from './logger';
+
+const log = createLogger('moderation');
 import {
   upsertMember, setMemberGoal, addWarning, muteMember,
   recordCompletion, getCompletionCount, hasUserCompleted, getPostByMessageId,
@@ -92,7 +95,7 @@ export function registerModeration(bot: Bot): void {
 
   // Periodic cleanup of expired captchas (every 30s)
   setInterval(() => cleanupExpiredCaptchas(bot).catch(err => {
-    console.error('[moderation] captcha cleanup failed:', err);
+    log.error('captcha cleanup failed', { error: String(err) });
   }), 30_000);
 
   // --- New member: mute + send captcha ---
@@ -117,7 +120,7 @@ export function registerModeration(bot: Bot): void {
         { can_send_messages: false, can_send_polls: false, can_send_other_messages: false }
       );
     } catch (err) {
-      console.error('[moderation] failed to mute new member for captcha:', err);
+      log.error('failed to mute new member for captcha', { error: String(err) });
     }
 
     const { question, answer, options } = generateCaptcha();
@@ -135,7 +138,7 @@ export function registerModeration(bot: Bot): void {
         { parse_mode: 'Markdown', reply_markup: keyboard }
       );
     } catch (err) {
-      console.error('[moderation] failed to send captcha:', err);
+      log.error('failed to send captcha', { error: String(err) });
       return;
     }
 
@@ -191,7 +194,7 @@ export function registerModeration(bot: Bot): void {
         }
       );
     } catch (err) {
-      console.error('[moderation] failed to unrestrict member:', err);
+      log.error('failed to unrestrict member', { error: String(err) });
     }
 
     await ctx.answerCallbackQuery('✅ Верно!');
@@ -267,7 +270,7 @@ export function registerModeration(bot: Bot): void {
         );
         await ctx.reply(`🔇 ${username} получил мут на 24 часа.`).catch(() => {});
       } catch (err) {
-        console.error('[moderation] failed to mute:', err);
+        log.error('failed to mute', { error: String(err) });
       }
     } else if (warnings >= 3) {
       try {
@@ -278,7 +281,7 @@ export function registerModeration(bot: Bot): void {
           `🚫 Заблокировал ${userId} (@${ctx.from?.username ?? '?'}) за спам.`
         );
       } catch (err) {
-        console.error('[moderation] failed to ban:', err);
+        log.error('failed to ban', { error: String(err) });
       }
     }
   });
@@ -342,5 +345,5 @@ export function registerModeration(bot: Bot): void {
     await ctx.answerCallbackQuery('Тренировка записана. Досмотри до конца — это важно.');
   });
 
-  console.log('[moderation] handlers registered');
+  log.info('handlers registered');
 }

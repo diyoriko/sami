@@ -8,6 +8,9 @@ import {
 import { downloadVideo, isYtDlpAvailable } from './downloader';
 import { detectEquipment } from './youtube';
 import { rewriteTitle, formatChannelName } from './translate';
+import { createLogger, type Logger } from './logger';
+
+const log = createLogger('poster');
 
 const CATEGORY_RU: Record<string, string> = {
   stretching: 'стретчинг',
@@ -73,19 +76,20 @@ export async function postVideoToChannel(
   bot: Bot,
   date: string,
   category: 'stretching' | 'strength' | 'mobility',
-  options?: { force?: boolean }
+  options?: { force?: boolean; correlationId?: string }
 ): Promise<PostResult> {
+  const postLog = options?.correlationId ? log.withCorrelation(options.correlationId) : log;
   const config = getConfig();
   const force = options?.force ?? false;
 
   if (!force && wasPostedToday(date, category)) {
-    console.log(`[poster] ${category} already posted for ${date}, skipping`);
+    postLog.info(`${category} already posted for ${date}, skipping`);
     return 'skipped';
   }
 
   const video = getApprovedVideo(date, category);
   if (!video) {
-    console.warn(`[poster] no approved video for ${category} on ${date}`);
+    postLog.warn(`no approved video for ${category} on ${date}`);
     return 'no_video';
   }
 
@@ -97,7 +101,7 @@ export async function postVideoToChannel(
   if (isYtDlpAvailable()) {
     let videoSent = false;
     try {
-      console.log(`[poster] downloading ${category} video: ${video.video_url}`);
+      postLog.info(`downloading ${category} video: ${video.video_url}`);
       const download = await downloadVideo(video.video_url, video.youtube_id);
 
       try {
@@ -124,31 +128,31 @@ export async function postVideoToChannel(
             markApprovalPosted(date, category);
           });
         } catch (dbErr) {
-          console.error(`[poster] DB WRITE FAILED for ${category} (video already sent, msgId=${msg.message_id}):`, dbErr);
+          postLog.error(`DB WRITE FAILED for ${category} (video already sent)`, { msgId: msg.message_id, error: String(dbErr) });
         }
 
-        console.log(`[poster] posted ${category} as VIDEO file, msgId=${msg.message_id}`);
+        postLog.info(`posted ${category} as VIDEO file`, { msgId: msg.message_id });
         return 'posted';
       } catch (uploadErr) {
         download.cleanup();
         if (videoSent) {
-          console.error(`[poster] POST-UPLOAD ERROR for ${category} (video already sent):`, uploadErr);
+          postLog.error(`POST-UPLOAD ERROR for ${category} (video already sent)`, { error: String(uploadErr) });
           return 'posted';
         }
-        console.error(`[poster] VIDEO UPLOAD FAILED for ${category} (${video.youtube_id}):`, uploadErr);
+        postLog.error(`VIDEO UPLOAD FAILED for ${category}`, { youtubeId: video.youtube_id, error: String(uploadErr) });
         // Fall through to link fallback
       }
     } catch (downloadErr) {
-      console.error(`[poster] DOWNLOAD FAILED for ${category} (${video.youtube_id}):`, downloadErr);
+      postLog.error(`DOWNLOAD FAILED for ${category}`, { youtubeId: video.youtube_id, error: String(downloadErr) });
       // Fall through to link fallback
     }
   } else {
-    console.warn(`[poster] yt-dlp not available, falling back to link for ${category}`);
+    postLog.warn(`yt-dlp not available, falling back to link for ${category}`);
   }
 
   // Fallback: post as text + YouTube link
   try {
-    console.warn(`[poster] FALLBACK: posting ${category} as TEXT LINK (video upload failed)`);
+    postLog.warn(`FALLBACK: posting ${category} as TEXT LINK (video upload failed)`);
     const msg = await bot.api.sendMessage(
       config.TELEGRAM_CHANNEL_ID,
       await formatCaption(video),
@@ -165,10 +169,10 @@ export async function postVideoToChannel(
       markApprovalPosted(date, category);
     });
 
-    console.warn(`[poster] posted ${category} as LINK (degraded), msgId=${msg.message_id}`);
+    postLog.warn(`posted ${category} as LINK (degraded)`, { msgId: msg.message_id });
     return 'posted';
   } catch (err) {
-    console.error(`[poster] COMPLETE FAILURE for ${category} on ${date}:`, err);
+    postLog.error(`COMPLETE FAILURE for ${category} on ${date}`, { error: String(err) });
     return 'error';
   }
 }

@@ -73,11 +73,14 @@ else
   echo "[strategist] analytics report unavailable (ok, skipping)"
 fi
 
+RECENT_SUMMARIES="$INTERNAL_DIR/recent-summaries.md"
+
 CONTEXT_FILES=(
   "$CONTEXT_ROOT/STRATEGIST_BRIEF.md"
   "$CONTEXT_ROOT/COMMUNITY_TASKS.md"
   "$COMMUNITY_REPORT_LOCAL"
   "$ANALYTICS_REPORT_LOCAL"
+  "$RECENT_SUMMARIES"
 )
 
 write_latest_json() {
@@ -375,6 +378,41 @@ run_telegram_notify() {
     printf '[strategist] telegram notify failed\n' >> "$RAW_OUT_PATH"
   fi
 }
+
+# Extract summaries from last 5 strategist reports for memory/continuity
+python3 - "$REPORT_DIR" "$RECENT_SUMMARIES" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+report_dir = Path(sys.argv[1])
+out_path = Path(sys.argv[2])
+
+reports = sorted(
+    report_dir.glob("*__strategist-report.md"),
+    key=lambda p: p.name,
+    reverse=True,
+)[:5]
+
+sections = []
+for rp in reports:
+    date = rp.name[:10]
+    text = rp.read_text(encoding="utf-8", errors="ignore")
+    match = re.search(r"^## Резюме\s*\n([\s\S]*?)(?:\n## |\n# |$)", text, re.MULTILINE)
+    if match:
+        bullets = [l for l in match.group(1).strip().splitlines() if l.strip().startswith("-")]
+        if bullets:
+            sections.append(f"### {date}\n" + "\n".join(bullets))
+
+if sections:
+    out_path.write_text(
+        "# Резюме предыдущих отчётов\n\n" + "\n\n".join(sections) + "\n",
+        encoding="utf-8",
+    )
+else:
+    out_path.write_text("# Резюме предыдущих отчётов\n\nНет предыдущих отчётов.\n", encoding="utf-8")
+PY
+echo "[strategist] extracted recent summaries -> $RECENT_SUMMARIES"
 
 python3 - "$PROMPT_PATH" "${CONTEXT_FILES[@]}" <<'PY'
 import sys

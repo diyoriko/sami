@@ -791,7 +791,28 @@ const staticData = {
         'yt-dlp: async upgrade при старте, кэш бинаря, semver-сравнение',
         'Стратег Mac: TCC fix, env vars, curl paths',
         'Стратег -> бот: POST /packet endpoint, COMMUNITY_PACKET в SQLite',
-        'Teletype: удалены мёртвые агенты (codex hourly, catchup)',
+      ],
+    },
+    {
+      version: 'v0.2.1',
+      date: '10.03.2026',
+      status: 'deployed',
+      items: [
+        'Дубликат поста: UNIQUE(date, category, video_id)',
+        'Атомарная публикация: withTransaction()',
+        'post_type трекинг: video/link в posts',
+        'Капча в SQLite: pending_captchas таблица',
+        'UGC-диалог в SQLite: ugc_conversation_state',
+        'Graceful shutdown: SIGTERM handler',
+      ],
+    },
+    {
+      version: 'v0.2.2',
+      date: '10.03.2026',
+      status: 'deployed',
+      items: [
+        'Дубликат видео+текст: отделить DB-ошибку от upload-ошибки',
+        'backlog.html: auto-fetch COMMUNITY_TASKS.md с GitHub',
       ],
     },
   ],
@@ -839,279 +860,160 @@ const staticData = {
       status: 'active',
       groups: [
         {
+          title: 'Стратег — launchd',
+          priority: 'p0',
+          tasks: [
+            { text: 'PATH: ~/.local/bin для claude CLI', done: true },
+            { text: 'Синхронизация контекста с TCC fallback', done: true },
+            { text: 'Обновление runtime скриптов', done: true },
+            { text: 'Reports dir в ~/Library/Application Support/', done: true },
+          ]
+        },
+        {
           title: 'Публикация видео',
           priority: 'p0',
           tasks: [
-            {
-              text: 'Видео постится текстом, не файлом (4+ случаев)',
-              done: false,
-              deploy: 'pending',
-              detail: 'async upgradeYtDlp задеплоен в v0.2.0, но проблема повторяется (09.03: стретчинг chilelavida — дубль, один с видео, второй без). Нужна глубокая диагностика: fallback при ошибке загрузки, retry, логирование причины.',
-            },
-            {
-              text: 'Дубликат поста — одно видео дважды',
-              done: false,
-              detail: 'Корень: CHECK constraint в approval_sessions не допускает статус "posted" — UPDATE молча не обновляет, видео остаётся "approved", повторная публикация при следующем вызове.',
-            },
-            {
-              text: 'Атомарная публикация',
-              done: false,
-              detail: 'sendVideo + recordPost + markApprovalPosted не в транзакции. Краш между шагами = потеря данных или дубликат. Обернуть в BEGIN/COMMIT с rollback.',
-            },
-            {
-              text: 'Все 3 категории — ошибка (09.03, 23:38)',
-              done: false,
-              detail: 'Скриншот: "Стретчинг — ошибка, Силовая — ошибка, Мобильность — ошибка". Нет логирования причины каждого фейла — невозможно диагностировать без доступа к Railway.',
-            },
+            { text: 'Дубликат поста: UNIQUE(date, category, video_id)', done: true },
+            { text: 'Атомарная публикация: withTransaction()', done: true },
+            { text: 'post_type трекинг: video/link', done: true },
           ]
         },
         {
           title: 'Потеря состояния при рестарте',
           priority: 'p0',
           tasks: [
-            {
-              text: 'Капча в памяти (Map) — пользователи навсегда замьючены',
-              done: false,
-              detail: 'При редеплое Railway все pending-капчи теряются. Пользователь, проходящий капчу в момент деплоя, остаётся замьюченным навсегда. Перенести в SQLite с TTL.',
-            },
-            {
-              text: 'UGC-диалог в памяти (Map) — потеря прогресса',
-              done: false,
-              detail: 'При рестарте пользователь теряет весь прогресс заполнения UGC. Перенести в SQLite: ugc_submissions + conversation_step.',
-            },
+            { text: 'Капча в SQLite: pending_captchas', done: true },
+            { text: 'UGC-диалог в SQLite: ugc_conversation_state', done: true },
           ]
         },
         {
           title: 'Graceful shutdown',
           priority: 'p0',
           tasks: [
-            {
-              text: 'Обработка SIGTERM при редеплое',
-              done: false,
-              detail: 'Railway шлёт SIGTERM, бот обрывает in-flight запросы. Добавить хэндлер: drain HTTP сервер, остановить grammy bot, закрыть SQLite соединение.',
-            },
+            { text: 'SIGTERM: bot.stop() + httpServer.close() + closeDb()', done: true },
           ]
         },
         {
           title: 'Нейминг кнопки',
           priority: 'p1',
           tasks: [
-            {
-              text: '"Я сделал(а)" -> переименовать',
-              done: false,
-              detail: 'Варианты: "Сделано", "Выполнено", "Готово". Выбрать по тону бренда (спокойно, конкретно).',
-            },
+            { text: '"Я сделал(а)" -> "Я сделаль"', done: true },
           ]
         },
         {
-          title: 'Монетизация (влияет на UX)',
+          title: 'Видимость очереди',
           priority: 'p1',
           tasks: [
-            {
-              text: 'Исследовать модели монетизации',
-              done: false,
-              detail: 'Задача стратегу: premium-контент, программы, партнёрства. Рекомендация с учётом влияния на UX сообщества. Приоритет высокий — от выбора модели зависит архитектура бота.',
-            },
-            {
-              text: 'Опрос в группе',
-              done: false,
-              detail: 'После исследования стратега — создать опрос в "Сами Daily" для валидации выбранной модели.',
-            },
-            {
-              text: 'Архитектура free/premium в боте',
-              done: false,
-              detail: 'Разделение контента и функций на бесплатный и premium уровни. Зависит от результата исследования.',
-            },
+            { text: 'Кнопка "Статус" — очередь по категориям', done: true },
+            { text: 'Расширить "Статус" — полная панель админа', done: true, detail: 'Подписчики, группа, UGC в ожидании, стратег, uptime.' },
+          ]
+        },
+        {
+          title: 'Монетизация',
+          priority: 'p1',
+          tasks: [
+            { text: 'Задача стратегу: исследовать модели', done: true },
+            { text: 'Опрос в группе', done: false, detail: 'Отложено — мало участников.' },
+            { text: 'Архитектура free/premium', done: false, detail: 'Отложено — мало участников.' },
           ]
         },
         {
           title: 'Исследование автопостинга',
           priority: 'p1',
           tasks: [
-            {
-              text: 'Анализ оптимального режима постинга',
-              done: false,
-              detail: 'Задача стратегу: нужен ли автопостинг по расписанию (07:30/12:00/19:00) или ручная публикация лучше. Сейчас автопостинг отключён, админ публикует вручную.',
-            },
+            { text: 'Задача стратегу: анализ режима постинга', done: true, detail: 'Добавлено в STRATEGIST_BRIEF.md как исследование.' },
           ]
         },
         {
-          title: 'Стратег — обогащение данных',
+          title: 'Аудит параметров поиска видео',
           priority: 'p1',
           tasks: [
-            {
-              text: 'Расширить analytics-latest.json',
-              done: false,
-              detail: 'Top-5 видео по completions, retention (вернулись вчера и сегодня), время публикации vs completions, completions по категориям. Сейчас стратег видит только 7 чисел.',
-            },
-            {
-              text: 'Заполнить community-latest.json',
-              done: false,
-              detail: 'Сейчас пустой ("report not generated yet"). Нужно: история постов за неделю с метриками (views, completions, forwards), активные пользователи.',
-            },
-            {
-              text: 'Ликвидировать галлюцинации в ресерче',
-              done: false,
-              detail: 'Стратег ссылается на несуществующие источники (Telemetr.io, Telegram Creator Hub) — у него нет интернета. Либо дать веб-доступ, либо собирать дайджест конкурентов скриптом.',
-            },
+            { text: 'Ревизия youtube.ts: запросы, скоринг, фильтры, penalty/bonus', done: false, detail: 'Синхронизировать с брифом, брендом, ЦА и текущим состоянием.' },
+          ]
+        },
+        {
+          title: 'Аналитика — метрики + формат DM',
+          priority: 'p1',
+          tasks: [
+            { text: 'Top-5 видео, retention, категории, breakdown, cumulative', done: true },
+            { text: 'analytics-latest.json + community-latest.json для стратега', done: true },
+            { text: 'Ежедневная + недельная аналитика: человечный формат', done: true },
+            { text: 'Deploy notification: очищен от мусора', done: true },
           ]
         },
         {
           title: 'Стратег — память и feedback loop',
           priority: 'p1',
           tasks: [
+            { text: 'Передавать последние 3-5 резюме прошлых отчётов', done: true, detail: 'recent-summaries.md генерируется перед каждым запуском.' },
+          ]
+        },
+        {
+          title: 'Стратег → Google Tasks',
+          priority: 'p1',
+          tasks: [
+            { text: 'Выжимка в описании таски', done: true, detail: 'Резюме + Фокус дня + Решения + Эксперименты + ссылка на отчёт.' },
+          ]
+        },
+        {
+          title: 'Социальные профили участников',
+          priority: 'p1',
+          tasks: [
+            { text: 'Статус/рейтинг участника', done: false, detail: 'Мягкая механика: выполненные тренировки, реакции на UGC, сохранения. Уровни: новичок → практик → наставник.' },
+            { text: 'Публичный профиль', done: false, detail: 'Список видео участника + интересы из welcome quiz.' },
+            { text: 'Просмотр профилей друг друга', done: false, detail: 'Кнопка "Профиль" в боте.' },
+          ]
+        },
+        {
+          title: 'Стратег — веб-доступ',
+          priority: 'p1',
+          tasks: [
             {
-              text: 'Передавать последние 3-5 резюме прошлых отчётов',
+              text: 'Ликвидировать галлюцинации в ресерче',
               done: false,
-              detail: 'Сейчас стратег каждый день начинает с нуля. Нужно: включать в промпт резюме последних отчётов, чтобы сохранялась преемственность.',
-            },
-            {
-              text: 'Трекер экспериментов',
-              done: false,
-              detail: 'JSON/SQLite: что стратег предложил, что внедрено, результат. Стратег читает при генерации — видит, работают ли его идеи.',
-            },
-            {
-              text: 'Лог решений владельца',
-              done: false,
-              detail: 'Стратег должен знать, что было отклонено/принято и почему (например: "UGC отложен до 50 подписчиков"). Без этого повторяет одни и те же рекомендации.',
+              detail: 'Стратег ссылается на несуществующие источники. Нужен веб-доступ или дайджест.',
             },
           ]
         },
         {
-          title: 'Стратег — веб-доступ и реальный ресерч',
+          title: 'Наблюдаемость',
           priority: 'p1',
           tasks: [
-            {
-              text: 'Включить веб-поиск для стратега',
-              done: false,
-              detail: 'STRATEGIST_ENABLE_WEB_SEARCH=1 уже есть как env var, но отключён. Или: предварительный дайджест конкурентов скриптом в файл контекста.',
-            },
-            {
-              text: 'Парсинг конкурентов: TGStat/Telemetr.io',
-              done: false,
-              detail: 'Автоматический сбор данных по fitness/wellness каналам РФ. Реальные цифры вместо галлюцинаций.',
-            },
-            {
-              text: 'Бенчмарки по размеру канала',
-              done: false,
-              detail: 'Средние метрики для каналов 0-100, 100-1000, 1000+ подписчиков. Чтобы стратег ставил реалистичные цели.',
-            },
-          ]
-        },
-        {
-          title: 'Стратег — агентность',
-          priority: 'p1',
-          tasks: [
-            {
-              text: 'COMMUNITY_PACKET v2: конкретные действия',
-              done: false,
-              detail: 'Стратег формирует не только отчёт, но и действия: создать опрос с вариантами X/Y/Z, текст welcome-сообщения, A/B варианты названий постов.',
-            },
-            {
-              text: 'Бот выполняет действия из пакета',
-              done: false,
-              detail: 'Бот умеет: создать опрос в группе, изменить welcome-текст, запустить A/B тест названий. По инструкции из COMMUNITY_PACKET.',
-            },
-            {
-              text: 'Feedback: бот -> стратег',
-              done: false,
-              detail: 'Бот отправляет стратегу результат: опрос создан, N голосов, итог. Стратег видит эффект своих решений.',
-            },
-          ]
-        },
-        {
-          title: 'Наблюдаемость и алертинг',
-          priority: 'p1',
-          tasks: [
-            {
-              text: 'Алерт с первого фейла постинга',
-              done: false,
-              detail: 'Сейчас DM админу только после 3 подряд. Первый фейл должен уведомлять с причиной: download failed / upload failed / timeout.',
-            },
-            {
-              text: 'Различать "пост с видео" и "пост текстом" в аналитике',
-              done: false,
-              detail: 'Fallback на текстовую ссылку молчит. Невозможно понять масштаб проблемы. Добавить post_type в posts таблицу.',
-            },
-            {
-              text: 'Structured logging с correlation ID',
-              done: false,
-              detail: 'Один ID на весь путь: поиск -> одобрение -> скачивание -> публикация. Замена console.log на структурированный логгер.',
-            },
+            { text: 'Алерт с первого фейла постинга', done: true },
+            { text: 'Structured logging с correlation ID', done: true, detail: 'logger.ts, критический путь с correlation ID.' },
           ]
         },
         {
           title: 'Защита от внешних API',
           priority: 'p1',
           tasks: [
-            {
-              text: 'Timeout на YouTube API fetch',
-              done: false,
-              detail: 'Сейчас без таймаута — запрос может висеть бесконечно, блокируя approval flow в 19:00.',
-            },
-            {
-              text: 'Circuit breaker для YouTube',
-              done: false,
-              detail: 'После N фейлов перестать долбить API, использовать кэшированные видео, уведомить админа.',
-            },
-            {
-              text: 'Rate limiting на callback-кнопки',
-              done: false,
-              detail: '"Я сделал(а)" можно спамить, искусственно накручивая счётчик completions. Добавить throttle.',
-            },
+            { text: 'Timeout на YouTube API fetch (15с)', done: true },
+            { text: 'Circuit breaker для YouTube', done: true },
+            { text: 'Rate limiting на callback-кнопки', done: true },
           ]
         },
         {
           title: 'Целостность данных',
           priority: 'p1',
           tasks: [
-            {
-              text: 'Soft delete вместо DELETE',
-              done: false,
-              detail: 'Добавить deleted_at во все таблицы. Сейчас UGC, баны, отклонения удаляются безвозвратно — нет аудита.',
-            },
-            {
-              text: 'Отдельный API-ключ для стратега',
-              done: false,
-              detail: '/packet авторизуется TELEGRAM_BOT_TOKEN. Утечка одного = контроль над всем. Добавить STRATEGIST_API_KEY.',
-            },
-            {
-              text: 'Трекинг активности пользователей',
-              done: false,
-              detail: 'members таблица не хранит last_activity_at, completions_total, статус. Невозможно найти churned.',
-            },
+            { text: 'Soft delete вместо DELETE', done: true, detail: 'deleted_at для approval_sessions и ugc_submissions. Captcha/UGC state — hard delete.' },
+            { text: 'Отдельный API-ключ для стратега', done: true },
+            { text: 'Трекинг активности пользователей', done: true },
           ]
         },
         {
           title: 'Формат постов',
           priority: 'p1',
           tasks: [
-            {
-              text: 'Теги каждый на отдельной строке',
-              done: false,
-              detail: 'Сейчас теги через пробел в одну строку. Нужно: каждый тег на новой строке для читаемости.',
-            },
-            {
-              text: 'Автор: "YouTube" со ссылкой внутри слова',
-              done: false,
-              detail: 'Текущий формат: "Автор: Name (ссылка)". Целевой: "Автор: YouTube" где "YouTube" — кликабельная ссылка на канал.',
-            },
+            { text: 'Теги каждый на отдельной строке', done: true },
+            { text: 'Автор со ссылкой внутри имени канала', done: true },
           ]
         },
         {
-          title: 'Admin UX',
+          title: 'backlog.html — синхронизация',
           priority: 'p1',
           tasks: [
-            {
-              text: 'Deploy notification: очеловечить',
-              done: false,
-              detail: 'Не показывать raw commit hash, Co-Authored-By и технические детали. Показать версию, краткое описание изменений.',
-            },
-            {
-              text: 'Аналитика DM: понятный формат',
-              done: false,
-              detail: 'Сейчас сообщение выглядит как лог. Нужен человекочитаемый формат: ключевые метрики, тренды, без технического мусора.',
-            },
+            { text: 'backlog.html не отражает реальный бэклог', done: false, detail: 'file:// не может fetch GitHub (CORS). staticData рассинхрон. Нужен надёжный механизм: либо Railway API, либо автогенерация staticData при коммите.' },
           ]
         },
       ]

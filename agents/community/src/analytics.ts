@@ -2,6 +2,9 @@ import { Bot } from 'grammy';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getConfig } from './config';
+import { createLogger } from './logger';
+
+const log = createLogger('analytics');
 import {
   writeChannelStats,
   getChannelStats,
@@ -23,7 +26,7 @@ import {
 
 export async function runDailyAnalytics(bot: Bot, date: string): Promise<void> {
   const config = getConfig();
-  console.log(`[analytics] Running daily analytics for ${date}`);
+  log.info(`running daily analytics for ${date}`);
 
   // 1. Collect channel/group stats from Telegram API
   let subscriberCount = 0;
@@ -32,13 +35,13 @@ export async function runDailyAnalytics(bot: Bot, date: string): Promise<void> {
   try {
     subscriberCount = await bot.api.getChatMemberCount(config.TELEGRAM_CHANNEL_ID);
   } catch (err) {
-    console.error('[analytics] Failed to get channel member count:', err);
+    log.error('failed to get channel member count', { error: String(err) });
   }
 
   try {
     groupMemberCount = await bot.api.getChatMemberCount(config.TELEGRAM_GROUP_ID);
   } catch (err) {
-    console.error('[analytics] Failed to get group member count:', err);
+    log.error('failed to get group member count', { error: String(err) });
   }
 
   // 2. Get today's community stats from DB
@@ -92,7 +95,7 @@ export async function runDailyAnalytics(bot: Bot, date: string): Promise<void> {
 
   const reportPath = path.join(reportDir, 'latest.json');
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n', 'utf8');
-  console.log(`[analytics] Wrote daily report: ${reportPath}`);
+  log.info(`wrote daily report: ${reportPath}`);
 
   // 6. DM admin
   const CATEGORY_RU: Record<string, string> = {
@@ -136,9 +139,9 @@ export async function runDailyAnalytics(bot: Bot, date: string): Promise<void> {
     await bot.api.sendMessage(config.TELEGRAM_ADMIN_USER_ID, lines.join('\n'), {
       parse_mode: 'Markdown',
     });
-    console.log('[analytics] Sent daily DM to admin');
+    log.info('sent daily DM to admin');
   } catch (err) {
-    console.error('[analytics] Failed to send DM:', err);
+    log.error('failed to send DM', { error: String(err) });
   }
 }
 
@@ -148,7 +151,7 @@ export async function runDailyAnalytics(bot: Bot, date: string): Promise<void> {
 
 export async function runWeeklyAnalytics(bot: Bot, weekStr: string): Promise<void> {
   const config = getConfig();
-  console.log(`[analytics] Running weekly analytics for ${weekStr}`);
+  log.info(`running weekly analytics for ${weekStr}`);
 
   // Calculate week boundaries (current week: Mon-Sun)
   const now = new Date();
@@ -165,7 +168,7 @@ export async function runWeeklyAnalytics(bot: Bot, weekStr: string): Promise<voi
   const days = getWeeklyStats(startDate, endDate);
 
   if (days.length === 0) {
-    console.log('[analytics] No data for this week, skipping dashboard');
+    log.info('no data for this week, skipping dashboard');
     return;
   }
 
@@ -217,7 +220,7 @@ export async function runWeeklyAnalytics(bot: Bot, weekStr: string): Promise<voi
   ].join('\n');
 
   fs.writeFileSync(dashPath, md, 'utf8');
-  console.log(`[analytics] Wrote weekly dashboard: ${dashPath}`);
+  log.info(`wrote weekly dashboard: ${dashPath}`);
 
   // Also write latest weekly report as JSON for strategist
   const reportDir = path.resolve(__dirname, '..', config.ANALYTICS_REPORT_DIR);
@@ -259,8 +262,8 @@ export async function runWeeklyAnalytics(bot: Bot, weekStr: string): Promise<voi
     await bot.api.sendMessage(config.TELEGRAM_ADMIN_USER_ID, dmLines.join('\n'), {
       parse_mode: 'Markdown',
     });
-    console.log('[analytics] Sent weekly DM to admin');
+    log.info('sent weekly DM to admin');
   } catch (err) {
-    console.error('[analytics] Failed to send weekly DM:', err);
+    log.error('failed to send weekly DM', { error: String(err) });
   }
 }

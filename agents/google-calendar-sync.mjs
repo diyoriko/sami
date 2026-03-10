@@ -194,6 +194,8 @@ async function extractReportSections(reportPath) {
   return {
     summary: extract("Резюме"),
     focus: extract("Фокус дня"),
+    decisions: extract("Решения"),
+    experiments: extract("Эксперименты"),
   };
 }
 
@@ -226,6 +228,18 @@ async function buildTaskBody({ status, timestamp, exitCode, reportFile, reportPa
     lines.push("");
     lines.push("Фокус дня:");
     lines.push(...sections.focus);
+  }
+
+  if (sections.decisions.length > 0) {
+    lines.push("");
+    lines.push("Решения:");
+    lines.push(...sections.decisions.slice(0, 3));
+  }
+
+  if (sections.experiments.length > 0) {
+    lines.push("");
+    lines.push("Эксперименты:");
+    lines.push(...sections.experiments.slice(0, 3));
   }
 
   if (reportUrl) {
