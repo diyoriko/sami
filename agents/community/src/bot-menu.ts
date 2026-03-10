@@ -221,11 +221,14 @@ export function registerBotMenu(bot: Bot): void {
 
   bot.hears('Сбросить выбор', async (ctx) => {
     if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
-    const { tomorrowMsk } = await import('./dates');
+    const { todayMsk, tomorrowMsk } = await import('./dates');
     const { resetApprovalSessions } = await import('./db');
-    const date = tomorrowMsk();
-    const count = resetApprovalSessions(date);
-    await ctx.reply(`Сброшено ${count} сессий на ${date}. Нажми «Поиск видео» для нового поиска.`);
+    const today = todayMsk();
+    const tomorrow = tomorrowMsk();
+    const countToday = resetApprovalSessions(today);
+    const countTomorrow = resetApprovalSessions(tomorrow);
+    const total = countToday + countTomorrow;
+    await ctx.reply(`Сброшено ${total} сессий (${today}: ${countToday}, ${tomorrow}: ${countTomorrow}). Нажми «Поиск видео» для нового поиска.`);
   });
 
   bot.hears('Аналитика', async (ctx) => {
