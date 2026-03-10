@@ -315,6 +315,13 @@ prompt = f"""Ты стратегический агент проекта Sami. �
 - Growth loops
 - Риски
 
+Обязательно добавь блок предложений в бэклог (если есть что предложить):
+// BACKLOG_PROPOSALS_START
+- [sprint:2|3|4|5] [priority:P1|P2] Краткое описание задачи — зачем и что конкретно сделать
+- [sprint:3] [priority:P1] Пример: добавить welcome-quiz после капчи — повысит retention новичков
+// BACKLOG_PROPOSALS_END
+Правила: только новые задачи (не дублируй то что уже в COMMUNITY_TASKS.md). Максимум 5 предложений. Учитывай owner-decisions.json.
+
 Обязательно в конце добавь блок:
 // COMMUNITY_PACKET_START
 {{JSON с полями: week_focus, content_themes, challenge_active, challenge_name, search_keywords (stretching/strength/mobility), community_priority}}
@@ -549,6 +556,18 @@ PY
       fi
     else
       echo "[strategist] API key not found, skipping packet POST" >> "$RAW_OUT_PATH"
+    fi
+  fi
+fi
+
+# Extract BACKLOG_PROPOSALS from report (non-critical)
+EXTRACT_PROPOSALS_SCRIPT="${SAMI_AGENTS_DIR:-$SCRIPT_DIR}/extract-backlog-proposals.mjs"
+if [[ "$STATUS" == "completed" && -s "$OUT_PATH" && -f "$EXTRACT_PROPOSALS_SCRIPT" ]]; then
+  if command -v node >/dev/null 2>&1; then
+    if node "$EXTRACT_PROPOSALS_SCRIPT" "$OUT_PATH" >> "$RAW_OUT_PATH" 2>&1; then
+      echo "[strategist] backlog proposals extracted" >> "$RAW_OUT_PATH"
+    else
+      echo "[strategist] backlog proposals extraction failed (non-critical)" >> "$RAW_OUT_PATH"
     fi
   fi
 fi

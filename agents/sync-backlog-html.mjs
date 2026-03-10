@@ -64,9 +64,11 @@ function parseTasks(md) {
       continue;
     }
 
-    // Sprint status line: Статус: **в работе**
+    // Sprint status line: Статус: **в работе** | **завершён** | **следующий**
     if (currentSprint && /^Статус:/.test(line)) {
-      if (/в работе|active|почти завершён/i.test(line)) {
+      if (/завершён|completed|done/i.test(line)) {
+        currentSprint.status = "completed";
+      } else if (/в работе|active|почти завершён/i.test(line)) {
         currentSprint.status = "active";
       }
       continue;

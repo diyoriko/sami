@@ -186,6 +186,17 @@ function migrate(db: Database.Database): void {
   // Soft delete columns
   try { db.exec('ALTER TABLE ugc_submissions ADD COLUMN deleted_at TEXT'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE approval_sessions ADD COLUMN deleted_at TEXT'); } catch { /* already exists */ }
+
+  // Deploy history
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS deploy_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      commit_sha TEXT,
+      commit_message TEXT,
+      version TEXT,
+      deployed_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
 }
 
 // --- Captcha state (persistent) ---
@@ -858,4 +869,35 @@ export function getLastStrategistTimestamp(): string | null {
     `SELECT created_at FROM strategist_packets ORDER BY created_at DESC LIMIT 1`
   ).get() as { created_at: string } | undefined;
   return row?.created_at ?? null;
+}
+
+// --- Deploy history ---
+
+export interface DeployRecord {
+  id: number;
+  commit_sha: string | null;
+  commit_message: string | null;
+  version: string | null;
+  deployed_at: string;
+}
+
+export function recordDeploy(commitSha?: string, commitMessage?: string, version?: string): void {
+  // Deduplicate: skip if last deploy has the same commit SHA
+  if (commitSha) {
+    const last = getDb().prepare(
+      `SELECT commit_sha FROM deploy_history ORDER BY id DESC LIMIT 1`
+    ).get() as { commit_sha: string | null } | undefined;
+    if (last?.commit_sha === commitSha) return;
+  }
+
+  getDb().prepare(`
+    INSERT INTO deploy_history (commit_sha, commit_message, version)
+    VALUES (?, ?, ?)
+  `).run(commitSha ?? null, commitMessage ?? null, version ?? null);
+}
+
+export function getLatestDeploy(): DeployRecord | null {
+  return getDb().prepare(
+    `SELECT * FROM deploy_history ORDER BY id DESC LIMIT 1`
+  ).get() as DeployRecord | null;
 }

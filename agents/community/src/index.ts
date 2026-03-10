@@ -13,6 +13,7 @@ import { registerApprovalCallbacks } from './approval';
 import { startScheduler } from './scheduler';
 import { upgradeYtDlp, logYtDlpStatus, initCookies, setAdminNotifier, runDiagnostic } from './downloader';
 import { migrateStrategist, savePacketFromExternal } from './strategist';
+import { recordDeploy, getLatestDeploy } from './db';
 
 async function main(): Promise<void> {
   const config = getConfig();
@@ -20,6 +21,16 @@ async function main(): Promise<void> {
   // Init DB
   getDb();
   migrateStrategist();
+
+  // Record deploy in DB
+  const commitSha = process.env.RAILWAY_GIT_COMMIT_SHA;
+  const commitMsg = process.env.RAILWAY_GIT_COMMIT_MESSAGE?.trim();
+  const pkgVersion = (() => {
+    try { return JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', 'package.json'), 'utf8')).version; }
+    catch { return undefined; }
+  })();
+  recordDeploy(commitSha, commitMsg, pkgVersion);
+
   log.info('database ready');
 
   // Upgrade yt-dlp to latest, init cookies, log status
@@ -147,8 +158,15 @@ async function main(): Promise<void> {
 
   const httpServer = http.createServer((req, res) => {
     if (req.url === '/health') {
-      res.writeHead(200, { 'Content-Type': 'text/plain' });
-      res.end('ok');
+      const deploy = getLatestDeploy();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        status: 'ok',
+        version: deploy?.version ?? null,
+        commit: deploy?.commit_sha?.slice(0, 7) ?? null,
+        deployed_at: deploy?.deployed_at ?? null,
+        uptime_seconds: Math.floor(process.uptime()),
+      }));
       return;
     }
 

@@ -667,7 +667,8 @@ function parseMarkdown(md) {
         const sm = lines[j].match(/Статус:\s*\*\*(.+?)\*\*/);
         if (sm) {
           const raw = sm[1].toLowerCase();
-          if (raw.includes('деплой') || raw.includes('работ') || raw.includes('active')) status = 'active';
+          if (raw.includes('завершён') || raw.includes('completed')) status = 'completed';
+          else if (raw.includes('деплой') || raw.includes('работ') || raw.includes('active')) status = 'active';
           break;
         }
       }
@@ -820,23 +821,17 @@ const staticData = {
       "date": "10.03",
       "status": "deployed",
       "items": [
-        "P0: Стратег launchd — PATH fix (`~/.local/bin`), контекст-синхронизация, TCC fallback",
+        "P0: Стратег launchd — PATH fix, контекст-синхронизация, TCC fallback",
         "\"Я сделал(а)\" → \"Я сделаль\"",
-        "Админ-панель \"Статус\": подписчики, UGC в ожидании, стратег, uptime",
-        "Задача стратегу: монетизация + автопостинг → STRATEGIST_BRIEF.md",
-        "Аналитика: retention, completions по категориям, top-5 видео, cumulative, breakdown видео/ссылки",
+        "Админ-панель \"Статус\": подписчики, UGC, стратег, uptime",
+        "Аналитика: retention, completions по категориям, top-5 видео, cumulative, breakdown",
         "analytics-latest.json + community-latest.json для стратега",
-        "DM формат: ежедневная + недельная аналитика + deploy notification",
-        "Формат постов: теги на отдельных строках, автор как ссылка",
-        "Structured logging: logger.ts с correlation ID, все модули мигрированы",
-        "Алерт с первого фейла загрузки",
-        "Timeout + circuit breaker на YouTube API, rate limiting на кнопки",
-        "Soft delete для approval_sessions и ugc_submissions",
-        "Отдельный API-ключ для стратега (STRATEGIST_API_KEY)",
-        "Трекинг активности: members.last_activity_at + completions_total",
-        "Стратег: память — recent-summaries.md (последние 5 резюме)",
-        "Стратег: Google Tasks/Calendar sync убран → только Telegram DM",
-        "Стратег DM обогащён: Резюме + Фокус дня + Решения + Эксперименты + ссылка"
+        "DM формат: аналитика + deploy notification",
+        "Формат постов: теги на строках, автор как ссылка",
+        "Structured logging с correlation ID",
+        "Алерт с первого фейла, timeout + circuit breaker, rate limiting",
+        "Soft delete, отдельный API-ключ стратега, трекинг активности",
+        "Стратег: память (recent-summaries.md), Google Tasks убран → Telegram DM обогащён"
       ]
     },
     {
@@ -844,18 +839,17 @@ const staticData = {
       "date": "10.03",
       "status": "deployed",
       "items": [
-        "Очередь \"Статус\": фильтр сегодня/завтра, auto-cleanup >2 дней, дедупликация при refresh",
-        "Аудит поиска видео: scoring weights и duration range в config.ts (конфигурируемые)",
-        "backlog.html синхронизирован через agents/sync-backlog-html.mjs",
-        "Стратег: experiments.json + owner-decisions.json в контексте",
-        "Стратег: промпт обновлён — учитывает эксперименты и решения владельца"
+        "Очередь \"Статус\": фильтр сегодня/завтра, auto-cleanup, дедупликация",
+        "Аудит поиска видео: scoring weights + duration range в config.ts",
+        "backlog.html синхронизирован через sync-backlog-html.mjs",
+        "Стратег: experiments.json + owner-decisions.json в контексте"
       ]
     }
   ],
   "sprints": [
     {
       "name": "Sprint 2 — стабильность и polish",
-      "status": "planned",
+      "status": "completed",
       "groups": [
         {
           "title": "Очередь в \"Статус\" — только сегодня/завтра",
@@ -895,11 +889,11 @@ const staticData = {
             },
             {
               "text": "Стратег → обновляет COMMUNITY_TASKS.md",
-              "done": false
+              "done": true
             },
             {
               "text": "Бот → обновляет бэклог после деплоя",
-              "done": false
+              "done": true
             }
           ]
         },
@@ -926,17 +920,73 @@ const staticData = {
               "done": true
             }
           ]
-        },
+        }
+      ]
+    },
+    {
+      "name": "Sprint 3 — операционка, качество, quick wins",
+      "status": "planned",
+      "groups": [
         {
-          "title": "Монетизация",
-          "priority": "p2",
+          "title": "Мониторинг деплоя (Web Fetch)",
+          "priority": "p1",
           "tasks": [
             {
-              "text": "Опрос в группе (когда будет достаточно участников)",
+              "text": "Health check после пуша",
               "done": false
             },
             {
-              "text": "Архитектура: бесплатный/premium в боте",
+              "text": "Проверка endpoints",
+              "done": false
+            },
+            {
+              "text": "Мониторинг стратега",
+              "done": false
+            }
+          ]
+        },
+        {
+          "title": "Code quality (/simplify)",
+          "priority": "p1",
+          "tasks": [
+            {
+              "text": "Аудит кода после Sprint 2",
+              "done": false
+            },
+            {
+              "text": "Тесты на новый функционал",
+              "done": false
+            }
+          ]
+        },
+        {
+          "title": "Стратег — реальный ресерч (Web Search)",
+          "priority": "p1",
+          "tasks": [
+            {
+              "text": "Дайджест конкурентов перед запуском стратега",
+              "done": false
+            },
+            {
+              "text": "Ликвидировать галлюцинации",
+              "done": false
+            },
+            {
+              "text": "Бенчмарки",
+              "done": false
+            }
+          ]
+        },
+        {
+          "title": "Welcome-поток",
+          "priority": "p1",
+          "tasks": [
+            {
+              "text": "Авто-сообщение после капчи: \"Вот сегодняшняя тренировка -> [ссылка]\"",
+              "done": false
+            },
+            {
+              "text": "Привязать к актуальному расписанию (какая категория сейчас по времени)",
               "done": false
             }
           ]
@@ -944,7 +994,7 @@ const staticData = {
       ]
     },
     {
-      "name": "Sprint 3 — UGC, фильтрация и профили",
+      "name": "Sprint 4 — UGC, профили, фильтрация",
       "status": "planned",
       "groups": [
         {
@@ -952,7 +1002,7 @@ const staticData = {
           "priority": "p1",
           "tasks": [
             {
-              "text": "Статус/рейтинг участника",
+              "text": "Статус/рейтинг",
               "done": false
             },
             {
@@ -1018,55 +1068,33 @@ const staticData = {
               "done": false
             }
           ]
+        },
+        {
+          "title": "Монетизация",
+          "priority": "p3",
+          "tasks": [
+            {
+              "text": "Опрос в группе (когда будет 50+ участников)",
+              "done": false
+            },
+            {
+              "text": "Архитектура: бесплатный/premium в боте",
+              "done": false
+            }
+          ]
         }
       ]
     },
     {
-      "name": "Sprint 4 — вовлечение и рост",
+      "name": "Sprint 5 — вовлечение, рост, агентность",
       "status": "planned",
       "groups": [
-        {
-          "title": "Welcome-поток",
-          "priority": "p1",
-          "tasks": [
-            {
-              "text": "Авто-сообщение после капчи: \"Вот сегодняшняя тренировка -> [ссылка]\"",
-              "done": false
-            },
-            {
-              "text": "Привязать к актуальному расписанию",
-              "done": false
-            }
-          ]
-        },
-        {
-          "title": "Стратег — веб-доступ и реальный ресерч",
-          "priority": "p1",
-          "tasks": [
-            {
-              "text": "Ликвидировать галлюцинации",
-              "done": false
-            },
-            {
-              "text": "Включить веб-поиск для стратега (STRATEGIST_ENABLE_WEB_SEARCH=1 или предварительный дайджест)",
-              "done": false
-            },
-            {
-              "text": "Парсинг конкурентов: TGStat данные по fitness/wellness каналам РФ",
-              "done": false
-            },
-            {
-              "text": "Бенчмарки: средние метрики для каналов 0-100, 100-1000, 1000+",
-              "done": false
-            }
-          ]
-        },
         {
           "title": "Стратег — агентность (действия, а не только текст)",
           "priority": "p1",
           "tasks": [
             {
-              "text": "COMMUNITY_PACKET v2: стратег формирует конкретные действия (опрос, welcome-текст, A/B варианты)",
+              "text": "COMMUNITY_PACKET v2: конкретные действия (опрос, welcome-текст, A/B варианты)",
               "done": false
             },
             {
@@ -1074,7 +1102,21 @@ const staticData = {
               "done": false
             },
             {
-              "text": "Feedback: бот отправляет стратегу результат (опрос создан, N голосов, результат)",
+              "text": "Feedback: бот отправляет стратегу результат (опрос создан, N голосов)",
+              "done": false
+            }
+          ]
+        },
+        {
+          "title": "Figma → лендинг Sami",
+          "priority": "p1",
+          "tasks": [
+            {
+              "text": "Pixel-perfect вёрстка лендинга",
+              "done": false
+            },
+            {
+              "text": "Деплой лендинга",
               "done": false
             }
           ]
@@ -1246,7 +1288,9 @@ const staticData = {
 let data = null;
 
 async function initData() {
-  const fetched = await fetchBacklog();
+  // Local file:// — use staticData directly (no GitHub fetch needed)
+  const isLocal = location.protocol === 'file:';
+  const fetched = isLocal ? null : await fetchBacklog();
   if (fetched) {
     data = {
       releases: fetched.releases,
@@ -1256,7 +1300,6 @@ async function initData() {
       services: staticData.services,
     };
   } else {
-    // Fallback to static
     data = staticData;
   }
   render();
@@ -1389,8 +1432,8 @@ function render() {
   html += '<div class="section-label">Спринты</div>';
 
   for (const sprint of data.sprints) {
-    const badgeClass = sprint.status === 'active' ? 'badge-active' : 'badge-planned';
-    const badgeText = sprint.status === 'active' ? 'В работе' : 'Планируется';
+    const badgeClass = sprint.status === 'completed' ? 'badge-deployed' : sprint.status === 'active' ? 'badge-active' : 'badge-planned';
+    const badgeText = sprint.status === 'completed' ? 'Завершён' : sprint.status === 'active' ? 'В работе' : 'Планируется';
     const total = sprint.groups.reduce((s, g) => s + g.tasks.length, 0);
     const done = sprint.groups.reduce((s, g) => s + g.tasks.filter(t => t.done).length, 0);
     const pct = total > 0 ? Math.round(done / total * 100) : 0;
