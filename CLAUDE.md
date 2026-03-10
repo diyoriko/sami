@@ -20,7 +20,7 @@ One-liner: "Не мотивация. Структура."
 | # | Агент | Платформа | Модель | Расписание |
 |---|---|---|---|---|
 | 1 | **Strategist** | launchd на Mac | Claude Sonnet 4.6 | 12:30 МСК |
-| 2 | **Community** | Railway 24/7 | — | 07:30/12:00/19:00 посты, 19:00 поиск |
+| 2 | **Community** | Railway 24/7 | — | Поиск и посты вручную через бота |
 | 3 | **Analytics** | модуль в community | — | 00:30 ежедневно + вс 10:00 + при старте |
 
 ### Как агенты связаны
@@ -34,10 +34,10 @@ Strategist (Mac, 12:30 МСК)
 
 Community Bot (Railway 24/7)
   |- читает: COMMUNITY_PACKET -> YouTube search keywords
-  |- cron: 07:30 стретчинг, 12:00 силовая, 19:00 мобильность
+  |- поиск и публикация: вручную через кнопки бота (автокроны отключены)
   |- модерация: капча, auto-delete ссылок, /report
   |- HTTP :3000 -> /report/community, /report/analytics, /health
-  |- постит: @sami_daily канал
+  |- постит: @sami_workouts канал
 
 Analytics (модуль в community, Railway)
   |- при старте + 00:30: собирает метрики -> reports/analytics/.internal/latest.json
