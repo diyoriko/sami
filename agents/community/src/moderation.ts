@@ -8,6 +8,7 @@ import {
   upsertMember, setMemberGoal, addWarning, muteMember,
   recordCompletion, getCompletionCount, hasUserCompleted, getPostByMessageId,
   saveCaptcha, getCaptcha, deleteCaptcha, getExpiredCaptchas,
+  getLatestPostForDate,
 } from './db';
 
 // ─── CAPTCHA ──────────────────────────────────────────────────────────────────
@@ -224,11 +225,26 @@ export function registerModeration(bot: Bot): void {
 
     const response = GOAL_RESPONSES[goal] ?? 'Добро пожаловать! Рады тебя видеть.';
 
+    // Build welcome message with link to today's training if available
+    const { todayMsk } = await import('./dates');
+    const latestPost = getLatestPostForDate(todayMsk());
+    const CATEGORY_RU: Record<string, string> = {
+      stretching: 'стретчинг', strength: 'силовая', mobility: 'мобильность',
+    };
+
+    let welcomeText = `${response}\n\n_Нажми «Я сделаль» под видео, когда закончишь тренировку._`;
+    if (latestPost) {
+      const catLabel = CATEGORY_RU[latestPost.category] ?? latestPost.category;
+      // Public channel: @sami_workouts -> t.me/sami_workouts/N; private: t.me/c/{id}/N
+      const channelHandle = config.TELEGRAM_CHANNEL_ID.startsWith('@')
+        ? config.TELEGRAM_CHANNEL_ID.slice(1)
+        : `c/${config.TELEGRAM_CHANNEL_ID.replace(/^-100/, '')}`;
+      const postLink = `https://t.me/${channelHandle}/${latestPost.channel_message_id}`;
+      welcomeText += `\n\n*Сегодняшняя тренировка (${catLabel}):*\n[Перейти к видео](${postLink})`;
+    }
+
     try {
-      await ctx.editMessageText(
-        `${response}\n\n_Нажми «Я сделаль» под видео, когда закончишь тренировку._`,
-        { parse_mode: 'Markdown' }
-      );
+      await ctx.editMessageText(welcomeText, { parse_mode: 'Markdown' });
     } catch {}
   });
 

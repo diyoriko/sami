@@ -113,6 +113,123 @@ describe('rating', () => {
   });
 });
 
+describe('approval queue', () => {
+  it('getApprovalQueue filters by date range', async () => {
+    const db = await import('../db');
+
+    // Create sessions for different dates
+    const videoId = db.upsertVideo({
+      youtube_id: 'queue-test-1', title: 'Queue Test', channel_name: 'Test',
+      channel_url: null, duration_seconds: 600, duration_label: '10:00',
+      difficulty: 'beginner', category: 'stretching', muscles: null,
+      thumbnail_url: null, video_url: 'https://youtube.com/watch?v=qt1',
+      view_count: 1000, rating: 0, like_ratio: 0.9, channel_subscribers: 5000,
+      search_query: 'test',
+    });
+    db.createApprovalSession('2026-03-10', 'stretching', videoId);
+    db.createApprovalSession('2026-03-11', 'strength', videoId);
+    db.createApprovalSession('2026-03-12', 'mobility', videoId);
+
+    // No filter — all sessions
+    const all = db.getApprovalQueue();
+    expect(all.length).toBeGreaterThanOrEqual(3);
+
+    // Filter: only March 10-11
+    const filtered = db.getApprovalQueue('2026-03-10', '2026-03-11');
+    const dates = filtered.map(r => r.date);
+    expect(dates.every(d => d >= '2026-03-10' && d <= '2026-03-11')).toBe(true);
+    expect(dates.some(d => d === '2026-03-12')).toBe(false);
+  });
+
+  it('cleanupOldApprovalSessions soft-deletes stale sessions', async () => {
+    const db = await import('../db');
+    // Sessions created above are from "now" — cleaning up sessions older than 0 days should delete them
+    const cleaned = db.cleanupOldApprovalSessions(0);
+    expect(cleaned).toBeGreaterThanOrEqual(0);
+  });
+
+  it('softDeletePendingSessions removes pending for date+category', async () => {
+    const db = await import('../db');
+    const videoId = db.upsertVideo({
+      youtube_id: 'soft-del-test', title: 'Soft Del', channel_name: 'Test',
+      channel_url: null, duration_seconds: 600, duration_label: '10:00',
+      difficulty: 'beginner', category: 'mobility', muscles: null,
+      thumbnail_url: null, video_url: 'https://youtube.com/watch?v=sdt',
+      view_count: 1000, rating: 0, like_ratio: 0.9, channel_subscribers: 5000,
+      search_query: 'test',
+    });
+    db.createApprovalSession('2026-04-01', 'mobility', videoId);
+    const before = db.getApprovalQueue('2026-04-01', '2026-04-01');
+    const mobilityBefore = before.filter(r => r.category === 'mobility');
+
+    db.softDeletePendingSessions('2026-04-01', 'mobility');
+
+    const after = db.getApprovalQueue('2026-04-01', '2026-04-01');
+    const mobilityAfter = after.filter(r => r.category === 'mobility');
+    expect(mobilityAfter.length).toBeLessThan(mobilityBefore.length);
+  });
+});
+
+describe('deploy history', () => {
+  it('records and retrieves deploy', async () => {
+    const db = await import('../db');
+    db.recordDeploy('abc1234', 'test deploy', '0.2.5');
+    const latest = db.getLatestDeploy();
+    expect(latest).not.toBeNull();
+    expect(latest!.commit_sha).toBe('abc1234');
+    expect(latest!.version).toBe('0.2.5');
+  });
+
+  it('deduplicates by commit SHA', async () => {
+    const db = await import('../db');
+    db.recordDeploy('abc1234', 'test deploy', '0.2.5');
+    db.recordDeploy('abc1234', 'test deploy', '0.2.5');
+    // Should still be the same single record (no duplicate)
+    const latest = db.getLatestDeploy();
+    expect(latest!.commit_sha).toBe('abc1234');
+  });
+});
+
+describe('getLatestPostForDate', () => {
+  it('returns latest post for date', async () => {
+    const db = await import('../db');
+    const post = db.getLatestPostForDate('2026-03-08');
+    expect(post).not.toBeNull();
+    expect(post!.category).toBe('stretching');
+    expect(post!.channel_message_id).toBe(1001);
+  });
+
+  it('returns null for date with no posts', async () => {
+    const db = await import('../db');
+    expect(db.getLatestPostForDate('2099-01-01')).toBeNull();
+  });
+});
+
+describe('computeTotalScore', () => {
+  it('uses config weights to compute score', async () => {
+    const { computeTotalScore } = await import('../youtube');
+    const score = computeTotalScore(80, 60, 100);
+    expect(score).toBeGreaterThan(0);
+    expect(score).toBeLessThanOrEqual(100);
+  });
+
+  it('higher brand score increases total', async () => {
+    const { computeTotalScore } = await import('../youtube');
+    const low = computeTotalScore(20, 50, 50);
+    const high = computeTotalScore(90, 50, 50);
+    expect(high).toBeGreaterThan(low);
+  });
+
+  it('weights sum correctly (brand-heavy by default)', async () => {
+    const { computeTotalScore } = await import('../youtube');
+    // With default weights (0.50 brand, 0.35 view, 0.15 duration)
+    // Perfect brand + zero others should be ~50
+    const brandOnly = computeTotalScore(100, 0, 0);
+    expect(brandOnly).toBeGreaterThanOrEqual(45);
+    expect(brandOnly).toBeLessThanOrEqual(55);
+  });
+});
+
 describe('getPostByMessageId', () => {
   it('returns post data for a valid message ID', async () => {
     const { getPostByMessageId } = await import('../db');

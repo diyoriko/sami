@@ -2,7 +2,6 @@ import * as cron from 'node-cron';
 import { Bot } from 'grammy';
 import { getConfig } from './config';
 import { createLogger } from './logger';
-import { postVideoToChannel } from './poster';
 import { runApprovalFlow } from './approval';
 import { readCommunityPacket, writeCommunityReport } from './strategist-sync';
 import { runDailyAnalytics, runWeeklyAnalytics } from './analytics';

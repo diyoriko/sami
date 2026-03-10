@@ -264,11 +264,41 @@ export function registerApprovalCallbacks(bot: Bot): void {
       .text('✅ Выбрать', `approve:${newSessionId}`)
       .text('🔄 Другое', `refresh:${newSessionId}`);
 
-    try {
-      const msg = await sendApprovalCard(ctx.api, config.TELEGRAM_ADMIN_USER_ID, v.thumbnail_url, text, keyboard);
-      setApprovalMessageId(newSessionId, msg.message_id);
-    } catch (err) {
-      refreshLog.error('refresh send failed', { error: String(err) });
+    // Edit existing message instead of sending a new one
+    const messageId = ctx.callbackQuery?.message?.message_id;
+    if (messageId) {
+      try {
+        if (v.thumbnail_url) {
+          await ctx.api.editMessageMedia(config.TELEGRAM_ADMIN_USER_ID, messageId, {
+            type: 'photo',
+            media: v.thumbnail_url,
+            caption: text,
+            parse_mode: 'Markdown',
+          }, { reply_markup: keyboard });
+        } else {
+          await ctx.api.editMessageText(config.TELEGRAM_ADMIN_USER_ID, messageId, text, {
+            parse_mode: 'Markdown',
+            reply_markup: keyboard,
+          });
+        }
+        setApprovalMessageId(newSessionId, messageId);
+      } catch (err) {
+        // Fallback: send new message if edit fails (e.g. switching photo<->text)
+        refreshLog.warn('edit failed, sending new message', { error: String(err) });
+        try {
+          const msg = await sendApprovalCard(ctx.api, config.TELEGRAM_ADMIN_USER_ID, v.thumbnail_url, text, keyboard);
+          setApprovalMessageId(newSessionId, msg.message_id);
+        } catch (err2) {
+          refreshLog.error('refresh send failed', { error: String(err2) });
+        }
+      }
+    } else {
+      try {
+        const msg = await sendApprovalCard(ctx.api, config.TELEGRAM_ADMIN_USER_ID, v.thumbnail_url, text, keyboard);
+        setApprovalMessageId(newSessionId, msg.message_id);
+      } catch (err) {
+        refreshLog.error('refresh send failed', { error: String(err) });
+      }
     }
   });
 

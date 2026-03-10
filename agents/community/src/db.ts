@@ -450,6 +450,15 @@ export function recordPost(date: string, category: string, videoId: number, chan
   return Number(result.lastInsertRowid);
 }
 
+export function getLatestPostForDate(date: string): { category: string; channel_message_id: number } | null {
+  const row = getDb().prepare(`
+    SELECT category, channel_message_id FROM posts
+    WHERE date = ? AND channel_message_id IS NOT NULL
+    ORDER BY posted_at DESC LIMIT 1
+  `).get(date) as { category: string; channel_message_id: number } | undefined;
+  return row ?? null;
+}
+
 export function wasPostedToday(date: string, category: string): boolean {
   const row = getDb().prepare(`
     SELECT COUNT(*) as cnt FROM posts WHERE date = ? AND category = ?
@@ -865,10 +874,14 @@ export function getPendingUgcCount(): number {
 }
 
 export function getLastStrategistTimestamp(): string | null {
-  const row = getDb().prepare(
-    `SELECT created_at FROM strategist_packets ORDER BY created_at DESC LIMIT 1`
-  ).get() as { created_at: string } | undefined;
-  return row?.created_at ?? null;
+  try {
+    const row = getDb().prepare(
+      `SELECT created_at FROM strategist_packets ORDER BY created_at DESC LIMIT 1`
+    ).get() as { created_at: string } | undefined;
+    return row?.created_at ?? null;
+  } catch {
+    return null;
+  }
 }
 
 // --- Deploy history ---
