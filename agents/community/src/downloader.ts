@@ -202,15 +202,44 @@ async function probeVideoMeta(filePath: string): Promise<VideoMeta> {
   }
 }
 
+/** Check if video codec is H.264. If not, re-encode with ffmpeg. */
+async function ensureH264(filePath: string): Promise<string> {
+  try {
+    const { stdout } = await execFileAsync('ffprobe', [
+      '-v', 'quiet', '-select_streams', 'v:0',
+      '-show_entries', 'stream=codec_name',
+      '-print_format', 'json', filePath,
+    ], { timeout: 10_000 });
+    const codec = JSON.parse(stdout).streams?.[0]?.codec_name;
+    if (codec === 'h264') return filePath;
+
+    log.info(`video codec is ${codec}, re-encoding to H.264`);
+    const outPath = filePath.replace(/\.mp4$/, '.h264.mp4');
+    await execFileAsync('ffmpeg', [
+      '-i', filePath, '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+      '-c:a', 'aac', '-movflags', '+faststart', '-y', outPath,
+    ], { timeout: 300_000 }); // 5 min max
+    // Replace original
+    fs.unlinkSync(filePath);
+    fs.renameSync(outPath, filePath);
+    log.info('re-encoded to H.264 successfully');
+    return filePath;
+  } catch (err) {
+    log.warn('H.264 check/re-encode failed, using original', { error: String(err) });
+    return filePath;
+  }
+}
+
 export async function downloadVideo(youtubeUrl: string, youtubeId: string): Promise<DownloadResult> {
   const ytDlp = findYtDlp();
   const tmpDir = os.tmpdir();
   const outTemplate = path.join(tmpDir, `sami-${youtubeId}.%(ext)s`);
 
-  // Target 480p mp4.
+  // Target 480p H.264 mp4 — Telegram requires H.264/AVC, not VP9/AV1.
+  // Prefer avc1 (H.264), fall back to any mp4, then re-encode if needed.
   const baseArgs = [
     youtubeUrl,
-    '-f', 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best[height<=480]',
+    '-f', 'bestvideo[height<=480][vcodec^=avc1]+bestaudio[ext=m4a]/bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best[height<=480]',
     '--merge-output-format', 'mp4',
     '-o', outTemplate,
     '--no-playlist',
@@ -272,6 +301,9 @@ export async function downloadVideo(youtubeUrl: string, youtubeId: string): Prom
   if (!fs.existsSync(filePath)) {
     throw new Error(`Downloaded file not found: ${filePath}`);
   }
+
+  // Ensure H.264 codec for Telegram compatibility (VP9/AV1 = black screen)
+  await ensureH264(filePath);
 
   const { size } = fs.statSync(filePath);
 
