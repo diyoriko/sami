@@ -8,8 +8,8 @@
 set -euo pipefail
 
 BASE_URL="${SAMI_BOT_URL:-https://courageous-happiness-production.up.railway.app}"
-WAIT_SEC="${1:-0}"
-if [[ "$1" == "--wait" ]]; then
+WAIT_SEC=0
+if [[ "${1:-}" == "--wait" ]]; then
   WAIT_SEC="${2:-180}"
 fi
 POLL_INTERVAL=15
