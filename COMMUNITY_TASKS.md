@@ -63,68 +63,19 @@
 - [x] backlog.html синхронизирован через sync-backlog-html.mjs
 - [x] Стратег: experiments.json + owner-decisions.json в контексте
 
----
+**v0.2.5 (10.03):**
+- [x] Deploy tracking: deploy_history в SQLite, версия/коммит в /health
+- [x] Стратег → COMMUNITY_TASKS.md: BACKLOG_PROPOSALS + extract-backlog-proposals.mjs
+- [x] Бот → бэклог после деплоя: запись в DB при старте
+- [x] backlog.html: file:// использует staticData, поддержка статуса "завершён"
 
-## SPRINT 2 — стабильность и polish
-
-Статус: **завершён** | Текущая версия: v0.2.4 | Прогресс: 10/10
-
-### P1: Очередь в "Статус" — только сегодня/завтра
-
-- [x] **Фильтровать очередь по дате** — getApprovalQueue(fromDate, toDate), показывает только сегодня/завтра
-- [x] **Очистка старых сессий** — cleanupOldApprovalSessions(2) при старте бота
-- [x] **Дедупликация в очереди** — softDeletePendingSessions() при refresh
-
-### P1: Аудит параметров поиска видео
-
-- [x] **Ревизия youtube.ts** — scoring weights и duration range в config.ts, паттерны проверены
-
-### P1: Автоматизация синхронизации бэклога
-
-- [x] **Стратег → обновляет backlog.html** — agents/sync-backlog-html.mjs
-- [x] **Стратег → обновляет COMMUNITY_TASKS.md** — BACKLOG_PROPOSALS в промпте + extract-backlog-proposals.mjs
-- [x] **Бот → обновляет бэклог после деплоя** — deploy_history в SQLite, версия в /health, запись при старте
-
-### P1: backlog.html — синхронизация с реальностью
-
-- [x] **backlog.html актуализирован** — staticData регенерирован через sync-backlog-html.mjs
-
-### P1: Стратег — память и feedback loop
-
-- [x] **Трекер экспериментов:** experiments.json в контексте стратега
-- [x] **Лог решений владельца:** owner-decisions.json в контексте стратега
-
----
-
-## SPRINT 3 — операционка, качество, quick wins
-
-Статус: **в работе** | Фокус: надёжность процессов, качество кода, первые UX-улучшения
-
-### P1: Мониторинг деплоя (Web Fetch)
-
-- [x] **Health check после пуша** — agents/check-deploy.sh: проверяет /health, /report/analytics, /report/community, strategist latest.json
-- [x] **Проверка endpoints** — включена в check-deploy.sh, ждёт нового коммита через --wait
-- [x] **Мониторинг стратега** — check-deploy.sh проверяет latest.json на свежесть
-
-### P1: Code quality (/simplify)
-
-- [x] **Аудит кода после Sprint 2** — проведён аудит youtube.ts, db.ts, approval.ts, bot-menu.ts, scheduler.ts
-- [x] **Тесты на новый функционал** — 10 новых тестов (47 всего): getApprovalQueue, cleanupOldApprovalSessions, softDeletePendingSessions, computeTotalScore, deploy history, getLatestPostForDate
-
-### P1: Стратег — реальный ресерч (Web Search)
-
-- [x] **Дайджест конкурентов перед запуском стратега** — competitor-digest.json в контексте стратега, данные из Web Search
-- [x] **Ликвидировать галлюцинации** — стратег получает реальные данные из дайджеста вместо выдуманных
-- [x] **Бенчмарки** — метрики по размерам каналов в competitor-digest.json
-
-### P1: Welcome-поток
-
-- [x] **Авто-сообщение после капчи** — после goal quiz бот отправляет ссылку на сегодняшнюю тренировку
-- [x] **Привязка к расписанию** — показывает последний опубликованный пост за сегодня с категорией
-
-### P1: UX — кнопка "Другое" (approval flow)
-
-- [x] **Редактирование вместо нового сообщения** — editMessageMedia заменяет карточку in-place, fallback на sendPhoto
+**v0.3.0 (10.03):**
+- [x] Мониторинг деплоя: agents/check-deploy.sh (health, endpoints, стратег)
+- [x] Аудит кода: youtube.ts, db.ts, approval.ts, bot-menu.ts, scheduler.ts
+- [x] 10 новых тестов (47 всего)
+- [x] Competitor digest: реальные фитнес-каналы + бенчмарки в контексте стратега
+- [x] Welcome-поток: ссылка на тренировку после капчи
+- [x] Кнопка "Другое": editMessageMedia вместо нового сообщения
 
 ---
 
@@ -155,6 +106,15 @@
 ### P2: Рейтинг — доработка
 
 - [ ] Пересчёт рейтинга при росте completions
+
+### P2: Технический долг (из аудита v0.3.0)
+
+- [ ] **Shared constants** — вынести CATEGORY_RU, DIFFICULTY_RU, escapeMarkdown в общий модуль (дубли в 3 файлах)
+- [ ] **newMembersToday в DB** — счётчик новых участников теряется при рестарте (scheduler.ts)
+- [ ] **MarkdownV2** — перейти с deprecated MarkdownV1 на V2 или HTML в approval cards
+- [ ] **Channel URL из API** — использовать channelId вместо display name для URL (youtube.ts)
+- [ ] **Типизация аналитики** — убрать `as any` касты в getChannelStats/getWeeklyStats (db.ts)
+- [ ] **Scoring cap** — ограничить штраф за weight-loss паттерны (сейчас stackable без лимита)
 
 ### P3: Монетизация
 

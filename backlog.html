@@ -844,165 +844,33 @@ const staticData = {
         "backlog.html синхронизирован через sync-backlog-html.mjs",
         "Стратег: experiments.json + owner-decisions.json в контексте"
       ]
+    },
+    {
+      "version": "v0.2.5",
+      "date": "10.03",
+      "status": "deployed",
+      "items": [
+        "Deploy tracking: deploy_history в SQLite, версия/коммит в /health",
+        "Стратег → COMMUNITY_TASKS.md: BACKLOG_PROPOSALS + extract-backlog-proposals.mjs",
+        "Бот → бэклог после деплоя: запись в DB при старте",
+        "backlog.html: file:// использует staticData, поддержка статуса \"завершён\""
+      ]
+    },
+    {
+      "version": "v0.3.0",
+      "date": "10.03",
+      "status": "deployed",
+      "items": [
+        "Мониторинг деплоя: agents/check-deploy.sh (health, endpoints, стратег)",
+        "Аудит кода: youtube.ts, db.ts, approval.ts, bot-menu.ts, scheduler.ts",
+        "10 новых тестов (47 всего)",
+        "Competitor digest: реальные фитнес-каналы + бенчмарки в контексте стратега",
+        "Welcome-поток: ссылка на тренировку после капчи",
+        "Кнопка \"Другое\": editMessageMedia вместо нового сообщения"
+      ]
     }
   ],
   "sprints": [
-    {
-      "name": "Sprint 2 — стабильность и polish",
-      "status": "completed",
-      "groups": [
-        {
-          "title": "Очередь в \"Статус\" — только сегодня/завтра",
-          "priority": "p1",
-          "tasks": [
-            {
-              "text": "Фильтровать очередь по дате",
-              "done": true
-            },
-            {
-              "text": "Очистка старых сессий",
-              "done": true
-            },
-            {
-              "text": "Дедупликация в очереди",
-              "done": true
-            }
-          ]
-        },
-        {
-          "title": "Аудит параметров поиска видео",
-          "priority": "p1",
-          "tasks": [
-            {
-              "text": "Ревизия youtube.ts",
-              "done": true
-            }
-          ]
-        },
-        {
-          "title": "Автоматизация синхронизации бэклога",
-          "priority": "p1",
-          "tasks": [
-            {
-              "text": "Стратег → обновляет backlog.html",
-              "done": true
-            },
-            {
-              "text": "Стратег → обновляет COMMUNITY_TASKS.md",
-              "done": true
-            },
-            {
-              "text": "Бот → обновляет бэклог после деплоя",
-              "done": true
-            }
-          ]
-        },
-        {
-          "title": "backlog.html — синхронизация с реальностью",
-          "priority": "p1",
-          "tasks": [
-            {
-              "text": "backlog.html актуализирован",
-              "done": true
-            }
-          ]
-        },
-        {
-          "title": "Стратег — память и feedback loop",
-          "priority": "p1",
-          "tasks": [
-            {
-              "text": "Трекер экспериментов:",
-              "done": true
-            },
-            {
-              "text": "Лог решений владельца:",
-              "done": true
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "Sprint 3 — операционка, качество, quick wins",
-      "status": "active",
-      "groups": [
-        {
-          "title": "Мониторинг деплоя (Web Fetch)",
-          "priority": "p1",
-          "tasks": [
-            {
-              "text": "Health check после пуша",
-              "done": true
-            },
-            {
-              "text": "Проверка endpoints",
-              "done": true
-            },
-            {
-              "text": "Мониторинг стратега",
-              "done": true
-            }
-          ]
-        },
-        {
-          "title": "Code quality (/simplify)",
-          "priority": "p1",
-          "tasks": [
-            {
-              "text": "Аудит кода после Sprint 2",
-              "done": true
-            },
-            {
-              "text": "Тесты на новый функционал",
-              "done": true
-            }
-          ]
-        },
-        {
-          "title": "Стратег — реальный ресерч (Web Search)",
-          "priority": "p1",
-          "tasks": [
-            {
-              "text": "Дайджест конкурентов перед запуском стратега",
-              "done": true
-            },
-            {
-              "text": "Ликвидировать галлюцинации",
-              "done": true
-            },
-            {
-              "text": "Бенчмарки",
-              "done": true
-            }
-          ]
-        },
-        {
-          "title": "Welcome-поток",
-          "priority": "p1",
-          "tasks": [
-            {
-              "text": "Авто-сообщение после капчи",
-              "done": true
-            },
-            {
-              "text": "Привязка к расписанию",
-              "done": true
-            }
-          ]
-        },
-        {
-          "title": "UX — кнопка \"Другое\" (approval flow)",
-          "priority": "p1",
-          "tasks": [
-            {
-              "text": "Редактирование вместо нового сообщения",
-              "done": true
-            }
-          ]
-        }
-      ]
-    },
     {
       "name": "Sprint 4 — UGC, профили, фильтрация",
       "status": "planned",
@@ -1075,6 +943,36 @@ const staticData = {
           "tasks": [
             {
               "text": "Пересчёт рейтинга при росте completions",
+              "done": false
+            }
+          ]
+        },
+        {
+          "title": "Технический долг (из аудита v0.3.0)",
+          "priority": "p2",
+          "tasks": [
+            {
+              "text": "Shared constants",
+              "done": false
+            },
+            {
+              "text": "newMembersToday в DB",
+              "done": false
+            },
+            {
+              "text": "MarkdownV2",
+              "done": false
+            },
+            {
+              "text": "Channel URL из API",
+              "done": false
+            },
+            {
+              "text": "Типизация аналитики",
+              "done": false
+            },
+            {
+              "text": "Scoring cap",
               "done": false
             }
           ]
