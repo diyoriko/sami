@@ -47,21 +47,21 @@ async function formatCaption(video: VideoRow): Promise<string> {
   const rating = updateVideoRating(video.id);
   const ratingStr = formatRating(rating);
 
-  const tagParts = [
-    `🏷 ${categoryRu}`,
-    `⏱ ${video.duration_label ?? '?'}`,
-    `💪 ${muscles}`,
-    `📊 ${difficultyRu}`,
-    `🎒 ${equipmentTag}`,
+  const tagLines = [
+    `\`🏷 ${categoryRu}\``,
+    `\`⏱ ${video.duration_label ?? '?'}\``,
+    `\`💪 ${muscles}\``,
+    `\`📊 ${difficultyRu}\``,
+    `\`🎒 ${equipmentTag}\``,
   ];
 
   const lines = [
     `*${title}*`,
     '',
-    `\`${tagParts.join('  ')}\``,
+    ...tagLines,
     ...(ratingStr ? [`★ ${ratingStr}`] : []),
     '',
-    `${channelName} · [оригинал](${video.video_url})`,
+    `Автор: [${channelName}](${video.video_url})`,
   ];
 
   return lines.join('\n');

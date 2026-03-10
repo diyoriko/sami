@@ -25,6 +25,7 @@ const ConfigSchema = z.object({
   ANALYTICS_WEEKLY_DIR: z.string().default('../../reports/analytics'),
   // Strategist agent
   CRON_STRATEGIST: z.string().default('30 12 * * *'),           // 12:30 MSK — daily strategist run
+  STRATEGIST_API_KEY: z.string().optional(),                     // separate key for /packet endpoint
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

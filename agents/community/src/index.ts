@@ -152,7 +152,8 @@ async function main(): Promise<void> {
     // POST /packet — receive COMMUNITY_PACKET from Mac strategist
     if (req.url === '/packet' && req.method === 'POST') {
       const authHeader = req.headers['x-admin-token'];
-      if (authHeader !== config.TELEGRAM_BOT_TOKEN) {
+      const expectedToken = config.STRATEGIST_API_KEY ?? config.TELEGRAM_BOT_TOKEN;
+      if (authHeader !== expectedToken) {
         res.writeHead(401, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'unauthorized' }));
         return;
@@ -224,12 +225,17 @@ async function main(): Promise<void> {
 
       const lines = ['*Sami Bot запущен*'];
       if (commitMsg) {
-        lines.push('', `\`${commitSha}\` ${commitMsg}`);
+        // Clean up commit message: remove Co-Authored-By, technical noise
+        const cleanMsg = commitMsg
+          .split('\n')
+          .filter(l => !l.startsWith('Co-Authored-By:') && l.trim() !== '')
+          .join(' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (cleanMsg) {
+          lines.push('', `\`${commitSha}\` ${cleanMsg}`);
+        }
       }
-      lines.push(
-        '',
-        'Команды: /status /search /reset /post /analytics',
-      );
 
       bot.api.sendMessage(
         config.TELEGRAM_ADMIN_USER_ID,

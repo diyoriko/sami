@@ -37,7 +37,6 @@ function migrate(db: Database.Database): void {
   try { db.exec('ALTER TABLE videos ADD COLUMN channel_subscribers INTEGER DEFAULT 0'); } catch { /* already exists */ }
   // Add post_type to posts table (video|link)
   try { db.exec(`ALTER TABLE posts ADD COLUMN post_type TEXT DEFAULT 'video'`); } catch { /* already exists */ }
-
   db.exec(`
     CREATE TABLE IF NOT EXISTS videos (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -117,7 +116,9 @@ function migrate(db: Database.Database): void {
       first_action_at TEXT,
       warning_count INTEGER DEFAULT 0,
       is_muted INTEGER DEFAULT 0,
-      muted_until TEXT
+      muted_until TEXT,
+      last_activity_at TEXT,
+      completions_total INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS ugc_submissions (
@@ -177,6 +178,10 @@ function migrate(db: Database.Database): void {
     -- Index for expired captcha cleanup
     CREATE INDEX IF NOT EXISTS idx_captcha_expires ON pending_captchas(expires_at);
   `);
+
+  // Post-create migrations for existing DBs (columns added in CREATE TABLE for new DBs)
+  try { db.exec('ALTER TABLE members ADD COLUMN last_activity_at TEXT'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE members ADD COLUMN completions_total INTEGER DEFAULT 0'); } catch { /* already exists */ }
 }
 
 // --- Captcha state (persistent) ---
@@ -347,6 +352,47 @@ export function markApprovalPosted(date: string, category: string): number {
   return result.changes;
 }
 
+export interface QueueItem {
+  date: string;
+  category: string;
+  status: string;
+  title: string;
+  video_url: string;
+}
+
+export function getApprovalQueue(): QueueItem[] {
+  return getDb().prepare(`
+    SELECT a.date, a.category, a.status, v.title, v.video_url
+    FROM approval_sessions a
+    JOIN videos v ON v.id = a.video_id
+    WHERE a.status IN ('approved', 'pending')
+    ORDER BY a.date ASC, CASE a.category
+      WHEN 'stretching' THEN 1
+      WHEN 'strength' THEN 2
+      WHEN 'mobility' THEN 3
+      ELSE 4 END
+  `).all() as QueueItem[];
+}
+
+export interface RecentPost {
+  date: string;
+  category: string;
+  title: string;
+  post_type: string;
+  completions: number;
+}
+
+export function getRecentPosts(days: number = 7): RecentPost[] {
+  return getDb().prepare(`
+    SELECT p.date, p.category, v.title, p.post_type,
+      (SELECT COUNT(*) FROM completions c WHERE c.post_id = p.id) as completions
+    FROM posts p
+    JOIN videos v ON v.id = p.video_id
+    WHERE p.date >= date('now', '-' || ? || ' days')
+    ORDER BY p.date DESC, p.category
+  `).all(days) as RecentPost[];
+}
+
 // --- Post helpers ---
 
 export function recordPost(date: string, category: string, videoId: number, channelMessageId: number, postType: 'video' | 'link' = 'video'): number {
@@ -500,15 +546,108 @@ export function getUniqueCompletionUsersForDate(date: string): number {
   return row.cnt;
 }
 
+// --- Extended analytics queries ---
+
+export interface TopVideoByCompletions {
+  video_id: number;
+  title: string;
+  category: string;
+  completions: number;
+}
+
+export function getTopVideosByCompletions(date: string, limit: number = 5): TopVideoByCompletions[] {
+  return getDb().prepare(`
+    SELECT v.id as video_id, v.title, p.category, COUNT(c.id) as completions
+    FROM completions c
+    JOIN posts p ON p.id = c.post_id
+    JOIN videos v ON v.id = p.video_id
+    WHERE p.date = ?
+    GROUP BY p.video_id
+    ORDER BY completions DESC
+    LIMIT ?
+  `).all(date, limit) as TopVideoByCompletions[];
+}
+
+export function getRetention(todayDate: string, yesterdayDate: string): { yesterday_active: number; returned_today: number } {
+  const row = getDb().prepare(`
+    SELECT
+      (SELECT COUNT(DISTINCT telegram_user_id) FROM completions c
+       JOIN posts p ON p.id = c.post_id WHERE p.date = ?) as yesterday_active,
+      (SELECT COUNT(DISTINCT c1.telegram_user_id) FROM completions c1
+       JOIN posts p1 ON p1.id = c1.post_id
+       WHERE p1.date = ?
+       AND c1.telegram_user_id IN (
+         SELECT DISTINCT c2.telegram_user_id FROM completions c2
+         JOIN posts p2 ON p2.id = c2.post_id WHERE p2.date = ?
+       )) as returned_today
+  `).get(yesterdayDate, todayDate, yesterdayDate) as { yesterday_active: number; returned_today: number };
+  return row;
+}
+
+export interface CompletionsByCategory {
+  category: string;
+  completions: number;
+  users: number;
+}
+
+export function getCompletionsByCategory(date: string): CompletionsByCategory[] {
+  return getDb().prepare(`
+    SELECT p.category, COUNT(c.id) as completions, COUNT(DISTINCT c.telegram_user_id) as users
+    FROM completions c
+    JOIN posts p ON p.id = c.post_id
+    WHERE p.date = ?
+    GROUP BY p.category
+    ORDER BY p.category
+  `).all(date) as CompletionsByCategory[];
+}
+
+export interface PostTypeBreakdown {
+  post_type: string;
+  count: number;
+}
+
+export function getPostTypeBreakdown(date: string): PostTypeBreakdown[] {
+  return getDb().prepare(`
+    SELECT post_type, COUNT(*) as count FROM posts WHERE date = ? GROUP BY post_type
+  `).all(date) as PostTypeBreakdown[];
+}
+
+export interface CumulativeStats {
+  total_completions: number;
+  total_active_users: number;
+  total_posts: number;
+}
+
+export function getCumulativeStats(): CumulativeStats {
+  return getDb().prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM completions) as total_completions,
+      (SELECT COUNT(DISTINCT telegram_user_id) FROM completions) as total_active_users,
+      (SELECT COUNT(*) FROM posts) as total_posts
+  `).get() as CumulativeStats;
+}
+
 // --- Completion helpers ("Сделано" button) ---
 
 export function recordCompletion(postId: number, videoId: number, userId: number): boolean {
+  const db = getDb();
   try {
-    getDb().prepare(`
+    const result = db.prepare(`
       INSERT INTO completions (post_id, video_id, telegram_user_id)
       VALUES (?, ?, ?)
       ON CONFLICT(post_id, telegram_user_id) DO NOTHING
     `).run(postId, videoId, userId);
+
+    // Update member activity tracking (only if actually inserted)
+    if (result.changes > 0) {
+      db.prepare(`
+        UPDATE members SET
+          last_activity_at = datetime('now'),
+          completions_total = COALESCE(completions_total, 0) + 1
+        WHERE telegram_user_id = ?
+      `).run(userId);
+    }
+
     return true;
   } catch {
     return false;

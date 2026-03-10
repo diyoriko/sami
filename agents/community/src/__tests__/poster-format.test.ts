@@ -17,8 +17,8 @@ describe('post format vision compliance', () => {
     expect(posterSource).not.toContain('#стретчинг');
   });
 
-  it('uses monospace backtick tags with emojis', () => {
-    expect(posterSource).toContain('`${tagParts.join');
+  it('uses monospace backtick tags on separate lines', () => {
+    expect(posterSource).toContain('tagLines');
     expect(posterSource).toMatch(/🏷/);
     expect(posterSource).toMatch(/⏱/);
     expect(posterSource).toMatch(/💪/);
@@ -35,9 +35,10 @@ describe('post format vision compliance', () => {
     expect(posterSource).toContain("'Я сделаль'");
   });
 
-  it('has YouTube link labeled "оригинал"', () => {
-    expect(posterSource).toContain('оригинал');
+  it('has author line with linked channel name', () => {
+    expect(posterSource).toContain('Автор:');
     expect(posterSource).toContain('video.video_url');
+    expect(posterSource).toContain('channelName');
   });
 
   it('disables link preview for text fallback posts', () => {
@@ -84,6 +85,14 @@ describe('analytics', () => {
     expect(analyticsSource).toContain('completions_today');
     expect(analyticsSource).toContain('completion_users');
     expect(analyticsSource).toContain('getCompletionCountForDate');
+  });
+
+  it('reports extended metrics', () => {
+    expect(analyticsSource).toContain('getTopVideosByCompletions');
+    expect(analyticsSource).toContain('getRetention');
+    expect(analyticsSource).toContain('getCompletionsByCategory');
+    expect(analyticsSource).toContain('getPostTypeBreakdown');
+    expect(analyticsSource).toContain('getCumulativeStats');
   });
 
   it('has no checkin references', () => {

@@ -254,9 +254,10 @@ export async function downloadVideo(youtubeUrl: string, youtubeId: string): Prom
   if (!succeeded) {
     consecutiveFailures++;
     const err = new Error(`yt-dlp all attempts failed: ${lastError.slice(0, 300)}`);
-    if (consecutiveFailures >= 3 && !adminNotified) {
+    if (!adminNotified) {
       adminNotified = true;
-      notifyAdmin?.(`Видео не загружаются ${consecutiveFailures} раз подряд. Проверь прокси (YT_PROXY) и логи Railway.`);
+      const reason = lastError.slice(0, 200);
+      notifyAdmin?.(`Видео не загрузилось (фейл #${consecutiveFailures}):\n\`${reason}\``);
     }
     throw err;
   }

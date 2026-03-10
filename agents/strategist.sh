@@ -633,19 +633,23 @@ PY
 )"
 
   if [[ -n "$PACKET_JSON" && "$PACKET_JSON" != "{}" ]]; then
-    BOT_TOKEN="$(grep -m1 'TELEGRAM_BOT_TOKEN=' "$HOME/.config/sami/community.env" 2>/dev/null | cut -d= -f2-)"
-    if [[ -n "$BOT_TOKEN" ]]; then
+    # Use STRATEGIST_API_KEY if available, fall back to TELEGRAM_BOT_TOKEN
+    API_KEY="$(grep -m1 'STRATEGIST_API_KEY=' "$HOME/.config/sami/community.env" 2>/dev/null | cut -d= -f2-)"
+    if [[ -z "$API_KEY" ]]; then
+      API_KEY="$(grep -m1 'TELEGRAM_BOT_TOKEN=' "$HOME/.config/sami/community.env" 2>/dev/null | cut -d= -f2-)"
+    fi
+    if [[ -n "$API_KEY" ]]; then
       if curl -sf --max-time 15 \
         -X POST "$COMMUNITY_AGENT_URL/packet" \
         -H "Content-Type: application/json" \
-        -H "X-Admin-Token: $BOT_TOKEN" \
+        -H "X-Admin-Token: $API_KEY" \
         -d "$PACKET_JSON" >/dev/null 2>&1; then
         echo "[strategist] COMMUNITY_PACKET posted to Railway" >> "$RAW_OUT_PATH"
       else
         echo "[strategist] failed to POST packet to Railway (non-critical)" >> "$RAW_OUT_PATH"
       fi
     else
-      echo "[strategist] TELEGRAM_BOT_TOKEN not found, skipping packet POST" >> "$RAW_OUT_PATH"
+      echo "[strategist] API key not found, skipping packet POST" >> "$RAW_OUT_PATH"
     fi
   fi
 fi

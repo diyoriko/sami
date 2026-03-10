@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { getConfig } from './config';
-import { getDb, writeDailyStats, getCompletionCountForDate, getUniqueCompletionUsersForDate } from './db';
+import { getDb, writeDailyStats, getCompletionCountForDate, getUniqueCompletionUsersForDate, getRecentPosts, getCumulativeStats } from './db';
 import { getLatestPacket, type StrategistPacket } from './strategist';
 
 export type { StrategistPacket as CommunityPacket };
@@ -60,12 +60,16 @@ export function writeCommunityReport(date: string, newMembers: number): void {
 
   const completions = getCompletionCountForDate(date);
   const completionUsers = getUniqueCompletionUsersForDate(date);
+  const recentPosts = getRecentPosts(7);
+  const cumulative = getCumulativeStats();
 
   const report = {
     date,
     completions,
     completion_users: completionUsers,
     new_members: newMembers,
+    recent_posts: recentPosts,
+    cumulative,
     written_at: new Date().toISOString(),
   };
 

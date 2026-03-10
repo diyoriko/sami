@@ -231,10 +231,40 @@ interface YouTubeVideoDetail {
   statistics: { viewCount?: string; likeCount?: string };
 }
 
+const FETCH_TIMEOUT_MS = 15_000;
+const CIRCUIT_BREAKER_THRESHOLD = 3;
+const CIRCUIT_BREAKER_RESET_MS = 5 * 60 * 1000; // 5 min
+
+let circuitFailures = 0;
+let circuitOpenUntil = 0;
+
 async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`YouTube API ${res.status}: ${await res.text()}`);
-  return res.json() as Promise<T>;
+  if (circuitFailures >= CIRCUIT_BREAKER_THRESHOLD && Date.now() < circuitOpenUntil) {
+    throw new Error(`YouTube API circuit open (${circuitFailures} consecutive failures, retry after ${new Date(circuitOpenUntil).toISOString()})`);
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) {
+      circuitFailures++;
+      circuitOpenUntil = Date.now() + CIRCUIT_BREAKER_RESET_MS;
+      throw new Error(`YouTube API ${res.status}: ${await res.text()}`);
+    }
+    circuitFailures = 0;
+    return res.json() as Promise<T>;
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      circuitFailures++;
+      circuitOpenUntil = Date.now() + CIRCUIT_BREAKER_RESET_MS;
+      throw new Error(`YouTube API timeout (${FETCH_TIMEOUT_MS}ms)`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // ─── EXPORTS ─────────────────────────────────────────────────────────────────

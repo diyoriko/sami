@@ -94,13 +94,48 @@ export function registerBotMenu(bot: Bot): void {
   bot.hears('Статус', async (ctx) => {
     if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
     const { todayMsk } = await import('./dates');
-    const { getPostCountForDate, getCompletionCountForDate, getUniqueCompletionUsersForDate } = await import('./db');
+    const { getPostCountForDate, getCompletionCountForDate, getUniqueCompletionUsersForDate, getApprovalQueue } = await import('./db');
     const date = todayMsk();
     const posts = getPostCountForDate(date);
     const completions = getCompletionCountForDate(date);
     const users = getUniqueCompletionUsersForDate(date);
+
+    const CATEGORY_RU: Record<string, string> = {
+      stretching: 'стретчинг',
+      strength: 'силовая',
+      mobility: 'мобильность',
+    };
+    const STATUS_ICON: Record<string, string> = {
+      approved: '✅',
+      pending: '⏳',
+    };
+
+    const queue = getApprovalQueue();
+    let queueText = '';
+    if (queue.length > 0) {
+      const grouped = new Map<string, typeof queue>();
+      for (const item of queue) {
+        const key = item.date;
+        if (!grouped.has(key)) grouped.set(key, []);
+        grouped.get(key)!.push(item);
+      }
+      const parts: string[] = [];
+      for (const [qDate, items] of grouped) {
+        const lines = items.map(item => {
+          const cat = CATEGORY_RU[item.category] ?? item.category;
+          const icon = STATUS_ICON[item.status] ?? item.status;
+          const title = item.title.length > 40 ? item.title.slice(0, 37) + '...' : item.title;
+          return `  ${icon} ${cat} — ${title}`;
+        });
+        parts.push(`*${qDate}:*\n${lines.join('\n')}`);
+      }
+      queueText = `\n\n*Очередь:*\n${parts.join('\n\n')}`;
+    } else {
+      queueText = '\n\nОчередь пуста.';
+    }
+
     await ctx.reply(
-      `*Sami — статус*\n\nДата: ${date}\nПостов: ${posts}\nВыполнений: ${completions} (${users} чел.)`,
+      `*Sami — статус*\n\nДата: ${date}\nПостов: ${posts}\nВыполнений: ${completions} (${users} чел.)${queueText}`,
       { parse_mode: 'Markdown' }
     );
   });
