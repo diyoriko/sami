@@ -48,7 +48,12 @@ function migrateCheckConstraints(db: Database.Database): void {
     // CHECK rejects 'yoga' → need to rebuild tables
   }
 
-  db.transaction(() => {
+  // Disable FK checks so DROP TABLE doesn't fail on referencing tables
+  db.pragma('foreign_keys = OFF');
+
+  try {
+    db.exec('BEGIN');
+
     // Rebuild videos table
     db.exec(`
       CREATE TABLE videos_v2 (
@@ -105,7 +110,20 @@ function migrateCheckConstraints(db: Database.Database): void {
       DROP TABLE ugc_submissions;
       ALTER TABLE ugc_submissions_v2 RENAME TO ugc_submissions;
     `);
-  })();
+
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  } finally {
+    db.pragma('foreign_keys = ON');
+  }
+
+  // Verify FK integrity after rebuild
+  const fkErrors = db.pragma('foreign_key_check');
+  if ((fkErrors as unknown[]).length > 0) {
+    throw new Error(`FK integrity broken after constraint migration: ${JSON.stringify(fkErrors)}`);
+  }
 }
 
 function migrate(db: Database.Database): void {
