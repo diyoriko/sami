@@ -51,7 +51,7 @@ async function formatCaption(video: VideoRow): Promise<string> {
     `*${title}*`,
     '',
     ...tagLines,
-    ...(ratingStr ? [`★ ${ratingStr}`] : []),
+    ...(ratingStr ? [`★ ${ratingStr} из 10`] : []),
     `Сделали: 0`,
     '',
     `Автор: [${channelName}](${video.video_url})`,

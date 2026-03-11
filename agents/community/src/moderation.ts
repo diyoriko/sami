@@ -473,13 +473,22 @@ export function registerModeration(bot: Bot): void {
     if (ctx.chat.id !== Number(config.TELEGRAM_GROUP_ID)) return;
     if (!ctx.message.is_automatic_forward) return;
 
+    log.info('auto-forward detected in group', {
+      messageId: ctx.message.message_id,
+      forwardOrigin: ctx.message.forward_origin?.type,
+      senderChat: ctx.message.sender_chat?.id,
+    });
+
     // Find the original channel message_id from forward_origin
     const origin = ctx.message.forward_origin;
     if (!origin || origin.type !== 'channel') return;
 
     const channelMsgId = origin.message_id;
     const post = getPostByMessageId(channelMsgId);
-    if (!post) return;
+    if (!post) {
+      log.warn('auto-forward: no post found for channel message', { channelMsgId });
+      return;
+    }
 
     const count = getCompletionCount(post.id);
     const keyboard = new InlineKeyboard()
@@ -490,11 +499,15 @@ export function registerModeration(bot: Bot): void {
         config.TELEGRAM_GROUP_ID,
         'Сделал(а) тренировку? Нажми кнопку:',
         {
-          message_thread_id: ctx.message.message_id,
+          reply_parameters: { message_id: ctx.message.message_id },
           reply_markup: keyboard,
         }
       );
       setGroupCommentId(post.id, comment.message_id);
+      // Pin the bot's comment so it's visible at the top of the discussion
+      try {
+        await bot.api.pinChatMessage(config.TELEGRAM_GROUP_ID, comment.message_id, { disable_notification: true });
+      } catch { /* may lack pin permissions */ }
     } catch (err) {
       log.error('failed to post completion button in discussion', { postId: post.id, error: String(err) });
     }
