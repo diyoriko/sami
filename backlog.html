@@ -622,6 +622,84 @@
   .flow-file { background: rgba(63,185,80,0.15); color: var(--p2); }
   .flow-telegram { background: rgba(163,113,247,0.15); color: var(--deployed); }
   .flow-cron { background: rgba(210,153,34,0.15); color: var(--pending); }
+
+  /* === Implementor Tasks === */
+  .impl-section {
+    margin-top: 32px;
+  }
+
+  .impl-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .impl-table th {
+    text-align: left;
+    padding: 10px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .impl-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+
+  .impl-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  .impl-table tr:hover td {
+    background: rgba(255,255,255,0.02);
+  }
+
+  .impl-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    white-space: nowrap;
+  }
+
+  .impl-badge-pending { background: rgba(139,148,158,0.15); color: #8b949e; }
+  .impl-badge-approved { background: rgba(88,166,255,0.15); color: #58a6ff; }
+  .impl-badge-in_progress { background: rgba(210,153,34,0.15); color: #d29922; }
+  .impl-badge-review { background: rgba(163,113,247,0.15); color: #a371f7; }
+  .impl-badge-done { background: rgba(63,185,80,0.15); color: #3fb950; }
+  .impl-badge-failed { background: rgba(248,81,73,0.15); color: #f85149; }
+
+  .impl-source {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .impl-branch {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    color: var(--accent);
+  }
+
+  .impl-empty {
+    text-align: center;
+    padding: 24px;
+    color: var(--text-muted);
+    font-size: 13px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
 </style>
 </head>
 <body>
@@ -635,6 +713,7 @@
 <div id="agents"></div>
 <div id="content"></div>
 <div class="services" id="services"></div>
+<div id="implTasks"></div>
 
 <script>
 const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/diyoriko/sami/main/COMMUNITY_TASKS.md';
@@ -1699,6 +1778,70 @@ function render() {
 }
 
 initData();
+
+// --- Implementor Tasks ---
+const IMPL_API_URL = 'https://courageous-happiness-production.up.railway.app/impl/tasks';
+
+const IMPL_STATUS_LABELS = {
+  pending: 'Ожидает',
+  approved: 'Одобрена',
+  in_progress: 'В работе',
+  review: 'Ревью',
+  done: 'Готово',
+  failed: 'Ошибка',
+};
+
+async function fetchImplTasks() {
+  const container = document.getElementById('implTasks');
+  let tasks = [];
+
+  try {
+    const res = await fetch(IMPL_API_URL + '?t=' + Date.now());
+    if (!res.ok) throw new Error(res.status);
+    tasks = await res.json();
+  } catch (err) {
+    console.warn('[impl] fetch failed:', err);
+  }
+
+  let html = '<div class="impl-section">';
+  html += '<div class="section-label">Задачи имплементатора</div>';
+
+  if (!tasks.length) {
+    html += '<div class="impl-empty">Нет задач</div>';
+    html += '</div>';
+    container.innerHTML = html;
+    return;
+  }
+
+  html += '<table class="impl-table">';
+  html += '<thead><tr>';
+  html += '<th>#</th><th>Задача</th><th>Источник</th><th>Приоритет</th><th>Статус</th><th>Ветка</th>';
+  html += '</tr></thead><tbody>';
+
+  for (const task of tasks) {
+    const statusClass = 'impl-badge-' + task.status;
+    const statusLabel = IMPL_STATUS_LABELS[task.status] || task.status;
+    const sourceLabel = task.source === 'strategist' ? 'Стратег' : 'Ручная';
+    const branch = task.branch
+      ? `<span class="impl-branch">${task.branch}</span>`
+      : '<span class="impl-source">—</span>';
+
+    html += '<tr>';
+    html += `<td style="color:var(--text-muted)">${task.id}</td>`;
+    html += `<td>${task.title}</td>`;
+    html += `<td><span class="impl-source">${sourceLabel}</span></td>`;
+    html += `<td>${task.priority}</td>`;
+    html += `<td><span class="impl-badge ${statusClass}">${statusLabel}</span></td>`;
+    html += `<td>${branch}</td>`;
+    html += '</tr>';
+  }
+
+  html += '</tbody></table>';
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+fetchImplTasks();
 </script>
 </body>
 </html>
