@@ -1038,16 +1038,16 @@ const staticData = {
     {
       "version": "v0.6.0",
       "date": "11.03",
-      "status": "pending",
+      "status": "deployed",
       "items": [
         "shared.ts SSoT: 7 категорий, 3 уровня, 12 групп мышц, 12 типов инвентаря",
-        "DB миграция CHECK constraints (yoga, breathing, recovery, cardio)",
+        "DB миграция CHECK constraints + hotfix FK crash",
         "Рейтинг: +15% completions из Telegram (35/30/20/15)",
         "Health dashboard в backlog.html — live-fetch /health",
         "Пост-онбординг DM новым участникам",
-        "Рубрики: #ритуал_недели (DB + кнопки) + #прогресс_пятницы (top-5)",
+        "Рубрики: #ритуал_недели + #прогресс_пятницы",
         "25 UX smoke-тестов (82 всего)",
-        "Proxy без cookies, feedback loop, UGC fixes",
+        "Кнопки категорий: 2 в ряд (читаемый текст)",
         "Стратег ↔ бэклог: sync-proposal-status.mjs"
       ]
     }
@@ -1285,34 +1285,38 @@ const staticData = {
       "status": "active",
       "groups": [
         {
-          "title": "Верификация после деплоя",
+          "title": "Критические баги — бот не может постить",
           "priority": "p0",
           "tasks": [
-            { "text": "\"Я сделаль\" автокоммент — проверить логи Railway после пуша", "done": false }
+            { "text": "Публикация YouTube-видео не работает — очередь пуста или approval flow сломан", "done": false },
+            { "text": "UGC \"Тест 3\" не опубликовалась — auto-publish не сработал", "done": false },
+            { "text": "\"Я сделаль\" автокоммент не появляется в группе", "done": false },
+            { "text": "Health dashboard \"Недоступен\" — FK migration crash", "done": true }
           ]
         },
         {
-          "title": "UX ревью и улучшения",
+          "title": "UX баги и улучшения",
           "priority": "p1",
           "tasks": [
+            { "text": "UX сообщения при публикации — не показывать \"не выбрано\"", "done": false },
+            { "text": "\"Мои тренировки\": только опубликованные в канале", "done": false },
             { "text": "Ревью UX автокоммента в группе", "done": false },
-            { "text": "Поиск тренировки в канале/боте — UX навигации", "done": false },
-            { "text": "Ревью алгоритма поиска видео", "done": false },
             { "text": "Описание канала и bio бота (SEO)", "done": false }
           ]
         },
         {
-          "title": "Автоматизация стратега",
+          "title": "Качество контента",
           "priority": "p1",
           "tasks": [
-            { "text": "Стратег: предложения → одобрение → бэклог", "done": false }
+            { "text": "Ревью алгоритма поиска видео", "done": false },
+            { "text": "Поиск тренировки в канале/боте — UX навигации", "done": false }
           ]
         },
         {
-          "title": "Контент",
+          "title": "Автоматизация",
           "priority": "p2",
           "tasks": [
-            { "text": "#механика (ср) — контент от стратега", "done": false }
+            { "text": "Стратег: предложения → одобрение → бэклог", "done": false }
           ]
         },
         {
@@ -1321,19 +1325,20 @@ const staticData = {
           "tasks": [
             { "text": "Cross-promo с 3 микро-каналами", "done": false },
             { "text": "Посевной пост-подборка", "done": false },
-            { "text": "Контент-расписание на 2 недели", "done": false }
+            { "text": "Контент-расписание на 2 недели", "done": false },
+            { "text": "#механика — контент от стратега", "done": false }
           ]
         },
         {
           "title": "Отложено (после 50+ участников)",
           "priority": "p3",
           "tasks": [
-            { "text": "Ручной посев — 10 приглашений", "done": false },
             { "text": "Монетизация", "done": false },
             { "text": "Weekly personal stats DM", "done": false },
             { "text": "Attribution flow для тренеров", "done": false },
             { "text": "MarkdownV2", "done": false },
-            { "text": "Лендинг Sami", "done": false }
+            { "text": "Лендинг Sami", "done": false },
+            { "text": "Ручной посев — 10 приглашений", "done": false }
           ]
         }
       ]

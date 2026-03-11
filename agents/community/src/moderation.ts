@@ -521,17 +521,21 @@ export function registerModeration(bot: Bot): void {
 
     const channelMsgId = origin.message_id;
     const post = getPostByMessageId(channelMsgId);
-    if (!post) {
-      log.warn('auto-forward: no post found for channel message', { channelMsgId });
-      return next();
-    }
 
-    const count = getCompletionCount(post.id);
-    const rating = updateVideoRating(post.video_id);
-    const ratingStr = rating > 0 ? rating.toFixed(1) : '—';
-    const keyboard = new InlineKeyboard()
-      .text(`Я сделаль${count > 0 ? ` · ${count}` : ''}`, `done:${post.video_id}`)
-      .text(`Рейтинг тренировки: ${ratingStr}/10`, `rating:${post.video_id}`);
+    let keyboard: InlineKeyboard;
+    if (post) {
+      const count = getCompletionCount(post.id);
+      const rating = updateVideoRating(post.video_id);
+      const ratingStr = rating > 0 ? rating.toFixed(1) : '—';
+      keyboard = new InlineKeyboard()
+        .text(`Я сделаль${count > 0 ? ` · ${count}` : ''}`, `done:${post.video_id}`)
+        .text(`Рейтинг тренировки: ${ratingStr}/10`, `rating:${post.video_id}`);
+    } else {
+      // Post not tracked in DB (e.g. manual publish) — still show button with channel msg ID
+      log.warn('auto-forward: no post in DB, using channel msg ID as fallback', { channelMsgId });
+      keyboard = new InlineKeyboard()
+        .text('Я сделаль', `done_msg:${channelMsgId}`);
+    }
 
     try {
       const comment = await bot.api.sendMessage(
@@ -542,13 +546,15 @@ export function registerModeration(bot: Bot): void {
           reply_markup: keyboard,
         }
       );
-      setGroupCommentId(post.id, comment.message_id);
-      log.info('posted completion button in discussion', { postId: post.id, commentId: comment.message_id });
+      if (post) {
+        setGroupCommentId(post.id, comment.message_id);
+      }
+      log.info('posted completion button in discussion', { postId: post?.id ?? null, commentId: comment.message_id });
       try {
         await bot.api.pinChatMessage(config.TELEGRAM_GROUP_ID, comment.message_id, { disable_notification: true });
       } catch { /* may lack pin permissions */ }
     } catch (err) {
-      log.error('failed to post completion button in discussion', { postId: post.id, error: String(err) });
+      log.error('failed to post completion button in discussion', { postId: post?.id ?? null, error: String(err) });
     }
   });
 

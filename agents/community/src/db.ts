@@ -101,11 +101,13 @@ function migrateCheckConstraints(db: Database.Database): void {
         admin_message_id INTEGER,
         created_at TEXT DEFAULT (datetime('now')),
         decided_at TEXT,
-        deleted_at TEXT
+        deleted_at TEXT,
+        published_at TEXT
       );
       INSERT INTO ugc_submissions_v2 SELECT
         id, telegram_user_id, username, video_url, youtube_id, title,
-        category, difficulty, status, admin_message_id, created_at, decided_at, deleted_at
+        category, difficulty, status, admin_message_id, created_at, decided_at, deleted_at,
+        CASE WHEN status = 'approved' THEN decided_at ELSE NULL END
       FROM ugc_submissions;
       DROP TABLE ugc_submissions;
       ALTER TABLE ugc_submissions_v2 RENAME TO ugc_submissions;
@@ -231,7 +233,8 @@ function migrate(db: Database.Database): void {
       status TEXT CHECK(status IN ('draft','pending','approved','rejected')) DEFAULT 'draft',
       admin_message_id INTEGER,
       created_at TEXT DEFAULT (datetime('now')),
-      decided_at TEXT
+      decided_at TEXT,
+      published_at TEXT
     );
 
     CREATE TABLE IF NOT EXISTS daily_stats (
@@ -288,6 +291,8 @@ function migrate(db: Database.Database): void {
   // Soft delete columns
   try { db.exec('ALTER TABLE ugc_submissions ADD COLUMN deleted_at TEXT'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE approval_sessions ADD COLUMN deleted_at TEXT'); } catch { /* already exists */ }
+  // UGC publish tracking
+  try { db.exec('ALTER TABLE ugc_submissions ADD COLUMN published_at TEXT'); } catch { /* already exists */ }
 
   // Migration: rebuild tables with updated CHECK constraints (added yoga, breathing, recovery, cardio)
   migrateCheckConstraints(db);
@@ -1092,6 +1097,7 @@ export interface UgcSubmission {
   admin_message_id: number | null;
   created_at: string;
   decided_at: string | null;
+  published_at: string | null;
 }
 
 export function createUgcSubmission(userId: number, username: string | null, videoUrl: string, youtubeId: string | null): number {
@@ -1102,7 +1108,7 @@ export function createUgcSubmission(userId: number, username: string | null, vid
   return Number(result.lastInsertRowid);
 }
 
-export function updateUgcSubmission(id: number, fields: Partial<Pick<UgcSubmission, 'title' | 'category' | 'difficulty' | 'status' | 'admin_message_id'>>): void {
+export function updateUgcSubmission(id: number, fields: Partial<Pick<UgcSubmission, 'title' | 'category' | 'difficulty' | 'status' | 'admin_message_id' | 'published_at'>>): void {
   const sets: string[] = [];
   const values: any[] = [];
   for (const [key, val] of Object.entries(fields)) {
@@ -1134,15 +1140,15 @@ export function deleteUgcSubmission(id: number): void {
 export function getUserSubmissions(userId: number, limit: number, offset: number): UgcSubmission[] {
   return getDb().prepare(`
     SELECT * FROM ugc_submissions
-    WHERE telegram_user_id = ? AND status != 'draft' AND deleted_at IS NULL
-    ORDER BY created_at DESC
+    WHERE telegram_user_id = ? AND published_at IS NOT NULL AND deleted_at IS NULL
+    ORDER BY published_at DESC
     LIMIT ? OFFSET ?
   `).all(userId, limit, offset) as UgcSubmission[];
 }
 
 export function getUserSubmissionTotal(userId: number): number {
   const row = getDb().prepare(
-    `SELECT COUNT(*) as cnt FROM ugc_submissions WHERE telegram_user_id = ? AND status != 'draft' AND deleted_at IS NULL`
+    `SELECT COUNT(*) as cnt FROM ugc_submissions WHERE telegram_user_id = ? AND published_at IS NOT NULL AND deleted_at IS NULL`
   ).get(userId) as { cnt: number };
   return row.cnt;
 }

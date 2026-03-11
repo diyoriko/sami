@@ -42,7 +42,7 @@ import {
 import {
   type Category, type Difficulty,
   CATEGORIES, DIFFICULTIES,
-  CATEGORY_RU, DIFFICULTY_RU,
+  CATEGORY_RU, CATEGORY_EMOJI, DIFFICULTY_RU,
   CATEGORY_BUTTONS, DIFFICULTY_BUTTONS,
   escapeMarkdown, decodeHtmlEntities,
 } from './shared';
@@ -76,6 +76,16 @@ function extractYoutubeId(url: string): string | null {
     if (m) return m[1];
   }
   return null;
+}
+
+/** Build category inline keyboard: 2 buttons per row so labels are readable */
+function buildCategoryKeyboard(subId: number): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  CATEGORY_BUTTONS.forEach((btn, i) => {
+    kb.text(btn.label, `ugc_cat:${subId}:${btn.value}`);
+    if (i % 2 === 1) kb.row(); // 2 per row
+  });
+  return kb;
 }
 
 // --- Register handlers ---
@@ -206,9 +216,8 @@ export function registerBotMenu(bot: Bot): void {
 
     const today = todayMsk();
     const tomorrow = tomorrowMsk();
-    const categories = ['stretching', 'strength', 'mobility'] as const;
-    const hasTomorrow = categories.some(c => getApprovedVideo(tomorrow, c) !== null);
-    const hasToday = categories.some(c => getApprovedVideo(today, c) !== null);
+    const hasTomorrow = CATEGORIES.some(c => getApprovedVideo(tomorrow, c) !== null);
+    const hasToday = CATEGORIES.some(c => getApprovedVideo(today, c) !== null);
     const date = hasTomorrow ? tomorrow : hasToday ? today : null;
 
     if (!date) {
@@ -218,15 +227,20 @@ export function registerBotMenu(bot: Bot): void {
 
     await ctx.reply(`Публикую видео на ${date}...`);
     const report: string[] = [];
-    for (const cat of categories) {
+    for (const cat of CATEGORIES) {
+      const approved = getApprovedVideo(date, cat);
+      if (!approved) continue; // skip categories without approved videos
       const result = await postVideoToChannel(bot, date, cat, { force: true });
-      const label = { stretching: 'Стретчинг', strength: 'Силовая', mobility: 'Мобильность' }[cat];
-      if (result === 'posted') report.push(`${label} — ok`);
-      else if (result === 'no_video') report.push(`${label} — не выбрано`);
+      const label = `${CATEGORY_EMOJI[cat]} ${CATEGORY_RU[cat]}`;
+      if (result === 'posted') report.push(`${label} — ${approved.title}`);
       else if (result === 'error') report.push(`${label} — ошибка`);
       else report.push(`${label} — пропущено`);
     }
-    await ctx.reply(report.join('\n'));
+    if (report.length === 0) {
+      await ctx.reply('Нет одобренных видео на эту дату.');
+    } else {
+      await ctx.reply(report.join('\n'));
+    }
   });
 
   bot.hears('Сбросить выбор', async (ctx) => {
@@ -290,16 +304,18 @@ export function registerBotMenu(bot: Bot): void {
     if (ctx.chat.type !== 'private') return;
     deleteUgcState(ctx.from!.id);
 
-    const kb = new InlineKeyboard()
-      .text('Стретчинг', 'filter:cat:stretching')
-      .text('Сила', 'filter:cat:strength')
-      .text('Мобильность', 'filter:cat:mobility')
+    const kb = new InlineKeyboard();
+    CATEGORY_BUTTONS.forEach((btn, i) => {
+      kb.text(btn.label, `filter:cat:${btn.value}`);
+      if (i % 2 === 1) kb.row();
+    });
+    // Ensure last odd category gets its own row before presets
+    if (CATEGORY_BUTTONS.length % 2 === 1) kb.row();
+    kb.text('💎 Новичок', 'filter:preset:beginner')
+      .text('☀️ Утро (до 15м)', 'filter:preset:morning')
       .row()
-      .text('Новичок', 'filter:preset:beginner')
-      .text('Утро (до 15 мин)', 'filter:preset:morning')
-      .row()
-      .text('После работы', 'filter:preset:afterwork')
-      .text('Быстрая (до 10 мин)', 'filter:preset:quick');
+      .text('🌙 После работы', 'filter:preset:afterwork')
+      .text('⚡ Быстрая (до 10м)', 'filter:preset:quick');
 
     await ctx.reply('Выбери фильтр или пресет:', { reply_markup: kb });
   });
@@ -382,11 +398,7 @@ export function registerBotMenu(bot: Bot): void {
     }
     saveUgcState(userId, 'waiting_category', subId);
 
-    const kb = new InlineKeyboard();
-    CATEGORY_BUTTONS.forEach((btn, i) => {
-      kb.text(btn.label, `ugc_cat:${subId}:${btn.value}`);
-      if (i === 3) kb.row(); // second row after 4 buttons
-    });
+    const kb = buildCategoryKeyboard(subId);
 
     await ctx.reply('Видео получено! Какой тип тренировки?', { reply_markup: kb });
   });
@@ -414,11 +426,7 @@ export function registerBotMenu(bot: Bot): void {
     }
     saveUgcState(userId, 'waiting_category', subId);
 
-    const kb = new InlineKeyboard();
-    CATEGORY_BUTTONS.forEach((btn, i) => {
-      kb.text(btn.label, `ugc_cat:${subId}:${btn.value}`);
-      if (i === 3) kb.row(); // second row after 4 buttons
-    });
+    const kb = buildCategoryKeyboard(subId);
 
     await ctx.reply('Видео получено! Какой тип тренировки?', { reply_markup: kb });
   });
@@ -446,10 +454,7 @@ export function registerBotMenu(bot: Bot): void {
       const subId = createUgcSubmission(userId, ctx.from!.username ?? null, videoUrl, ytId);
       saveUgcState(userId, 'waiting_category', subId);
 
-      const kb = new InlineKeyboard()
-        .text('Стретчинг', `ugc_cat:${subId}:stretching`)
-        .text('Силовая', `ugc_cat:${subId}:strength`)
-        .text('Мобильность', `ugc_cat:${subId}:mobility`);
+      const kb = buildCategoryKeyboard(subId);
 
       await ctx.reply('Какой тип тренировки?', { reply_markup: kb });
       return;
@@ -654,6 +659,7 @@ export function registerBotMenu(bot: Bot): void {
         }
 
         published = true;
+        updateUgcSubmission(subId, { published_at: new Date().toISOString() });
         log.info('UGC published to channel', { subId, videoId });
       } catch (err) {
         publishError = String(err);
@@ -710,7 +716,7 @@ async function sendMyWorkouts(
   const total = getUserSubmissionTotal(userId);
 
   if (total === 0) {
-    const text = 'У тебя пока нет предложенных тренировок.\n\nНажми «Предложить тренировку» чтобы добавить свою.';
+    const text = 'У тебя пока нет опубликованных тренировок.\n\nНажми «Предложить тренировку» чтобы добавить свою.';
     if (editMessageId) {
       try { await ctx.api.editMessageText(ctx.chat!.id, editMessageId, text); } catch {}
     } else {
@@ -721,19 +727,12 @@ async function sendMyWorkouts(
 
   const items = getUserSubmissions(userId, PAGE_SIZE, offset);
 
-  const STATUS_LABELS: Record<string, string> = {
-    pending: '⏳ на модерации',
-    approved: '✅ одобрена',
-    rejected: '❌ отклонена',
-  };
-
   const lines = items.map((item, i) => {
     const num = offset + i + 1;
     const catRu = item.category ? (CATEGORY_RU[item.category as Category] ?? item.category) : '—';
     const title = item.title ? decodeHtmlEntities(item.title) : 'Без названия';
-    const dateShort = item.created_at.slice(0, 10);
-    const status = STATUS_LABELS[item.status] ?? item.status;
-    return `${num}. *${escapeMarkdown(title)}*\n   ${catRu} · ${dateShort} · ${status}`;
+    const dateShort = (item.published_at ?? item.created_at).slice(0, 10);
+    return `${num}. *${escapeMarkdown(title)}*\n   ${catRu} · ${dateShort}`;
   });
 
   const header = `*Мои тренировки* (${total})\n`;
