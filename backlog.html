@@ -1281,51 +1281,38 @@ const staticData = {
       ]
     },
     {
-      "name": "Sprint 6 — Growth + UX-фиксы",
+      "name": "Sprint 6 — Качество + UX",
       "status": "active",
       "groups": [
         {
-          "title": "Баги (критичные — блокируют основной UX)",
+          "title": "Верификация после деплоя",
           "priority": "p0",
           "tasks": [
-            { "text": "\"Я сделаль\" автокоммент не появляется в группе (auto-forward handler)", "done": false },
-            { "text": "Формула рейтинга занижает оценки (3-6/10 для хороших видео)", "done": true },
-            { "text": "Рейтинг некликабельный — popup убран с inline-кнопками", "done": true },
-            { "text": "\"Мои тренировки\" показывает UGC вместо completions", "done": true },
-            { "text": "UGC: видеофайл (.mov) не обрабатывается — Telegram отправляет как document", "done": true }
+            { "text": "\"Я сделаль\" автокоммент — проверить логи Railway после пуша", "done": false }
           ]
         },
         {
-          "title": "UX",
+          "title": "UX ревью и улучшения",
           "priority": "p1",
           "tasks": [
-            { "text": "Эмодзи в теле поста (🧘/💪/🐍 категория, ⏱️ длительность, 🦴 мышцы, 💎 уровень, 🎾 инвентарь)", "done": true },
-            { "text": "Превью видео на десктопе (thumbnail)", "done": true },
-            { "text": "Отмена как inline-кнопка (не /cancel)", "done": true },
-            { "text": "Убрать \"Сохранённое\" + мёртвый код", "done": true },
-            { "text": "\"Мои тренировки\" редизайн — выполненные тренировки", "done": true },
-            { "text": "Статус: очистка сессий после /post", "done": true },
-            { "text": "Валидация \"Я сделаль\" — cooldown 1 час", "done": true },
-            { "text": "Аудит текстов админки + удаление мёртвых cron vars", "done": true },
-            { "text": "\"Мои тренировки\" — показывать UGC submissions, не completions", "done": true },
-            { "text": "UGC: пуш админу — экранирование + логи", "done": true },
-            { "text": "Proxy без cookies — cookies опциональны, placeholder на Railway", "done": true },
-            { "text": "Стратег ↔ бэклог: feedback loop (sync-proposal-status.mjs)", "done": true },
             { "text": "Ревью UX автокоммента в группе", "done": false },
             { "text": "Поиск тренировки в канале/боте — UX навигации", "done": false },
-            { "text": "Ревью алгоритма поиска видео — like_ratio, channel auth, config, стратег keywords", "done": false },
-            { "text": "Стратег: предложения задач в репорте → одобрение → бэклог", "done": false },
-            { "text": "Описание канала и bio бота (SEO)", "done": false },
-            { "text": "Пост-онбординг DM новым участникам", "done": true },
-            { "text": "Автотесты UX — 25 smoke-тестов", "done": true }
+            { "text": "Ревью алгоритма поиска видео", "done": false },
+            { "text": "Описание канала и bio бота (SEO)", "done": false }
           ]
         },
         {
-          "title": "Мониторинг и стабильность",
+          "title": "Автоматизация стратега",
           "priority": "p1",
           "tasks": [
-            { "text": "Health dashboard в backlog.html — live-fetch /health", "done": true },
-            { "text": "Ревью формулы рейтинга — +15% completions из Telegram", "done": true }
+            { "text": "Стратег: предложения → одобрение → бэклог", "done": false }
+          ]
+        },
+        {
+          "title": "Контент",
+          "priority": "p2",
+          "tasks": [
+            { "text": "#механика (ср) — контент от стратега", "done": false }
           ]
         },
         {
@@ -1338,29 +1325,14 @@ const staticData = {
           ]
         },
         {
-          "title": "Контент и рубрики",
-          "priority": "p2",
-          "tasks": [
-            { "text": "Ревью метаданных — shared.ts SSoT: 7 категорий, мышцы, инвентарь", "done": true },
-            { "text": "Новые категории + DB миграция CHECK constraints", "done": true },
-            { "text": "#ритуал_недели (пн) — ritual challenge, DB, кнопки", "done": true },
-            { "text": "#механика (ср) — контент от стратега", "done": false },
-            { "text": "#прогресс_пятницы (пт) — top-5 активных, итоги", "done": true }
-          ]
-        },
-        {
           "title": "Отложено (после 50+ участников)",
           "priority": "p3",
           "tasks": [
-            { "text": "Ручной посев — 10 личных приглашений (после стабильной версии)", "done": false },
+            { "text": "Ручной посев — 10 приглашений", "done": false },
             { "text": "Монетизация", "done": false },
-            { "text": "Фильтры и профили вернуть в меню", "done": false },
-            { "text": "Категория \"Йога\" / \"Восстановление\"", "done": false },
             { "text": "Weekly personal stats DM", "done": false },
             { "text": "Attribution flow для тренеров", "done": false },
-            { "text": "Cross-promotion механика", "done": false },
-            { "text": "Proxy без cookies → перенесено в P1", "done": true },
-            { "text": "MarkdownV2 — перевод на новый parse_mode", "done": false },
+            { "text": "MarkdownV2", "done": false },
             { "text": "Лендинг Sami", "done": false }
           ]
         }
