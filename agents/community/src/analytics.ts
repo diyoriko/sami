@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getConfig } from './config';
 import { createLogger } from './logger';
-import { CATEGORY_RU } from './shared';
+import { type Category, CATEGORY_RU } from './shared';
 
 const log = createLogger('analytics');
 import {
@@ -108,7 +108,7 @@ export async function runDailyAnalytics(bot: Bot, date: string): Promise<void> {
   const linkCount = postTypes.find(p => p.post_type === 'link')?.count ?? 0;
 
   const catLines = completionsByCat.map(c =>
-    `  ${CATEGORY_RU[c.category] ?? c.category}: ${c.completions} (${c.users} чел.)`
+    `  ${CATEGORY_RU[c.category as Category] ?? c.category}: ${c.completions} (${c.users} чел.)`
   );
 
   const topLines = topVideos.slice(0, 3).map((v, i) => {

@@ -9,7 +9,7 @@ import { downloadVideo, isYtDlpAvailable } from './downloader';
 import { detectEquipment } from './youtube';
 import { rewriteTitle, formatChannelName } from './translate';
 import { createLogger, type Logger } from './logger';
-import { CATEGORY_RU, DIFFICULTY_RU } from './shared';
+import { type Category, CATEGORY_RU, DIFFICULTY_RU, CATEGORY_EMOJI, EQUIPMENT_NO_GEAR } from './shared';
 
 const log = createLogger('poster');
 
@@ -31,7 +31,7 @@ async function formatCaption(video: VideoRow): Promise<string> {
   }
 
   const equipment = detectEquipment(video.title, '');
-  const equipmentTag = equipment.length > 0 ? equipment.join(', ') : 'без инвентаря';
+  const equipmentTag = equipment.length > 0 ? equipment.join(', ') : EQUIPMENT_NO_GEAR;
 
   const title = await rewriteTitle(video.title);
   const channelName = await formatChannelName(video.channel_name);
@@ -39,11 +39,6 @@ async function formatCaption(video: VideoRow): Promise<string> {
   const rating = updateVideoRating(video.id);
   const ratingStr = formatRating(rating);
 
-  const CATEGORY_EMOJI: Record<string, string> = {
-    stretching: '🧘',
-    strength: '💪',
-    mobility: '🐍',
-  };
   const catEmoji = CATEGORY_EMOJI[video.category] ?? '🏷';
 
   const tagLines = [
@@ -72,7 +67,7 @@ export type PostResult = 'posted' | 'skipped' | 'no_video' | 'error';
 export async function postVideoToChannel(
   bot: Bot,
   date: string,
-  category: 'stretching' | 'strength' | 'mobility',
+  category: Category,
   options?: { force?: boolean; correlationId?: string }
 ): Promise<PostResult> {
   const postLog = options?.correlationId ? log.withCorrelation(options.correlationId) : log;

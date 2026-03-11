@@ -19,10 +19,7 @@ import { todayMsk } from './dates';
 
 const log = createLogger('bot-menu');
 import {
-  getUserSubmissions,
-  getUserSubmissionTotal,
-  getUserCompletions,
-  getUserCompletionTotal,
+  getUserSubmissions, getUserSubmissionTotal,
   createUgcSubmission,
   updateUgcSubmission,
   getUgcSubmission,
@@ -42,7 +39,13 @@ import {
   type UgcSubmission,
   type UgcStep,
 } from './db';
-import { CATEGORY_RU, DIFFICULTY_RU, escapeMarkdown, decodeHtmlEntities } from './shared';
+import {
+  type Category, type Difficulty,
+  CATEGORIES, DIFFICULTIES,
+  CATEGORY_RU, DIFFICULTY_RU,
+  CATEGORY_BUTTONS, DIFFICULTY_BUTTONS,
+  escapeMarkdown, decodeHtmlEntities,
+} from './shared';
 
 const PAGE_SIZE = 5;
 
@@ -156,7 +159,7 @@ export function registerBotMenu(bot: Bot): void {
       const parts: string[] = [];
       for (const [qDate, items] of grouped) {
         const lines = items.map(item => {
-          const cat = CATEGORY_RU[item.category] ?? item.category;
+          const cat = CATEGORY_RU[item.category as Category] ?? item.category;
           const icon = STATUS_ICON[item.status] ?? item.status;
           const rawTitle = decodeHtmlEntities(item.title);
           const title = rawTitle.length > 40 ? rawTitle.slice(0, 37) + '...' : rawTitle;
@@ -301,11 +304,12 @@ export function registerBotMenu(bot: Bot): void {
     await ctx.reply('Выбери фильтр или пресет:', { reply_markup: kb });
   });
 
-  bot.callbackQuery(/^filter:cat:(stretching|strength|mobility)$/, async (ctx) => {
+  const filterCatPattern = new RegExp(`^filter:cat:(${CATEGORIES.join('|')})$`);
+  bot.callbackQuery(filterCatPattern, async (ctx) => {
     const category = ctx.match[1];
     await ctx.answerCallbackQuery();
     const videos = filterVideos({ category, limit: 5 });
-    await sendFilterResults(ctx, videos, CATEGORY_RU[category] ?? category);
+    await sendFilterResults(ctx, videos, CATEGORY_RU[category as Category] ?? category);
   });
 
   bot.callbackQuery(/^filter:preset:(beginner|morning|afterwork|quick)$/, async (ctx) => {
@@ -378,10 +382,11 @@ export function registerBotMenu(bot: Bot): void {
     }
     saveUgcState(userId, 'waiting_category', subId);
 
-    const kb = new InlineKeyboard()
-      .text('Стретчинг', `ugc_cat:${subId}:stretching`)
-      .text('Силовая', `ugc_cat:${subId}:strength`)
-      .text('Мобильность', `ugc_cat:${subId}:mobility`);
+    const kb = new InlineKeyboard();
+    CATEGORY_BUTTONS.forEach((btn, i) => {
+      kb.text(btn.label, `ugc_cat:${subId}:${btn.value}`);
+      if (i === 3) kb.row(); // second row after 4 buttons
+    });
 
     await ctx.reply('Видео получено! Какой тип тренировки?', { reply_markup: kb });
   });
@@ -409,10 +414,11 @@ export function registerBotMenu(bot: Bot): void {
     }
     saveUgcState(userId, 'waiting_category', subId);
 
-    const kb = new InlineKeyboard()
-      .text('Стретчинг', `ugc_cat:${subId}:stretching`)
-      .text('Силовая', `ugc_cat:${subId}:strength`)
-      .text('Мобильность', `ugc_cat:${subId}:mobility`);
+    const kb = new InlineKeyboard();
+    CATEGORY_BUTTONS.forEach((btn, i) => {
+      kb.text(btn.label, `ugc_cat:${subId}:${btn.value}`);
+      if (i === 3) kb.row(); // second row after 4 buttons
+    });
 
     await ctx.reply('Видео получено! Какой тип тренировки?', { reply_markup: kb });
   });
@@ -475,7 +481,8 @@ export function registerBotMenu(bot: Bot): void {
   });
 
   // --- UGC category callback ---
-  bot.callbackQuery(/^ugc_cat:(\d+):(stretching|strength|mobility)$/, async (ctx) => {
+  const catPattern = new RegExp(`^ugc_cat:(\\d+):(${CATEGORIES.join('|')})$`);
+  bot.callbackQuery(catPattern, async (ctx) => {
     const subId = parseInt(ctx.match[1]);
     const category = ctx.match[2];
     const userId = ctx.from!.id;
@@ -488,10 +495,10 @@ export function registerBotMenu(bot: Bot): void {
     updateUgcSubmission(subId, { category });
     saveUgcState(userId, 'waiting_difficulty', subId);
 
-    const kb = new InlineKeyboard()
-      .text('Начинающий', `ugc_diff:${subId}:beginner`)
-      .text('Средний', `ugc_diff:${subId}:intermediate`)
-      .text('Продвинутый', `ugc_diff:${subId}:advanced`);
+    const kb = new InlineKeyboard();
+    DIFFICULTY_BUTTONS.forEach(btn => {
+      kb.text(btn.label, `ugc_diff:${subId}:${btn.value}`);
+    });
 
     try {
       await ctx.editMessageText('Уровень сложности?', { reply_markup: kb });
@@ -501,7 +508,8 @@ export function registerBotMenu(bot: Bot): void {
   });
 
   // --- UGC difficulty callback ---
-  bot.callbackQuery(/^ugc_diff:(\d+):(beginner|intermediate|advanced)$/, async (ctx) => {
+  const diffPattern = new RegExp(`^ugc_diff:(\\d+):(${DIFFICULTIES.join('|')})$`);
+  bot.callbackQuery(diffPattern, async (ctx) => {
     const subId = parseInt(ctx.match[1]);
     const difficulty = ctx.match[2];
     const userId = ctx.from!.id;
@@ -546,8 +554,8 @@ export function registerBotMenu(bot: Bot): void {
       let published = false;
       let publishError = '';
       try {
-        const categoryRu = CATEGORY_RU[sub.category ?? ''] ?? sub.category ?? '—';
-        const difficultyRu = DIFFICULTY_RU[sub.difficulty ?? ''] ?? sub.difficulty ?? '—';
+        const categoryRu = CATEGORY_RU[sub.category as Category] ?? sub.category ?? '—';
+        const difficultyRu = DIFFICULTY_RU[sub.difficulty as Difficulty] ?? sub.difficulty ?? '—';
         const title = escapeMarkdown(sub.title ?? 'Тренировка');
 
         const caption = [
@@ -575,8 +583,8 @@ export function registerBotMenu(bot: Bot): void {
           channel_url: null,
           duration_seconds: null,
           duration_label: null,
-          difficulty: (sub.difficulty as 'beginner' | 'intermediate' | 'advanced') ?? 'beginner',
-          category: (sub.category as 'stretching' | 'strength' | 'mobility') ?? 'stretching',
+          difficulty: (sub.difficulty as Difficulty) ?? 'beginner',
+          category: (sub.category as Category) ?? 'stretching',
           muscles: null,
           thumbnail_url: null,
           video_url: sub.video_url,
@@ -699,10 +707,10 @@ async function sendMyWorkouts(
   editMessageId?: number
 ): Promise<void> {
   const config = getConfig();
-  const total = getUserCompletionTotal(userId);
+  const total = getUserSubmissionTotal(userId);
 
   if (total === 0) {
-    const text = 'Ты пока не отметил(а) ни одной тренировки.\n\nНажми «Я сделаль» под постом, чтобы она появилась здесь.';
+    const text = 'У тебя пока нет предложенных тренировок.\n\nНажми «Предложить тренировку» чтобы добавить свою.';
     if (editMessageId) {
       try { await ctx.api.editMessageText(ctx.chat!.id, editMessageId, text); } catch {}
     } else {
@@ -711,22 +719,21 @@ async function sendMyWorkouts(
     return;
   }
 
-  const items = getUserCompletions(userId, PAGE_SIZE, offset);
+  const items = getUserSubmissions(userId, PAGE_SIZE, offset);
 
-  // Build channel post link: public @handle or private c/{id}
-  const channelHandle = config.TELEGRAM_CHANNEL_ID.startsWith('@')
-    ? config.TELEGRAM_CHANNEL_ID.slice(1)
-    : `c/${config.TELEGRAM_CHANNEL_ID.replace(/^-100/, '')}`;
+  const STATUS_LABELS: Record<string, string> = {
+    pending: '⏳ на модерации',
+    approved: '✅ одобрена',
+    rejected: '❌ отклонена',
+  };
 
   const lines = items.map((item, i) => {
     const num = offset + i + 1;
-    const catRu = item.category ? (CATEGORY_RU[item.category] ?? item.category) : '—';
-    const title = item.video_title ? decodeHtmlEntities(item.video_title) : 'Без названия';
-    const dateShort = item.date ?? item.completed_at.slice(0, 10);
-    const link = item.channel_message_id
-      ? `[↗](https://t.me/${channelHandle}/${item.channel_message_id})`
-      : '';
-    return `${num}. *${escapeMarkdown(title)}* ${link}\n   ${catRu} · ${dateShort}`;
+    const catRu = item.category ? (CATEGORY_RU[item.category as Category] ?? item.category) : '—';
+    const title = item.title ? decodeHtmlEntities(item.title) : 'Без названия';
+    const dateShort = item.created_at.slice(0, 10);
+    const status = STATUS_LABELS[item.status] ?? item.status;
+    return `${num}. *${escapeMarkdown(title)}*\n   ${catRu} · ${dateShort} · ${status}`;
   });
 
   const header = `*Мои тренировки* (${total})\n`;
@@ -756,19 +763,21 @@ async function sendMyWorkouts(
 
 async function sendUgcToAdmin(bot: Bot, sub: UgcSubmission): Promise<void> {
   const config = getConfig();
-  const catRu = sub.category ? (CATEGORY_RU[sub.category] ?? sub.category) : '?';
-  const diffRu: Record<string, string> = { beginner: 'начинающий', intermediate: 'средний', advanced: 'продвинутый' };
-  const diff = sub.difficulty ? (diffRu[sub.difficulty] ?? sub.difficulty) : '?';
+  const catRu = sub.category ? (CATEGORY_RU[sub.category as Category] ?? sub.category) : '?';
+  const diff = sub.difficulty ? (DIFFICULTY_RU[sub.difficulty as Difficulty] ?? sub.difficulty) : '?';
   const author = sub.username ? `@${sub.username}` : `id:${sub.telegram_user_id}`;
+
+  const safeTitle = escapeMarkdown(sub.title ?? 'Без названия');
+  const videoLink = sub.video_url.startsWith('tg:') ? '(видеофайл)' : sub.video_url;
 
   const text = [
     `*UGC: предложенная тренировка*`,
     '',
     `Автор: ${author}`,
-    `Название: ${sub.title}`,
+    `Название: ${safeTitle}`,
     `Тип: ${catRu}`,
     `Уровень: ${diff}`,
-    `Ссылка: ${sub.video_url}`,
+    `Видео: ${videoLink}`,
   ].join('\n');
 
   const kb = new InlineKeyboard()
@@ -776,13 +785,15 @@ async function sendUgcToAdmin(bot: Bot, sub: UgcSubmission): Promise<void> {
     .text('Отклонить', `ugc_decide:${sub.id}:reject`);
 
   try {
+    log.info('sending UGC to admin', { subId: sub.id, adminId: config.TELEGRAM_ADMIN_USER_ID });
     const msg = await bot.api.sendMessage(config.TELEGRAM_ADMIN_USER_ID, text, {
       parse_mode: 'Markdown',
       reply_markup: kb,
     });
     updateUgcSubmission(sub.id, { admin_message_id: msg.message_id });
+    log.info('UGC sent to admin', { subId: sub.id, msgId: msg.message_id });
   } catch (err) {
-    log.error('failed to send UGC to admin', { error: String(err) });
+    log.error('FAILED to send UGC to admin', { subId: sub.id, adminId: config.TELEGRAM_ADMIN_USER_ID, error: String(err) });
   }
 }
 
@@ -815,7 +826,7 @@ async function sendFilterResults(ctx: any, videos: ReturnType<typeof filterVideo
   const lines = videos.map((v, i) => {
     const title = decodeHtmlEntities(v.title);
     const shortTitle = title.length > 40 ? title.slice(0, 37) + '...' : title;
-    const catRu = CATEGORY_RU[v.category] ?? v.category;
+    const catRu = CATEGORY_RU[v.category as Category] ?? v.category;
     const dur = v.duration_label ?? '?';
     const link = v.channel_message_id
       ? `[${escapeMarkdown(shortTitle)}](https://t.me/${channelHandle}/${v.channel_message_id})`

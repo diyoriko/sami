@@ -77,6 +77,18 @@ EXPERIMENTS_JSON="$INTERNAL_DIR/experiments.json"
 OWNER_DECISIONS_JSON="$INTERNAL_DIR/owner-decisions.json"
 
 COMPETITOR_DIGEST="$INTERNAL_DIR/competitor-digest.json"
+PROPOSAL_STATUS="$INTERNAL_DIR/proposal-status.md"
+
+# Sync proposal statuses before generating prompt (non-critical)
+SYNC_PROPOSALS_SCRIPT="${SAMI_AGENTS_DIR:-$SCRIPT_DIR}/sync-proposal-status.mjs"
+if [[ -f "$SYNC_PROPOSALS_SCRIPT" ]] && command -v node >/dev/null 2>&1; then
+  if node "$SYNC_PROPOSALS_SCRIPT" 2>&1; then
+    echo "[strategist] proposal statuses synced"
+  else
+    echo "[strategist] proposal status sync failed (non-critical)"
+  fi
+fi
+
 CONTEXT_FILES=(
   "$CONTEXT_ROOT/STRATEGIST_BRIEF.md"
   "$CONTEXT_ROOT/COMMUNITY_TASKS.md"
@@ -86,6 +98,7 @@ CONTEXT_FILES=(
   "$EXPERIMENTS_JSON"
   "$OWNER_DECISIONS_JSON"
   "$COMPETITOR_DIGEST"
+  "$PROPOSAL_STATUS"
 )
 
 write_latest_json() {
@@ -323,6 +336,7 @@ prompt = f"""Ты стратегический агент проекта Sami. �
 - [sprint:3] [priority:P1] Пример: добавить welcome-quiz после капчи — повысит retention новичков
 // BACKLOG_PROPOSALS_END
 Правила: только новые задачи (не дублируй то что уже в COMMUNITY_TASKS.md). Максимум 5 предложений. Учитывай owner-decisions.json.
+ВАЖНО: В контексте есть proposal-status.md — статусы твоих прошлых предложений (done/accepted/pending). НЕ повторяй accepted и done предложения. Сфокусируйся на новых идеях.
 
 Обязательно в конце добавь блок:
 // COMMUNITY_PACKET_START

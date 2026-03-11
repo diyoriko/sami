@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import * as path from 'path';
 import * as fs from 'fs';
 import { getConfig } from './config';
+import { type Category, type Difficulty, CATEGORIES_SQL, DIFFICULTIES_SQL } from './shared';
 
 let _db: Database.Database | null = null;
 
@@ -29,6 +30,84 @@ export function withTransaction<T>(fn: () => T): T {
   return db.transaction(fn)();
 }
 
+/**
+ * Rebuild videos + ugc_submissions tables to update CHECK constraints.
+ * Needed when new categories (yoga, breathing, recovery, cardio) are added
+ * to an existing DB that was created with only 3 categories.
+ */
+function migrateCheckConstraints(db: Database.Database): void {
+  // Test if current CHECK allows new categories
+  try {
+    const stmt = db.prepare(
+      `INSERT INTO videos (youtube_id, title, channel_name, video_url, category) VALUES (?, ?, ?, ?, ?)`
+    );
+    stmt.run('__constraint_test__', '__test__', '__test__', '__test__', 'yoga');
+    db.exec(`DELETE FROM videos WHERE youtube_id = '__constraint_test__'`);
+    return; // CHECK already supports new categories
+  } catch {
+    // CHECK rejects 'yoga' → need to rebuild tables
+  }
+
+  db.transaction(() => {
+    // Rebuild videos table
+    db.exec(`
+      CREATE TABLE videos_v2 (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        youtube_id TEXT UNIQUE NOT NULL,
+        title TEXT NOT NULL,
+        channel_name TEXT NOT NULL,
+        channel_url TEXT,
+        duration_seconds INTEGER,
+        duration_label TEXT,
+        difficulty TEXT CHECK(difficulty IN (${DIFFICULTIES_SQL})),
+        category TEXT CHECK(category IN (${CATEGORIES_SQL})) NOT NULL,
+        muscles TEXT,
+        thumbnail_url TEXT,
+        video_url TEXT NOT NULL,
+        search_query TEXT,
+        view_count INTEGER DEFAULT 0,
+        rating REAL DEFAULT 0,
+        like_ratio REAL DEFAULT 0,
+        channel_subscribers INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+      INSERT INTO videos_v2 SELECT
+        id, youtube_id, title, channel_name, channel_url,
+        duration_seconds, duration_label, difficulty, category, muscles,
+        thumbnail_url, video_url, search_query,
+        view_count, rating, like_ratio, channel_subscribers, created_at
+      FROM videos;
+      DROP TABLE videos;
+      ALTER TABLE videos_v2 RENAME TO videos;
+    `);
+
+    // Rebuild ugc_submissions table
+    db.exec(`
+      CREATE TABLE ugc_submissions_v2 (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        telegram_user_id INTEGER NOT NULL,
+        username TEXT,
+        video_url TEXT NOT NULL,
+        youtube_id TEXT,
+        title TEXT,
+        category TEXT CHECK(category IN (${CATEGORIES_SQL})),
+        difficulty TEXT CHECK(difficulty IN (${DIFFICULTIES_SQL})),
+        status TEXT CHECK(status IN ('draft','pending','approved','rejected')) DEFAULT 'draft',
+        admin_message_id INTEGER,
+        created_at TEXT DEFAULT (datetime('now')),
+        decided_at TEXT,
+        deleted_at TEXT
+      );
+      INSERT INTO ugc_submissions_v2 SELECT
+        id, telegram_user_id, username, video_url, youtube_id, title,
+        category, difficulty, status, admin_message_id, created_at, decided_at, deleted_at
+      FROM ugc_submissions;
+      DROP TABLE ugc_submissions;
+      ALTER TABLE ugc_submissions_v2 RENAME TO ugc_submissions;
+    `);
+  })();
+}
+
 function migrate(db: Database.Database): void {
   // Migrations for older schemas
   try { db.exec('ALTER TABLE videos ADD COLUMN view_count INTEGER DEFAULT 0'); } catch { /* already exists */ }
@@ -46,8 +125,8 @@ function migrate(db: Database.Database): void {
       channel_url TEXT,
       duration_seconds INTEGER,
       duration_label TEXT,
-      difficulty TEXT CHECK(difficulty IN ('beginner','intermediate','advanced')),
-      category TEXT CHECK(category IN ('stretching','strength','mobility')) NOT NULL,
+      difficulty TEXT CHECK(difficulty IN (${DIFFICULTIES_SQL})),
+      category TEXT CHECK(category IN (${CATEGORIES_SQL})) NOT NULL,
       muscles TEXT,  -- JSON array as string
       thumbnail_url TEXT,
       video_url TEXT NOT NULL,
@@ -129,8 +208,8 @@ function migrate(db: Database.Database): void {
       video_url TEXT NOT NULL,
       youtube_id TEXT,
       title TEXT,
-      category TEXT CHECK(category IN ('stretching','strength','mobility')),
-      difficulty TEXT CHECK(difficulty IN ('beginner','intermediate','advanced')),
+      category TEXT CHECK(category IN (${CATEGORIES_SQL})),
+      difficulty TEXT CHECK(difficulty IN (${DIFFICULTIES_SQL})),
       status TEXT CHECK(status IN ('draft','pending','approved','rejected')) DEFAULT 'draft',
       admin_message_id INTEGER,
       created_at TEXT DEFAULT (datetime('now')),
@@ -191,6 +270,9 @@ function migrate(db: Database.Database): void {
   // Soft delete columns
   try { db.exec('ALTER TABLE ugc_submissions ADD COLUMN deleted_at TEXT'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE approval_sessions ADD COLUMN deleted_at TEXT'); } catch { /* already exists */ }
+
+  // Migration: rebuild tables with updated CHECK constraints (added yoga, breathing, recovery, cardio)
+  migrateCheckConstraints(db);
 
   // Video rejections (blocklist): tracks admin "Другое" clicks
   db.exec(`
@@ -268,6 +350,31 @@ function migrate(db: Database.Database): void {
     );
     CREATE INDEX IF NOT EXISTS idx_impl_tasks_status ON impl_tasks(status);
   `);
+
+  // Rubrics: weekly ritual challenges, mechanics breakdowns, progress digests
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS rubric_rituals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      week_start TEXT NOT NULL,  -- ISO date of Monday
+      title TEXT NOT NULL,
+      description TEXT,
+      category TEXT,
+      channel_message_id INTEGER,
+      participants INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_ritual_week ON rubric_rituals(week_start);
+
+    CREATE TABLE IF NOT EXISTS rubric_ritual_participants (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ritual_id INTEGER NOT NULL REFERENCES rubric_rituals(id),
+      telegram_user_id INTEGER NOT NULL,
+      day_number INTEGER NOT NULL,  -- 1-7
+      completed_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(ritual_id, telegram_user_id, day_number)
+    );
+    CREATE INDEX IF NOT EXISTS idx_ritual_part_user ON rubric_ritual_participants(telegram_user_id);
+  `);
 }
 
 // --- Captcha state (persistent) ---
@@ -335,8 +442,8 @@ export interface VideoRow {
   channel_url: string | null;
   duration_seconds: number | null;
   duration_label: string | null;
-  difficulty: 'beginner' | 'intermediate' | 'advanced';
-  category: 'stretching' | 'strength' | 'mobility';
+  difficulty: Difficulty;
+  category: Category;
   muscles: string | null;
   thumbnail_url: string | null;
   video_url: string;
@@ -528,6 +635,13 @@ export function recordPost(date: string, category: string, videoId: number, chan
     INSERT INTO posts (date, category, video_id, channel_message_id, post_type) VALUES (?, ?, ?, ?, ?)
   `).run(date, category, videoId, channelMessageId, postType);
   return Number(result.lastInsertRowid);
+}
+
+/** Get the most recent post overall (for health dashboard) */
+export function getLatestPost(): { date: string; category: string; posted_at: string } | null {
+  return (getDb().prepare(
+    `SELECT date, category, posted_at FROM posts ORDER BY posted_at DESC LIMIT 1`
+  ).get() as { date: string; category: string; posted_at: string } | undefined) ?? null;
 }
 
 export function getLatestPostForDate(date: string): { category: string; channel_message_id: number } | null {
@@ -863,14 +977,47 @@ function normalizeViews(viewCount: number): number {
   return Math.min(Math.max((log - 2) / 4, 0), 1); // 100 views = 0, 1M = 1.0
 }
 
+/**
+ * Normalize completion count to 0..1 score.
+ * 0 = 0, 3 = 0.5, 10+ = 1.0 (diminishing returns via sqrt)
+ */
+function normalizeCompletions(count: number): number {
+  if (count <= 0) return 0;
+  return Math.min(Math.sqrt(count / 10), 1);
+}
+
+/**
+ * Get total completions across all posts for a given video.
+ */
+function getVideoCompletionCount(videoId: number): number {
+  const row = getDb().prepare(
+    `SELECT COUNT(*) as cnt FROM completions WHERE video_id = ?`
+  ).get(videoId) as { cnt: number };
+  return row.cnt;
+}
+
+/**
+ * Rating formula: YouTube metrics + Telegram engagement.
+ *
+ * Weights:
+ *  35% view count (YouTube reach)
+ *  30% like ratio (YouTube quality signal)
+ *  20% channel authority
+ *  15% completions (Telegram engagement — people who actually did the workout)
+ */
 export function computeRating(video: VideoRow): number {
   const viewScore = normalizeViews(video.view_count);
   const likeScore = normalizeLikeRatio(video.like_ratio ?? 0);
   const channelScore = video.channel_subscribers > 0
     ? Math.min(Math.log10(video.channel_subscribers) / 6, 1) // 1M subs = 1.0
     : 0.4;
+  const completionScore = normalizeCompletions(getVideoCompletionCount(video.id));
 
-  const raw = 0.40 * viewScore + 0.35 * likeScore + 0.25 * channelScore;
+  const raw =
+    0.35 * viewScore +
+    0.30 * likeScore +
+    0.20 * channelScore +
+    0.15 * completionScore;
   return Math.round(Math.min(raw * 10, 10) * 10) / 10; // 0.0 .. 10.0
 }
 
@@ -1340,4 +1487,77 @@ export function listImplTasks(status?: ImplTaskStatus): ImplTask[] {
   return getDb().prepare(
     `SELECT * FROM impl_tasks ORDER BY created_at DESC`
   ).all() as ImplTask[];
+}
+
+// --- Rubrics ---
+
+export interface RitualRow {
+  id: number;
+  week_start: string;
+  title: string;
+  description: string | null;
+  category: string | null;
+  channel_message_id: number | null;
+  participants: number;
+  created_at: string;
+}
+
+export function createRitual(weekStart: string, title: string, description?: string, category?: string): number {
+  const result = getDb().prepare(
+    `INSERT INTO rubric_rituals (week_start, title, description, category) VALUES (?, ?, ?, ?)`
+  ).run(weekStart, title, description ?? null, category ?? null);
+  return Number(result.lastInsertRowid);
+}
+
+export function getCurrentRitual(): RitualRow | null {
+  return (getDb().prepare(
+    `SELECT * FROM rubric_rituals ORDER BY week_start DESC LIMIT 1`
+  ).get() as RitualRow | undefined) ?? null;
+}
+
+export function setRitualMessageId(ritualId: number, messageId: number): void {
+  getDb().prepare('UPDATE rubric_rituals SET channel_message_id = ? WHERE id = ?').run(messageId, ritualId);
+}
+
+export function recordRitualParticipation(ritualId: number, userId: number, dayNumber: number): boolean {
+  try {
+    getDb().prepare(
+      `INSERT INTO rubric_ritual_participants (ritual_id, telegram_user_id, day_number) VALUES (?, ?, ?)`
+    ).run(ritualId, userId, dayNumber);
+    // Update participant count
+    const count = getDb().prepare(
+      `SELECT COUNT(DISTINCT telegram_user_id) as cnt FROM rubric_ritual_participants WHERE ritual_id = ?`
+    ).get(ritualId) as { cnt: number };
+    getDb().prepare('UPDATE rubric_rituals SET participants = ? WHERE id = ?').run(count.cnt, ritualId);
+    return true;
+  } catch {
+    return false; // duplicate
+  }
+}
+
+export function getRitualProgress(ritualId: number, userId: number): number {
+  const row = getDb().prepare(
+    `SELECT COUNT(*) as cnt FROM rubric_ritual_participants WHERE ritual_id = ? AND telegram_user_id = ?`
+  ).get(ritualId, userId) as { cnt: number };
+  return row.cnt;
+}
+
+export function getRitualParticipantCount(ritualId: number): number {
+  const row = getDb().prepare(
+    `SELECT COUNT(DISTINCT telegram_user_id) as cnt FROM rubric_ritual_participants WHERE ritual_id = ?`
+  ).get(ritualId) as { cnt: number };
+  return row.cnt;
+}
+
+/** Get top active members for weekly progress digest */
+export function getWeeklyTopMembers(weekStart: string, limit: number = 5): { telegram_user_id: number; username: string | null; first_name: string | null; count: number }[] {
+  return getDb().prepare(`
+    SELECT m.telegram_user_id, m.username, m.first_name, COUNT(*) as count
+    FROM completions c
+    JOIN members m ON m.telegram_user_id = c.telegram_user_id
+    WHERE c.completed_at >= ?
+    GROUP BY c.telegram_user_id
+    ORDER BY count DESC
+    LIMIT ?
+  `).all(weekStart, limit) as { telegram_user_id: number; username: string | null; first_name: string | null; count: number }[];
 }

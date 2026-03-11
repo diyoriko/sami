@@ -14,15 +14,9 @@ import {
 import { searchAllCategories, searchVideos, detectEquipment, Category, ScoredVideo } from './youtube';
 import { rewriteTitle, formatChannelName } from './translate';
 import { createLogger, generateCorrelationId } from './logger';
-import { CATEGORY_RU, DIFFICULTY_RU } from './shared';
+import { CATEGORIES, CATEGORY_RU, DIFFICULTY_RU, CATEGORY_EMOJI } from './shared';
 
 const log = createLogger('approval');
-
-const CATEGORY_EMOJI: Record<Category, string> = {
-  stretching: '🧘',
-  strength: '💪',
-  mobility: '🔄',
-};
 
 function formatViews(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -105,7 +99,7 @@ export async function runApprovalFlow(
   const cid = correlationId ?? generateCorrelationId();
   const flowLog = log.withCorrelation(cid);
   const config = getConfig();
-  const categories: Category[] = ['stretching', 'strength', 'mobility'];
+  const categories = [...CATEGORIES];
 
   flowLog.info('starting approval flow', { date, hasCustomKeywords: !!customKeywords });
 

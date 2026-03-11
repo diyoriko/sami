@@ -341,6 +341,61 @@
     flex-shrink: 0;
   }
 
+  /* Health Dashboard */
+  .health-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-top: 24px;
+  }
+
+  .health-panel h3 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+
+  .health-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+
+  .health-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+  }
+
+  .health-card-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+
+  .health-card-value {
+    font-size: 16px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .health-ok { color: var(--p2); }
+  .health-warn { color: var(--p1); }
+  .health-error { color: var(--p0); }
+  .health-muted { color: var(--text-muted); }
+
+  .health-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+  }
+
   .services {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -712,6 +767,7 @@
 <div class="stats" id="stats"></div>
 <div id="agents"></div>
 <div id="content"></div>
+<div id="health"></div>
 <div class="services" id="services"></div>
 <div id="implTasks"></div>
 
@@ -978,6 +1034,22 @@ const staticData = {
         "UGC auto-publish при одобрении",
         "Архитектура канал+группа зафиксирована до 50 подписчиков"
       ]
+    },
+    {
+      "version": "v0.6.0",
+      "date": "11.03",
+      "status": "pending",
+      "items": [
+        "shared.ts SSoT: 7 категорий, 3 уровня, 12 групп мышц, 12 типов инвентаря",
+        "DB миграция CHECK constraints (yoga, breathing, recovery, cardio)",
+        "Рейтинг: +15% completions из Telegram (35/30/20/15)",
+        "Health dashboard в backlog.html — live-fetch /health",
+        "Пост-онбординг DM новым участникам",
+        "Рубрики: #ритуал_недели (DB + кнопки) + #прогресс_пятницы (top-5)",
+        "25 UX smoke-тестов (82 всего)",
+        "Proxy без cookies, feedback loop, UGC fixes",
+        "Стратег ↔ бэклог: sync-proposal-status.mjs"
+      ]
     }
   ],
   "sprints": [
@@ -1235,16 +1307,31 @@ const staticData = {
             { "text": "Статус: очистка сессий после /post", "done": true },
             { "text": "Валидация \"Я сделаль\" — cooldown 1 час", "done": true },
             { "text": "Аудит текстов админки + удаление мёртвых cron vars", "done": true },
-            { "text": "UGC: админ не получает пуш на модерацию", "done": false },
-            { "text": "Стратег ↔ бэклог: автоматизация feedback loop", "done": false },
-            { "text": "Автотесты UX в Telegram (smoke-тестирование кнопок)", "done": false }
+            { "text": "\"Мои тренировки\" — показывать UGC submissions, не completions", "done": true },
+            { "text": "UGC: пуш админу — экранирование + логи", "done": true },
+            { "text": "Proxy без cookies — cookies опциональны, placeholder на Railway", "done": true },
+            { "text": "Стратег ↔ бэклог: feedback loop (sync-proposal-status.mjs)", "done": true },
+            { "text": "Ревью UX автокоммента в группе", "done": false },
+            { "text": "Поиск тренировки в канале/боте — UX навигации", "done": false },
+            { "text": "Ревью алгоритма поиска видео — like_ratio, channel auth, config, стратег keywords", "done": false },
+            { "text": "Стратег: предложения задач в репорте → одобрение → бэклог", "done": false },
+            { "text": "Описание канала и bio бота (SEO)", "done": false },
+            { "text": "Пост-онбординг DM новым участникам", "done": true },
+            { "text": "Автотесты UX — 25 smoke-тестов", "done": true }
+          ]
+        },
+        {
+          "title": "Мониторинг и стабильность",
+          "priority": "p1",
+          "tasks": [
+            { "text": "Health dashboard в backlog.html — live-fetch /health", "done": true },
+            { "text": "Ревью формулы рейтинга — +15% completions из Telegram", "done": true }
           ]
         },
         {
           "title": "Growth (ручная работа)",
-          "priority": "p1",
+          "priority": "p2",
           "tasks": [
-            { "text": "Ручной посев — 10 личных приглашений", "done": false },
             { "text": "Cross-promo с 3 микро-каналами", "done": false },
             { "text": "Посевной пост-подборка", "done": false },
             { "text": "Контент-расписание на 2 недели", "done": false }
@@ -1254,24 +1341,25 @@ const staticData = {
           "title": "Контент и рубрики",
           "priority": "p2",
           "tasks": [
-            { "text": "[СТРАТЕГ] Ревью метаданных тренировки — аудит всех параметров, новые категории, концепция сложности", "done": false },
-            { "text": "Новые категории + синхронизация UGC — реализация по спеке стратега", "done": false },
-            { "text": "#ритуал_недели (пн) + ritual challenge (7 дней, счётчик)", "done": false },
-            { "text": "#механика (ср)", "done": false },
-            { "text": "#прогресс_пятницы (пт)", "done": false }
+            { "text": "Ревью метаданных — shared.ts SSoT: 7 категорий, мышцы, инвентарь", "done": true },
+            { "text": "Новые категории + DB миграция CHECK constraints", "done": true },
+            { "text": "#ритуал_недели (пн) — ritual challenge, DB, кнопки", "done": true },
+            { "text": "#механика (ср) — контент от стратега", "done": false },
+            { "text": "#прогресс_пятницы (пт) — top-5 активных, итоги", "done": true }
           ]
         },
         {
           "title": "Отложено (после 50+ участников)",
           "priority": "p3",
           "tasks": [
+            { "text": "Ручной посев — 10 личных приглашений (после стабильной версии)", "done": false },
             { "text": "Монетизация", "done": false },
             { "text": "Фильтры и профили вернуть в меню", "done": false },
             { "text": "Категория \"Йога\" / \"Восстановление\"", "done": false },
             { "text": "Weekly personal stats DM", "done": false },
             { "text": "Attribution flow для тренеров", "done": false },
             { "text": "Cross-promotion механика", "done": false },
-            { "text": "Proxy без cookies — убрать зависимость от YouTube cookies", "done": false },
+            { "text": "Proxy без cookies → перенесено в P1", "done": true },
             { "text": "MarkdownV2 — перевод на новый parse_mode", "done": false },
             { "text": "Лендинг Sami", "done": false }
           ]
@@ -1627,6 +1715,104 @@ function render() {
   const src = ts ? 'GitHub' : 'static';
   const time = new Date().toLocaleString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   document.getElementById('lastUpdate').textContent = `${time} (${src})`;
+
+  // Health dashboard — fetch live data from Railway
+  fetchHealth();
+}
+
+const RAILWAY_URL = 'https://courageous-happiness-production.up.railway.app';
+
+async function fetchHealth() {
+  const container = document.getElementById('health');
+  let healthData = null;
+
+  try {
+    const res = await fetch(RAILWAY_URL + '/health?t=' + Date.now());
+    healthData = res.ok ? await res.json() : null;
+  } catch {
+    // Network error
+  }
+
+  if (!healthData) {
+    container.innerHTML = `
+      <div class="health-panel">
+        <h3>System Health</h3>
+        <div class="health-grid">
+          <div class="health-card">
+            <div class="health-card-label">Статус</div>
+            <div class="health-card-value health-error">
+              <span class="health-dot" style="background:var(--p0)"></span>Недоступен
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  const uptime = healthData.uptime_seconds || 0;
+  const uptimeStr = uptime >= 3600
+    ? `${Math.floor(uptime / 3600)}ч ${Math.floor((uptime % 3600) / 60)}м`
+    : `${Math.floor(uptime / 60)}м`;
+
+  const deployedAt = healthData.deployed_at
+    ? new Date(healthData.deployed_at + 'Z').toLocaleString('ru-RU', {
+        day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+      })
+    : '—';
+
+  // Extract health stats
+  const lastPost = healthData.lastPost
+    ? `${healthData.lastPost.date} (${healthData.lastPost.category})`
+    : '—';
+  const ytDlpOk = healthData.ytDlpAvailable ?? null;
+
+  const statusDot = healthData.status === 'ok' ? 'var(--p2)' : 'var(--p0)';
+  const statusText = healthData.status === 'ok' ? 'Работает' : healthData.status;
+  const statusClass = healthData.status === 'ok' ? 'health-ok' : 'health-error';
+
+  const ytDlpStatus = ytDlpOk === true ? 'OK' : ytDlpOk === false ? 'Ошибка' : '—';
+  const ytDlpClass = ytDlpOk === true ? 'health-ok' : ytDlpOk === false ? 'health-error' : 'health-muted';
+
+  container.innerHTML = `
+    <div class="health-panel">
+      <h3>System Health</h3>
+      <div class="health-grid">
+        <div class="health-card">
+          <div class="health-card-label">Бот</div>
+          <div class="health-card-value ${statusClass}">
+            <span class="health-dot" style="background:${statusDot}"></span>${statusText}
+          </div>
+        </div>
+        <div class="health-card">
+          <div class="health-card-label">Версия</div>
+          <div class="health-card-value">${healthData.version || '—'}
+            <span style="font-size:11px;color:var(--text-muted);font-weight:400"> ${healthData.commit || ''}</span>
+          </div>
+        </div>
+        <div class="health-card">
+          <div class="health-card-label">Uptime</div>
+          <div class="health-card-value">${uptimeStr}</div>
+        </div>
+        <div class="health-card">
+          <div class="health-card-label">Деплой</div>
+          <div class="health-card-value" style="font-size:13px">${deployedAt}</div>
+        </div>
+        <div class="health-card">
+          <div class="health-card-label">yt-dlp</div>
+          <div class="health-card-value ${ytDlpClass}">${ytDlpStatus}</div>
+        </div>
+        <div class="health-card">
+          <div class="health-card-label">Последний пост</div>
+          <div class="health-card-value" style="font-size:13px">${lastPost}</div>
+        </div>
+        <div class="health-card">
+          <div class="health-card-label">Proxy</div>
+          <div class="health-card-value health-ok">Dataimpulse</div>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 initData();

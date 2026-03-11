@@ -19,7 +19,7 @@ describe('post format vision compliance', () => {
 
   it('uses monospace backtick tags on separate lines', () => {
     expect(posterSource).toContain('tagLines');
-    expect(posterSource).toMatch(/🧘/);
+    expect(posterSource).toContain('CATEGORY_EMOJI');
     expect(posterSource).toMatch(/⏱/);
     expect(posterSource).toMatch(/🦴/);
     expect(posterSource).toMatch(/💎/);

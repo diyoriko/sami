@@ -13,44 +13,17 @@
 import { getConfig } from './config';
 import { wasPostedRecently, isVideoRejected, VideoRow } from './db';
 import { createLogger } from './logger';
+import {
+  type Category, type Difficulty,
+  CATEGORIES, CATEGORY_QUERIES,
+  EQUIPMENT_PATTERNS as EQUIPMENT_DETECT_PATTERNS,
+  MUSCLE_PATTERNS, MUSCLE_DEFAULTS,
+} from './shared';
+
+// Re-export for backward compatibility (other modules import Category from youtube)
+export type { Category } from './shared';
 
 const log = createLogger('youtube');
-
-export type Category = 'stretching' | 'strength' | 'mobility';
-
-// Mixed RU+EN queries. "Только коврик" — no equipment framing.
-const CATEGORY_QUERIES: Record<Category, string[]> = {
-  stretching: [
-    'утренняя растяжка дома на коврике',
-    'растяжка всего тела для начинающих без инвентаря',
-    'стретчинг для гибкости дома',
-    'утренняя разминка суставов 10 минут',
-    'растяжка после тренировки восстановление',
-    'full body stretching routine no equipment',
-    'morning stretch routine 10 min mat only',
-    'gentle flexibility routine beginner',
-  ],
-  strength: [
-    'силовая тренировка дома без инвентаря на коврике',
-    'тренировка с весом тела для начинающих',
-    'функциональная тренировка дома без оборудования',
-    'бодивейт тренировка 20 минут дома',
-    'силовая тренировка без гантелей',
-    'bodyweight workout at home no equipment',
-    'mat only strength training beginner',
-    'full body workout no equipment 15 min',
-  ],
-  mobility: [
-    'мобильность суставов тренировка дома',
-    'мобильность тазобедренных суставов на коврике',
-    'суставная гимнастика утром для начинающих',
-    'мобильность позвоночника упражнения',
-    'подвижность суставов ежедневная практика',
-    'joint mobility routine morning',
-    'hip mobility flow mat only',
-    'spine mobility exercises daily routine',
-  ],
-};
 
 // ─── PENALTY PATTERNS ────────────────────────────────────────────────────────
 
@@ -202,7 +175,7 @@ function parseDuration(iso: string): { seconds: number; label: string } {
   return { seconds: total, label };
 }
 
-function guessDifficulty(title: string, description: string): 'beginner' | 'intermediate' | 'advanced' {
+function guessDifficulty(title: string, description: string): Difficulty {
   const text = (title + ' ' + description).toLowerCase();
   if (/beginner|начинающ|для новичк|easy|лёгк|light|простой/.test(text)) return 'beginner';
   if (/advanced|сложн|hard|intense|профи|тяжёл/.test(text)) return 'advanced';
@@ -212,20 +185,12 @@ function guessDifficulty(title: string, description: string): 'beginner' | 'inte
 function guessMuscles(title: string, category: Category): string[] {
   const text = title.toLowerCase();
   const muscles: string[] = [];
-  const muscleMap: [RegExp, string][] = [
-    [/back|спин/, 'спина'], [/hip|бедр/, 'бёдра'],
-    [/shoulder|плеч/, 'плечи'], [/chest|грудь|грудн/, 'грудь'],
-    [/leg|нога|ног/, 'ноги'], [/core|пресс|abs/, 'кор/пресс'],
-    [/arm|рук|bicep|tricep/, 'руки'], [/neck|ше[ия]/, 'шея'],
-    [/glute|ягодиц/, 'ягодицы'], [/hamstring|подколен/, 'задняя бедра'],
-    [/quad|четырехглав/, 'квадрицепс'], [/calf|икр/, 'икры'],
-  ];
-  for (const [re, label] of muscleMap) {
+  for (const [re, label] of MUSCLE_PATTERNS) {
     if (re.test(text)) muscles.push(label);
   }
   return muscles.length > 0
     ? muscles
-    : { stretching: ['всё тело'], strength: ['всё тело'], mobility: ['суставы, всё тело'] }[category];
+    : (MUSCLE_DEFAULTS[category] ?? ['всё тело']);
 }
 
 // ─── API TYPES ───────────────────────────────────────────────────────────────
@@ -286,20 +251,9 @@ async function fetchJson<T>(url: string): Promise<T> {
 
 // ─── EQUIPMENT DETECTION ─────────────────────────────────────────────────────
 
-const EQUIPMENT_LABELS: [RegExp, string][] = [
-  [/гантели|dumbbell/i, 'гантели'],
-  [/штанга|barbell/i, 'штанга'],
-  [/резинк|эспандер|resistance band/i, 'резинка'],
-  [/гиря|kettlebell/i, 'гиря'],
-  [/тренажёр|тренажер|machine/i, 'тренажёр'],
-  [/скакалка|jump rope/i, 'скакалка'],
-  [/турник|pull.?up bar/i, 'турник'],
-  [/петли|trx/i, 'петли TRX'],
-];
-
 export function detectEquipment(title: string, description: string): string[] {
   const text = (title + ' ' + description).toLowerCase();
-  return EQUIPMENT_LABELS.filter(([re]) => re.test(text)).map(([, label]) => label);
+  return EQUIPMENT_DETECT_PATTERNS.filter(([re]) => re.test(text)).map(([, label]) => label);
 }
 
 export type ScoredVideo = Omit<VideoRow, 'id'> & {
@@ -414,14 +368,13 @@ export async function searchVideos(
 }
 
 export async function searchAllCategories(
-  keywords?: { stretching?: string; strength?: string; mobility?: string },
+  keywords?: Partial<Record<Category, string>>,
   correlationId?: string,
 ): Promise<Record<Category, ScoredVideo[]>> {
   const searchLog = correlationId ? log.withCorrelation(correlationId) : log;
-  const categories: Category[] = ['stretching', 'strength', 'mobility'];
   const result = {} as Record<Category, ScoredVideo[]>;
 
-  for (const cat of categories) {
+  for (const cat of CATEGORIES) {
     try {
       result[cat] = await searchVideos(cat, 3, keywords?.[cat], correlationId);
       const top = result[cat][0];

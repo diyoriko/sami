@@ -117,7 +117,9 @@ export function logYtDlpStatus(): void {
     const bin = findYtDlp();
     const ver = require('child_process').execFileSync(bin, ['--version'], { encoding: 'utf8' }).trim();
     const proxy = process.env.YT_PROXY ? 'yes' : 'no';
-    const cookies = fs.existsSync(COOKIES_PATH) ? 'yes' : (fs.existsSync(path.join(os.tmpdir(), 'yt-cookies.txt')) ? 'yes (tmp)' : 'no');
+    const cookieFile = [COOKIES_PATH, path.join(os.tmpdir(), 'yt-cookies.txt')].find(p => fs.existsSync(p));
+    const cookieSize = cookieFile ? fs.statSync(cookieFile).size : 0;
+    const cookies = cookieFile ? (cookieSize > 100 ? `yes (${(cookieSize / 1024).toFixed(0)}KB)` : 'skipped (empty)') : 'no';
     log.info(`yt-dlp: ${bin} (${ver}), proxy: ${proxy}, cookies: ${cookies}`);
   } catch {
     log.warn('yt-dlp NOT found — will post YouTube links as fallback');
@@ -253,12 +255,15 @@ export async function downloadVideo(youtubeUrl: string, youtubeId: string): Prom
     baseArgs.push('--proxy', proxy);
   }
 
-  // Use cookies if available (needed for datacenter IP auth)
+  // Use cookies if available and non-empty (skip placeholder/empty files)
   const cookieCandidates = [COOKIES_PATH, path.join(os.tmpdir(), 'yt-cookies.txt')];
   for (const cp of cookieCandidates) {
     if (fs.existsSync(cp)) {
-      baseArgs.push('--cookies', cp);
-      break;
+      const size = fs.statSync(cp).size;
+      if (size > 100) { // skip empty/placeholder files
+        baseArgs.push('--cookies', cp);
+        break;
+      }
     }
   }
 

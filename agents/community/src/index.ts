@@ -13,7 +13,9 @@ import { registerApprovalCallbacks } from './approval';
 import { startScheduler } from './scheduler';
 import { upgradeYtDlp, logYtDlpStatus, initCookies, setAdminNotifier, runDiagnostic } from './downloader';
 import { migrateStrategist, savePacketFromExternal, registerStrategistCallbacks, sendActionToAdmin, getActionById } from './strategist';
-import { recordDeploy, getLatestDeploy, listImplTasks, getNextImplTask, getImplTask, updateImplTaskStatus, createImplTask } from './db';
+import { registerRubricHandlers } from './rubrics';
+import { recordDeploy, getLatestDeploy, getLatestPost, listImplTasks, getNextImplTask, getImplTask, updateImplTaskStatus, createImplTask } from './db';
+import { isYtDlpAvailable as isYtDlpAvailableCheck } from './downloader';
 import type { ImplTaskStatus, ImplTaskSource } from './db';
 
 async function main(): Promise<void> {
@@ -64,6 +66,7 @@ async function main(): Promise<void> {
   registerModeration(bot);
   registerApprovalCallbacks(bot);
   registerStrategistCallbacks(bot);
+  registerRubricHandlers(bot);
 
   // --- Admin commands (all use Moscow timezone) ---
 
@@ -166,13 +169,17 @@ async function main(): Promise<void> {
   const httpServer = http.createServer((req, res) => {
     if (req.url === '/health') {
       const deploy = getLatestDeploy();
-      res.writeHead(200, { 'Content-Type': 'application/json' });
+      const latestPost = getLatestPost();
+      const ytDlpAvailable = isYtDlpAvailableCheck();
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
       res.end(JSON.stringify({
         status: 'ok',
         version: deploy?.version ?? null,
         commit: deploy?.commit_sha?.slice(0, 7) ?? null,
         deployed_at: deploy?.deployed_at ?? null,
         uptime_seconds: Math.floor(process.uptime()),
+        ytDlpAvailable,
+        lastPost: latestPost ? { date: latestPost.date, category: latestPost.category, posted_at: latestPost.posted_at } : null,
       }));
       return;
     }
@@ -358,7 +365,7 @@ async function main(): Promise<void> {
 
     const filePath = reportFiles[req.url ?? ''];
     if (filePath) {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
       if (fs.existsSync(filePath)) {
         res.end(fs.readFileSync(filePath, 'utf8'));
       } else {

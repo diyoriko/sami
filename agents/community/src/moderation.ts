@@ -2,7 +2,7 @@ import { Bot } from 'grammy';
 import { InlineKeyboard } from 'grammy';
 import { getConfig } from './config';
 import { createLogger } from './logger';
-import { CATEGORY_RU } from './shared';
+import { type Category, CATEGORY_RU } from './shared';
 import { moscowHour } from './dates';
 
 const log = createLogger('moderation');
@@ -321,7 +321,7 @@ export function registerModeration(bot: Bot): void {
 
     let welcomeText = `${response}\n\n_Нажми «Я сделаль» под видео, когда закончишь тренировку._`;
     if (latestPost) {
-      const catLabel = CATEGORY_RU[latestPost.category] ?? latestPost.category;
+      const catLabel = CATEGORY_RU[latestPost.category as Category] ?? latestPost.category;
       // Public channel: @sami_workouts -> t.me/sami_workouts/N; private: t.me/c/{id}/N
       const channelHandle = config.TELEGRAM_CHANNEL_ID.startsWith('@')
         ? config.TELEGRAM_CHANNEL_ID.slice(1)
@@ -333,6 +333,28 @@ export function registerModeration(bot: Bot): void {
     try {
       await ctx.editMessageText(welcomeText, { parse_mode: 'Markdown' });
     } catch {}
+
+    // Post-onboarding DM: explain how Sami works (sent privately)
+    try {
+      await bot.api.sendMessage(
+        userId,
+        `*Как устроен Sami*\n\n` +
+        `Каждый день в канале @sami_workouts появляются видео-тренировки: стретчинг, силовая, мобильность и другие.\n\n` +
+        `*Что делать:*\n` +
+        `1. Открой видео, сделай тренировку\n` +
+        `2. Нажми *Я сделаль* под постом — это отмечает выполнение\n` +
+        `3. Счётчик показывает сколько людей уже сделали\n\n` +
+        `*Что ещё умеет бот:*\n` +
+        `• _Профиль_ — твоя статистика и уровень\n` +
+        `• _Мои тренировки_ — загруженные тобой видео\n` +
+        `• _Предложить тренировку_ — поделись своей находкой\n` +
+        `• _Фильтры_ — найди видео по категории и длительности\n\n` +
+        `Вопросы? Пиши в группу — поможем.`,
+        { parse_mode: 'Markdown' }
+      );
+    } catch {
+      // User may have blocked DMs — that's ok
+    }
   });
 
   // --- Spam + antiflood + cooldown filter ---
@@ -619,7 +641,7 @@ export function registerModeration(bot: Bot): void {
     const rating = updateVideoRating(videoId);
     const ratingStr = rating > 0 ? rating.toFixed(1) : '—';
     await ctx.answerCallbackQuery({
-      text: `★ Рейтинг: ${ratingStr} из 10\n\nФормула:\n• 40% — просмотры на YouTube\n• 35% — соотношение лайков\n• 25% — авторитет канала\n\nЧем выше рейтинг, тем популярнее и качественнее видео.`,
+      text: `★ Рейтинг: ${ratingStr} из 10\n\nФормула:\n• 35% — просмотры на YouTube\n• 30% — соотношение лайков\n• 20% — авторитет канала\n• 15% — выполнения в Sami\n\nЧем больше людей делает тренировку, тем выше рейтинг.`,
       show_alert: true,
     });
   });
