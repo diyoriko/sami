@@ -207,6 +207,35 @@ async function main(): Promise<void> {
       return;
     }
 
+    // POST /upload-cookies — update yt-dlp cookies from local machine
+    if (req.url === '/upload-cookies' && req.method === 'POST') {
+      const authHeader = req.headers['x-admin-token'];
+      const expectedToken = config.STRATEGIST_API_KEY ?? config.TELEGRAM_BOT_TOKEN;
+      if (authHeader !== expectedToken) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'unauthorized' }));
+        return;
+      }
+
+      let body = '';
+      req.on('data', (chunk: string) => { body += chunk; });
+      req.on('end', () => {
+        try {
+          const cookiesPath = process.env.YT_COOKIES_PATH || '/data/cookies.txt';
+          const fs = require('fs');
+          fs.writeFileSync(cookiesPath, body, 'utf8');
+          const lines = body.split('\n').length;
+          createLogger('http').info(`cookies updated: ${lines} lines written to ${cookiesPath}`);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: 'ok', lines, path: cookiesPath }));
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: String(err) }));
+        }
+      });
+      return;
+    }
+
     // --- Implementor endpoints ---
 
     const parsedUrl = new URL(req.url ?? '/', `http://localhost:${port}`);

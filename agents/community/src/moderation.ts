@@ -9,7 +9,7 @@ const log = createLogger('moderation');
 import {
   upsertMember, setMemberGoal, addWarning, muteMember,
   recordCompletion, getCompletionCount, hasUserCompleted,
-  getPostByMessageId, getLatestPostByVideoId, getPostByGroupCommentId, setGroupCommentId,
+  getPostByMessageId, getLatestPostByVideoId, getPostByGroupCommentId, setGroupCommentId, updateVideoRating,
   saveCaptcha, getCaptcha, deleteCaptcha, getExpiredCaptchas,
   getLatestPostForDate,
   getMemberLevel, getMemberJoinedAt,
@@ -505,8 +505,11 @@ export function registerModeration(bot: Bot): void {
     }
 
     const count = getCompletionCount(post.id);
+    const rating = updateVideoRating(post.video_id);
+    const ratingStr = rating > 0 ? rating.toFixed(1) : '—';
     const keyboard = new InlineKeyboard()
-      .text(`Я сделаль${count > 0 ? ` · ${count}` : ''}`, `done:${post.video_id}`);
+      .text(`Я сделаль${count > 0 ? ` · ${count}` : ''}`, `done:${post.video_id}`)
+      .text(`Рейтинг тренировки: ${ratingStr}/10`, `rating:${post.video_id}`);
 
     try {
       const comment = await bot.api.sendMessage(
@@ -575,9 +578,12 @@ export function registerModeration(bot: Bot): void {
 
     const count = getCompletionCount(post.id);
 
-    // Update the button with new count
+    // Update buttons with new count (preserve rating button)
+    const rating = updateVideoRating(videoId);
+    const ratingStr = rating > 0 ? rating.toFixed(1) : '—';
     const keyboard = new InlineKeyboard()
-      .text(`Я сделаль · ${count}`, `done:${videoId}`);
+      .text(`Я сделаль · ${count}`, `done:${videoId}`)
+      .text(`Рейтинг тренировки: ${ratingStr}/10`, `rating:${videoId}`);
 
     try {
       const msgText = ctx.callbackQuery.message?.text;
@@ -593,6 +599,17 @@ export function registerModeration(bot: Bot): void {
     }
 
     await ctx.answerCallbackQuery('Тренировка записана.');
+  });
+
+  // --- Rating popup ---
+  bot.callbackQuery(/^rating:(\d+)$/, async (ctx) => {
+    const videoId = parseInt(ctx.match[1]);
+    const rating = updateVideoRating(videoId);
+    const ratingStr = rating > 0 ? rating.toFixed(1) : '—';
+    await ctx.answerCallbackQuery({
+      text: `★ Рейтинг: ${ratingStr} из 10\n\nФормула:\n• 40% — просмотры на YouTube\n• 35% — соотношение лайков\n• 25% — авторитет канала\n\nЧем выше рейтинг, тем популярнее и качественнее видео.`,
+      show_alert: true,
+    });
   });
 
   log.info('handlers registered');
