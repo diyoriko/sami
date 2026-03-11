@@ -1213,21 +1213,26 @@ const staticData = {
       "status": "active",
       "groups": [
         {
-          "title": "Баги (от пользователя)",
+          "title": "Баги (критичные — блокируют основной UX)",
           "priority": "p0",
           "tasks": [
+            { "text": "\"Я сделаль\" автокоммент не появляется в группе (auto-forward handler)", "done": false },
+            { "text": "Формула рейтинга занижает оценки (3-6/10 для хороших видео)", "done": false },
+            { "text": "Рейтинг некликабельный — popup убран с inline-кнопками", "done": false },
             { "text": "\"Мои тренировки\" показывает UGC вместо completions", "done": false },
-            { "text": "UGC: видеофайл не обрабатывается после загрузки", "done": false },
-            { "text": "Превью видео на десктопе (thumbnail)", "done": false }
+            { "text": "UGC: видеофайл не обрабатывается после загрузки", "done": false }
           ]
         },
         {
           "title": "UX",
           "priority": "p1",
           "tasks": [
+            { "text": "Эмодзи в теле поста (✅ Сделали, 🏋️ инвентарь, ⏱️ длительность)", "done": false },
+            { "text": "Превью видео на десктопе (thumbnail)", "done": false },
             { "text": "Отмена как inline-кнопка (не /cancel)", "done": false },
             { "text": "Убрать \"Сохранённое\" из persistent menu", "done": false },
-            { "text": "\"Мои тренировки\" редизайн — выполненные тренировки", "done": false }
+            { "text": "\"Мои тренировки\" редизайн — выполненные тренировки", "done": false },
+            { "text": "Статус: очередь на завтра после ручной публикации", "done": false }
           ]
         },
         {
@@ -1257,6 +1262,9 @@ const staticData = {
             { "text": "Фильтры и профили вернуть в меню", "done": false },
             { "text": "Категория \"Йога\" / \"Восстановление\"", "done": false },
             { "text": "Weekly personal stats DM", "done": false },
+            { "text": "Attribution flow для тренеров", "done": false },
+            { "text": "Cross-promotion механика", "done": false },
+            { "text": "MarkdownV2 — перевод на новый parse_mode", "done": false },
             { "text": "Лендинг Sami", "done": false }
           ]
         }

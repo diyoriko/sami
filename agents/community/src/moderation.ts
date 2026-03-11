@@ -338,9 +338,11 @@ export function registerModeration(bot: Bot): void {
   // --- Spam + antiflood + cooldown filter ---
   bot.on('message:text', async (ctx, next) => {
     if (ctx.chat.id.toString() !== config.TELEGRAM_GROUP_ID) return next();
+    // Don't filter auto-forwarded channel posts — let auto-forward handler process them
+    if (ctx.message.is_automatic_forward) return next();
 
     const userId = ctx.from?.id;
-    if (!userId) return;
+    if (!userId) return next();
 
     // Skip admins
     try {
@@ -468,26 +470,38 @@ export function registerModeration(bot: Bot): void {
   });
 
   // --- Auto-forward from channel → post "Я сделаль" button as comment in discussion group ---
-  bot.on('message', async (ctx) => {
-    // Only handle auto-forwarded channel posts in the discussion group
-    if (ctx.chat.id !== Number(config.TELEGRAM_GROUP_ID)) return;
-    if (!ctx.message.is_automatic_forward) return;
+  bot.on('message', async (ctx, next) => {
+    const groupId = Number(config.TELEGRAM_GROUP_ID);
+    if (ctx.chat.id !== groupId) return next();
 
-    log.info('auto-forward detected in group', {
-      messageId: ctx.message.message_id,
-      forwardOrigin: ctx.message.forward_origin?.type,
-      senderChat: ctx.message.sender_chat?.id,
+    // Diagnostic: log every group message to understand what Telegram sends
+    const msg = ctx.message;
+    log.info('group message received', {
+      messageId: msg.message_id,
+      isAutoForward: msg.is_automatic_forward ?? false,
+      forwardOrigin: msg.forward_origin?.type ?? null,
+      senderChatId: msg.sender_chat?.id ?? null,
+      senderChatType: msg.sender_chat?.type ?? null,
+      hasVideo: 'video' in msg,
+      hasText: 'text' in msg,
+      fromId: ctx.from?.id ?? null,
     });
 
+    // Only handle auto-forwarded channel posts
+    if (!msg.is_automatic_forward) return next();
+
     // Find the original channel message_id from forward_origin
-    const origin = ctx.message.forward_origin;
-    if (!origin || origin.type !== 'channel') return;
+    const origin = msg.forward_origin;
+    if (!origin || origin.type !== 'channel') {
+      log.warn('auto-forward: unexpected origin type', { origin });
+      return next();
+    }
 
     const channelMsgId = origin.message_id;
     const post = getPostByMessageId(channelMsgId);
     if (!post) {
       log.warn('auto-forward: no post found for channel message', { channelMsgId });
-      return;
+      return next();
     }
 
     const count = getCompletionCount(post.id);
@@ -499,12 +513,12 @@ export function registerModeration(bot: Bot): void {
         config.TELEGRAM_GROUP_ID,
         'Сделал(а) тренировку? Нажми кнопку:',
         {
-          reply_parameters: { message_id: ctx.message.message_id },
+          reply_parameters: { message_id: msg.message_id },
           reply_markup: keyboard,
         }
       );
       setGroupCommentId(post.id, comment.message_id);
-      // Pin the bot's comment so it's visible at the top of the discussion
+      log.info('posted completion button in discussion', { postId: post.id, commentId: comment.message_id });
       try {
         await bot.api.pinChatMessage(config.TELEGRAM_GROUP_ID, comment.message_id, { disable_notification: true });
       } catch { /* may lack pin permissions */ }
