@@ -221,6 +221,30 @@ function migrate(db: Database.Database): void {
       deployed_at TEXT DEFAULT (datetime('now'))
     );
   `);
+
+  // Moderation log — tracks all automated moderation actions
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS moderation_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      telegram_user_id INTEGER NOT NULL,
+      action TEXT NOT NULL,  -- 'warn' | 'mute' | 'ban' | 'delete' | 'antiflood' | 'cooldown'
+      reason TEXT,
+      message_snippet TEXT,  -- first 200 chars of deleted message
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_modlog_user ON moderation_log(telegram_user_id);
+    CREATE INDEX IF NOT EXISTS idx_modlog_created ON moderation_log(created_at);
+  `);
+
+  // Dynamic stop-phrases — strategist can update via actions
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS stop_phrases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      phrase TEXT NOT NULL UNIQUE,
+      added_by TEXT DEFAULT 'manual',  -- 'manual' | 'strategist'
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
 }
 
 // --- Captcha state (persistent) ---
@@ -1105,4 +1129,63 @@ export function filterVideos(opts: {
     ORDER BY v.rating DESC, v.created_at DESC
     LIMIT ?
   `).all(...params) as FilteredVideo[];
+}
+
+// --- Moderation log ---
+
+export type ModAction = 'warn' | 'mute' | 'ban' | 'delete' | 'antiflood' | 'cooldown';
+
+export function logModAction(userId: number, action: ModAction, reason: string, messageSnippet?: string): void {
+  getDb().prepare(`
+    INSERT INTO moderation_log (telegram_user_id, action, reason, message_snippet)
+    VALUES (?, ?, ?, ?)
+  `).run(userId, action, reason, messageSnippet?.slice(0, 200) ?? null);
+}
+
+export function getModLogCount(sinceDays: number = 7): number {
+  const row = getDb().prepare(
+    `SELECT COUNT(*) as cnt FROM moderation_log WHERE created_at > datetime('now', '-' || ? || ' days')`
+  ).get(sinceDays) as { cnt: number };
+  return row.cnt;
+}
+
+export function getRecentModActions(limit: number = 20): Array<{
+  telegram_user_id: number; action: string; reason: string; message_snippet: string | null; created_at: string;
+}> {
+  return getDb().prepare(`
+    SELECT telegram_user_id, action, reason, message_snippet, created_at
+    FROM moderation_log ORDER BY id DESC LIMIT ?
+  `).all(limit) as Array<{
+    telegram_user_id: number; action: string; reason: string; message_snippet: string | null; created_at: string;
+  }>;
+}
+
+// --- Stop phrases (dynamic spam list) ---
+
+export function getStopPhrases(): string[] {
+  const rows = getDb().prepare(`SELECT phrase FROM stop_phrases`).all() as Array<{ phrase: string }>;
+  return rows.map(r => r.phrase);
+}
+
+export function addStopPhrase(phrase: string, addedBy: 'manual' | 'strategist' = 'manual'): boolean {
+  try {
+    getDb().prepare(`INSERT INTO stop_phrases (phrase, added_by) VALUES (?, ?)`).run(phrase.toLowerCase(), addedBy);
+    return true;
+  } catch {
+    return false; // duplicate
+  }
+}
+
+export function removeStopPhrase(phrase: string): boolean {
+  const result = getDb().prepare(`DELETE FROM stop_phrases WHERE phrase = ?`).run(phrase.toLowerCase());
+  return result.changes > 0;
+}
+
+// --- Member joined_at helper ---
+
+export function getMemberJoinedAt(userId: number): string | null {
+  const row = getDb().prepare(
+    `SELECT joined_at FROM members WHERE telegram_user_id = ?`
+  ).get(userId) as { joined_at: string } | undefined;
+  return row?.joined_at ?? null;
 }

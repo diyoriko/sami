@@ -107,7 +107,7 @@ export function getActionById(actionId: number): StrategistAction | null {
 
 // --- Strategist Actions (v2) ---
 
-export type StrategistActionType = 'create_poll' | 'update_welcome' | 'limit_posts' | 'send_digest';
+export type StrategistActionType = 'create_poll' | 'update_welcome' | 'limit_posts' | 'send_digest' | 'update_stop_list';
 
 export interface StrategistAction {
   type: StrategistActionType;
@@ -332,6 +332,7 @@ function buildPrompt(): string {
 - "update_welcome" — обновить приветственный текст. params: { text: string }
 - "limit_posts" — изменить лимит постов/день. params: { max_per_day: number }
 - "send_digest" — отправить дайджест в канал. params: { text: string }
+- "update_stop_list" — обновить стоп-лист спам-фраз. params: { add?: string[], remove?: string[] }
 Если нет предложений — actions: []
 
 Формат: валидный Markdown. Заголовок: "# Sami Strategist Report — YYYY-MM-DD".
@@ -482,6 +483,7 @@ const ACTION_TYPE_LABELS: Record<StrategistActionType, string> = {
   update_welcome: 'Обновить приветствие',
   limit_posts: 'Ограничить посты',
   send_digest: 'Отправить дайджест',
+  update_stop_list: 'Обновить стоп-лист',
 };
 
 export async function sendActionToAdmin(bot: Bot, actionId: number, action: StrategistAction): Promise<void> {
@@ -546,6 +548,20 @@ async function executeAction(bot: Bot, actionId: number, type: StrategistActionT
       const text = String(params.text ?? 'Недельный дайджест Sami');
       await bot.api.sendMessage(config.TELEGRAM_CHANNEL_ID, text, { parse_mode: 'Markdown' });
       return `Дайджест отправлен в канал`;
+    }
+
+    case 'update_stop_list': {
+      const { addStopPhrase, removeStopPhrase } = await import('./db');
+      const add = Array.isArray(params.add) ? params.add.map(String) : [];
+      const remove = Array.isArray(params.remove) ? params.remove.map(String) : [];
+      let added = 0, removed = 0;
+      for (const phrase of add) {
+        if (addStopPhrase(phrase, 'strategist')) added++;
+      }
+      for (const phrase of remove) {
+        if (removeStopPhrase(phrase)) removed++;
+      }
+      return `Стоп-лист: +${added} / -${removed}`;
     }
 
     default:

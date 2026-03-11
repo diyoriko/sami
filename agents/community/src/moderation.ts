@@ -3,6 +3,7 @@ import { InlineKeyboard } from 'grammy';
 import { getConfig } from './config';
 import { createLogger } from './logger';
 import { CATEGORY_RU } from './shared';
+import { moscowHour } from './dates';
 
 const log = createLogger('moderation');
 import {
@@ -11,6 +12,8 @@ import {
   toggleFavorite,
   saveCaptcha, getCaptcha, deleteCaptcha, getExpiredCaptchas,
   getLatestPostForDate,
+  getMemberLevel, getMemberJoinedAt,
+  logModAction, getStopPhrases,
 } from './db';
 
 // ─── CAPTCHA ──────────────────────────────────────────────────────────────────
@@ -56,13 +59,97 @@ const GOAL_RESPONSES: Record<string, string> = {
 // ─── SPAM PATTERNS ───────────────────────────────────────────────────────────
 
 const SPAM_PATTERNS = [
+  // External URLs (except YouTube, youtu.be, t.me/sami)
   /https?:\/\/(?!youtube\.com|youtu\.be|t\.me\/sami)/i,
-  /(?:заработ|earn|casino|казино|crypto|крипт|invest|инвест|forex|форекс)/i,
+  // Financial/gambling/crypto
+  /(?:заработ|earn|casino|казино|crypto|крипт|invest|инвест|forex|форекс|binance|биржа|трейд|trade|betting|ставк|slot|слот|poker|покер|roulette|рулетк)/i,
+  // Follow/subscribe spam
   /подпишись|subscribe|follow me|подпишитесь/i,
+  // Adult/dating spam
+  /(?:знакомств|dating|18\+|секс|sex|порн|porn|onlyfans|эскорт|escort)/i,
+  // MLM/pyramid
+  /(?:пассивн\w{0,5}\s*доход|passive\s*income|mlm|сетев\w{0,5}\s*маркетинг|network\s*marketing|пирамид)/i,
+  // Telegram channel/group promo (except our own)
+  /(?:t\.me\/(?!sami)\w+|телеграм.{0,10}канал|telegram.{0,10}channel)/i,
 ];
 
 function isSpam(text: string): boolean {
   return SPAM_PATTERNS.some(re => re.test(text));
+}
+
+// ─── STOP PHRASES (dynamic, loaded from DB) ─────────────────────────────────
+
+let _cachedStopPhrases: string[] = [];
+let _stopPhrasesLoadedAt = 0;
+const STOP_PHRASES_TTL_MS = 5 * 60 * 1000; // refresh every 5 min
+
+function matchesStopPhrases(text: string): boolean {
+  const now = Date.now();
+  if (now - _stopPhrasesLoadedAt > STOP_PHRASES_TTL_MS) {
+    try {
+      _cachedStopPhrases = getStopPhrases();
+    } catch {
+      // DB not ready yet, use cached
+    }
+    _stopPhrasesLoadedAt = now;
+  }
+  if (_cachedStopPhrases.length === 0) return false;
+  const lower = text.toLowerCase();
+  return _cachedStopPhrases.some(phrase => lower.includes(phrase));
+}
+
+// ─── ANTIFLOOD (in-memory rate limiter) ──────────────────────────────────────
+// Tracks message timestamps per user. Mutes at threshold.
+
+const ANTIFLOOD_WINDOW_MS = 30_000;   // 30 seconds
+const ANTIFLOOD_MAX_MESSAGES = 5;     // max messages in window
+
+// Newbie cooldown: 1 message per minute for first 24h
+const NEWBIE_COOLDOWN_MS = 60_000;    // 1 minute between messages
+const NEWBIE_PERIOD_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+// Night mode: 00:00-07:00 MSK — stricter thresholds
+const NIGHT_START_HOUR = 0;
+const NIGHT_END_HOUR = 7;
+const NIGHT_ANTIFLOOD_MAX = 3; // stricter at night
+
+const messageTimestamps = new Map<number, number[]>();
+
+function cleanupTimestamps(userId: number, now: number): number[] {
+  const timestamps = messageTimestamps.get(userId) ?? [];
+  const recent = timestamps.filter(t => now - t < ANTIFLOOD_WINDOW_MS);
+  messageTimestamps.set(userId, recent);
+  return recent;
+}
+
+function isNightMode(): boolean {
+  const hour = moscowHour();
+  return hour >= NIGHT_START_HOUR && hour < NIGHT_END_HOUR;
+}
+
+// ─── REPUTATION-BASED THRESHOLDS ─────────────────────────────────────────────
+// новичок: stricter (standard thresholds)
+// практик: relaxed (double thresholds)
+// наставник: minimal moderation (quadruple thresholds, no cooldown)
+
+function getAntifloodLimit(userId: number): number {
+  const { level } = getMemberLevel(userId);
+  const base = isNightMode() ? NIGHT_ANTIFLOOD_MAX : ANTIFLOOD_MAX_MESSAGES;
+  switch (level) {
+    case 'наставник': return base * 4;
+    case 'практик': return base * 2;
+    default: return base;
+  }
+}
+
+function isNewbie(userId: number): boolean {
+  const { level } = getMemberLevel(userId);
+  if (level !== 'новичок') return false;
+
+  const joinedAt = getMemberJoinedAt(userId);
+  if (!joinedAt) return true; // no record = treat as new
+  const joinedMs = new Date(joinedAt).getTime();
+  return Date.now() - joinedMs < NEWBIE_PERIOD_MS;
 }
 
 // ─── EXPIRED CAPTCHA CLEANUP ────────────────────────────────────────────────
@@ -247,13 +334,14 @@ export function registerModeration(bot: Bot): void {
     } catch {}
   });
 
-  // --- Spam filter ---
+  // --- Spam + antiflood + cooldown filter ---
   bot.on('message:text', async (ctx, next) => {
     if (ctx.chat.id.toString() !== config.TELEGRAM_GROUP_ID) return next();
 
     const userId = ctx.from?.id;
     if (!userId) return;
 
+    // Skip admins
     try {
       const member = await ctx.getChatMember(userId);
       if (['administrator', 'creator'].includes(member.status)) return;
@@ -262,21 +350,78 @@ export function registerModeration(bot: Bot): void {
     }
 
     const text = ctx.message.text ?? '';
-    if (!isSpam(text)) return;
+    const now = Date.now();
+    const night = isNightMode();
 
+    // 1. Antiflood check (5 msgs / 30s, or 3 at night, scaled by reputation)
+    const timestamps = cleanupTimestamps(userId, now);
+    timestamps.push(now);
+    messageTimestamps.set(userId, timestamps);
+
+    const limit = getAntifloodLimit(userId);
+    if (timestamps.length > limit) {
+      try { await ctx.deleteMessage(); } catch {}
+      muteMember(userId, night ? 2 : 1); // 1h mute (2h at night)
+      const muteHours = night ? 2 : 1;
+      try {
+        const until = Math.floor(now / 1000) + muteHours * 3600;
+        await ctx.api.restrictChatMember(
+          ctx.chat.id, userId,
+          { can_send_messages: false, can_send_polls: false, can_send_other_messages: false },
+          { until_date: until }
+        );
+      } catch {}
+      logModAction(userId, 'antiflood', `${timestamps.length} msgs in 30s (limit: ${limit})${night ? ' [night]' : ''}`, text);
+      const username = ctx.from?.username ? `@${ctx.from.username}` : String(userId);
+      await ctx.reply(`🔇 ${username} получил мут на ${muteHours}ч за флуд.`).catch(() => {});
+      // Clear timestamps after mute
+      messageTimestamps.delete(userId);
+      return;
+    }
+
+    // 2. Newbie cooldown (1 msg / min for first 24h)
+    if (isNewbie(userId) && timestamps.length >= 2) {
+      const prevTimestamp = timestamps[timestamps.length - 2];
+      if (now - prevTimestamp < NEWBIE_COOLDOWN_MS) {
+        try { await ctx.deleteMessage(); } catch {}
+        logModAction(userId, 'cooldown', 'newbie cooldown: <1min between messages', text);
+        // Silent delete — no public warning for cooldown
+        return;
+      }
+    }
+
+    // 3. Spam patterns + stop phrases
+    const isSpamMessage = isSpam(text) || matchesStopPhrases(text);
+
+    // Night mode: also flag messages with multiple caps words or excessive emojis
+    if (!isSpamMessage && night) {
+      const capsWords = (text.match(/[A-ZА-ЯЁ]{4,}/g) ?? []).length;
+      if (capsWords >= 3) {
+        try { await ctx.deleteMessage(); } catch {}
+        logModAction(userId, 'delete', 'excessive caps at night', text);
+        return;
+      }
+    }
+
+    if (!isSpamMessage) return;
+
+    // Delete and escalate
     try { await ctx.deleteMessage(); } catch {}
 
     const warnings = addWarning(userId);
     const username = ctx.from?.username ? `@${ctx.from.username}` : String(userId);
+    const reason = matchesStopPhrases(text) ? 'stop phrase' : 'spam pattern';
 
     if (warnings === 1) {
+      logModAction(userId, 'warn', reason, text);
       await ctx.reply(
         `⚠️ ${username}, внешние ссылки и реклама здесь не приветствуются. Следующее нарушение — мут на 24 часа.`
       ).catch(() => {});
     } else if (warnings === 2) {
       muteMember(userId, 24);
+      logModAction(userId, 'mute', `${reason}, 2nd warning`, text);
       try {
-        const until = Math.floor(Date.now() / 1000) + 24 * 3600;
+        const until = Math.floor(now / 1000) + 24 * 3600;
         await ctx.api.restrictChatMember(
           ctx.chat.id,
           userId,
@@ -288,6 +433,7 @@ export function registerModeration(bot: Bot): void {
         log.error('failed to mute', { error: String(err) });
       }
     } else if (warnings >= 3) {
+      logModAction(userId, 'ban', `${reason}, ${warnings} warnings`, text);
       try {
         await ctx.api.banChatMember(ctx.chat.id, userId);
         await ctx.reply(`🚫 Участник заблокирован за систематические нарушения.`).catch(() => {});
