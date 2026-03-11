@@ -182,8 +182,13 @@ async function editKeyboard(
 export function registerApprovalCallbacks(bot: Bot): void {
   bot.callbackQuery(/^(approve|reject):(\d+)$/, async (ctx) => {
     const action = ctx.match[1] as 'approve' | 'reject';
+    const sessionIdFromCallback = parseInt(ctx.match[2]);
 
-    const session = getApprovalSessionByMessageId(ctx.callbackQuery.message?.message_id ?? -1);
+    // Primary: lookup by message_id. Fallback: by session ID from callback data
+    let session = getApprovalSessionByMessageId(ctx.callbackQuery.message?.message_id ?? -1);
+    if (!session) {
+      session = getApprovalSessionById(sessionIdFromCallback);
+    }
     if (!session) {
       await ctx.answerCallbackQuery('Сессия не найдена');
       return;
@@ -215,10 +220,19 @@ export function registerApprovalCallbacks(bot: Bot): void {
     const sessionId = parseInt(ctx.match[1]);
     const config = getConfig();
 
-    const session = getApprovalSessionById(sessionId);
+    let session = getApprovalSessionById(sessionId);
+
+    // Fallback: if session was already soft-deleted (e.g. double-click),
+    // find the current active session for this message
     if (!session) {
-      await ctx.answerCallbackQuery('Сессия не найдена');
-      return;
+      const msgId = ctx.callbackQuery.message?.message_id ?? -1;
+      const byMsg = getApprovalSessionByMessageId(msgId);
+      if (byMsg) {
+        session = byMsg;
+      } else {
+        await ctx.answerCallbackQuery('Сессия не найдена');
+        return;
+      }
     }
 
     await ctx.answerCallbackQuery('Ищу другое...');

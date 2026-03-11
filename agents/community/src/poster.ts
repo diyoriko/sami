@@ -53,10 +53,10 @@ async function formatCaption(video: VideoRow): Promise<string> {
     `*${title}*`,
     '',
     ...tagLines,
-    ...(ratingStr ? [`★ ${ratingStr} из 10`] : []),
+    ...(ratingStr ? [`⭐ ${ratingStr} из 10`] : []),
     `✅ Сделали: 0`,
     '',
-    `Автор: [${channelName}](${video.video_url})`,
+    `Автор: ${channelName}, 📎 [YouTube](${video.video_url})`,
   ];
 
   return lines.join('\n');

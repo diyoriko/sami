@@ -126,11 +126,16 @@ describe('approval queue', () => {
       view_count: 1000, rating: 0, like_ratio: 0.9, channel_subscribers: 5000,
       search_query: 'test',
     });
-    db.createApprovalSession('2026-03-10', 'stretching', videoId);
-    db.createApprovalSession('2026-03-11', 'strength', videoId);
-    db.createApprovalSession('2026-03-12', 'mobility', videoId);
+    const s1 = db.createApprovalSession('2026-03-10', 'stretching', videoId);
+    const s2 = db.createApprovalSession('2026-03-11', 'strength', videoId);
+    const s3 = db.createApprovalSession('2026-03-12', 'mobility', videoId);
 
-    // No filter — all sessions
+    // Approve the sessions so they appear in the queue (queue only shows approved)
+    db.setApprovalStatus(s1, 'approved');
+    db.setApprovalStatus(s2, 'approved');
+    db.setApprovalStatus(s3, 'approved');
+
+    // No filter — all approved sessions
     const all = db.getApprovalQueue();
     expect(all.length).toBeGreaterThanOrEqual(3);
 
@@ -158,15 +163,19 @@ describe('approval queue', () => {
       view_count: 1000, rating: 0, like_ratio: 0.9, channel_subscribers: 5000,
       search_query: 'test',
     });
-    db.createApprovalSession('2026-04-01', 'mobility', videoId);
-    const before = db.getApprovalQueue('2026-04-01', '2026-04-01');
-    const mobilityBefore = before.filter(r => r.category === 'mobility');
+    const sessionId = db.createApprovalSession('2026-04-01', 'mobility', videoId);
 
-    db.softDeletePendingSessions('2026-04-01', 'mobility');
+    // Session exists before soft-delete
+    const beforeSession = db.getApprovalSessionById(sessionId);
+    expect(beforeSession).not.toBeNull();
 
-    const after = db.getApprovalQueue('2026-04-01', '2026-04-01');
-    const mobilityAfter = after.filter(r => r.category === 'mobility');
-    expect(mobilityAfter.length).toBeLessThan(mobilityBefore.length);
+    // Soft-delete should return 1 (one pending session deleted)
+    const deleted = db.softDeletePendingSessions('2026-04-01', 'mobility');
+    expect(deleted).toBeGreaterThanOrEqual(1);
+
+    // Session is no longer findable (deleted_at IS NOT NULL filtered out)
+    const afterSession = db.getApprovalSessionById(sessionId);
+    expect(afterSession).toBeNull();
   });
 });
 

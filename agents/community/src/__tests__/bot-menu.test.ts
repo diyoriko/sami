@@ -25,20 +25,24 @@ describe('getUserSubmissions (Мои тренировки)', () => {
     expect(getUserSubmissionTotal(999)).toBe(0);
   });
 
-  it('returns non-draft submissions', async () => {
+  it('returns only published submissions', async () => {
     const db = await import('../db');
 
     // draft — should NOT appear
     db.createUgcSubmission(80, 'user80', 'https://youtube.com/watch?v=draft1', 'draft1');
 
-    // pending — should appear
+    // pending (not published) — should NOT appear in "Мои тренировки"
     const pendingId = db.createUgcSubmission(80, 'user80', 'https://youtube.com/watch?v=pend1', 'pend1');
-    db.updateUgcSubmission(pendingId, { title: 'My Stretch', category: 'stretching', difficulty: 'beginner', status: 'pending' });
+    db.updateUgcSubmission(pendingId, { title: 'Pending Stretch', category: 'stretching', difficulty: 'beginner', status: 'pending' });
+
+    // published — should appear
+    const publishedId = db.createUgcSubmission(80, 'user80', 'https://youtube.com/watch?v=pub1', 'pub1');
+    db.updateUgcSubmission(publishedId, { title: 'My Stretch', category: 'stretching', difficulty: 'beginner', status: 'approved', published_at: '2026-03-11T20:00:00.000Z' });
 
     const items = db.getUserSubmissions(80, 5, 0);
     expect(items).toHaveLength(1);
     expect(items[0].title).toBe('My Stretch');
-    expect(items[0].status).toBe('pending');
+    expect(items[0].status).toBe('approved');
 
     expect(db.getUserSubmissionTotal(80)).toBe(1);
   });
@@ -98,5 +102,40 @@ describe('bot-menu module structure', () => {
     expect(source).toContain('ugc_decide');
     expect(source).toContain('approve');
     expect(source).toContain('reject');
+  });
+
+  it('has UGC duration and equipment steps', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'bot-menu.ts'), 'utf8');
+    expect(source).toContain('ugc_dur:');
+    expect(source).toContain('ugc_equip:');
+    expect(source).toContain('waiting_duration');
+    expect(source).toContain('waiting_equipment');
+    expect(source).toContain('buildDurationKeyboard');
+    expect(source).toContain('buildEquipmentKeyboard');
+  });
+});
+
+describe('UGC extended fields', () => {
+  it('stores and retrieves duration, muscles, equipment', async () => {
+    const db = await import('../db');
+    const id = db.createUgcSubmission(90, 'user90', 'https://youtube.com/watch?v=ext1', 'ext1');
+
+    db.updateUgcSubmission(id, {
+      category: 'stretching',
+      difficulty: 'beginner',
+      duration_seconds: 900,
+      duration_label: '15 мин',
+      muscles: 'спина, плечи',
+      equipment: 'без инвентаря',
+      title: 'Растяжка спины и плеч',
+      status: 'pending',
+    });
+
+    const sub = db.getUgcSubmission(id);
+    expect(sub).not.toBeNull();
+    expect(sub!.duration_seconds).toBe(900);
+    expect(sub!.duration_label).toBe('15 мин');
+    expect(sub!.muscles).toBe('спина, плечи');
+    expect(sub!.equipment).toBe('без инвентаря');
   });
 });

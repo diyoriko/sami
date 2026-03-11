@@ -293,6 +293,11 @@ function migrate(db: Database.Database): void {
   try { db.exec('ALTER TABLE approval_sessions ADD COLUMN deleted_at TEXT'); } catch { /* already exists */ }
   // UGC publish tracking
   try { db.exec('ALTER TABLE ugc_submissions ADD COLUMN published_at TEXT'); } catch { /* already exists */ }
+  // UGC extended metadata (v0.6.1)
+  try { db.exec('ALTER TABLE ugc_submissions ADD COLUMN duration_seconds INTEGER'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE ugc_submissions ADD COLUMN duration_label TEXT'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE ugc_submissions ADD COLUMN muscles TEXT'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE ugc_submissions ADD COLUMN equipment TEXT'); } catch { /* already exists */ }
 
   // Migration: rebuild tables with updated CHECK constraints (added yoga, breathing, recovery, cardio)
   migrateCheckConstraints(db);
@@ -432,7 +437,7 @@ export function getExpiredCaptchas(): CaptchaRow[] {
 
 // --- UGC conversation state (persistent) ---
 
-export type UgcStep = 'waiting_link' | 'waiting_category' | 'waiting_difficulty' | 'waiting_title';
+export type UgcStep = 'waiting_link' | 'waiting_category' | 'waiting_difficulty' | 'waiting_duration' | 'waiting_equipment' | 'waiting_title';
 
 export interface UgcConversationRow {
   telegram_user_id: number;
@@ -578,7 +583,7 @@ export interface QueueItem {
 }
 
 export function getApprovalQueue(fromDate?: string, toDate?: string): QueueItem[] {
-  const conditions = [`a.status IN ('approved', 'pending')`, `a.deleted_at IS NULL`];
+  const conditions = [`a.status = 'approved'`, `a.deleted_at IS NULL`];
   const params: string[] = [];
 
   if (fromDate) {
@@ -1093,6 +1098,10 @@ export interface UgcSubmission {
   title: string | null;
   category: string | null;
   difficulty: string | null;
+  duration_seconds: number | null;
+  duration_label: string | null;
+  muscles: string | null;
+  equipment: string | null;
   status: string;
   admin_message_id: number | null;
   created_at: string;
@@ -1108,7 +1117,7 @@ export function createUgcSubmission(userId: number, username: string | null, vid
   return Number(result.lastInsertRowid);
 }
 
-export function updateUgcSubmission(id: number, fields: Partial<Pick<UgcSubmission, 'title' | 'category' | 'difficulty' | 'status' | 'admin_message_id' | 'published_at'>>): void {
+export function updateUgcSubmission(id: number, fields: Partial<Pick<UgcSubmission, 'title' | 'category' | 'difficulty' | 'duration_seconds' | 'duration_label' | 'muscles' | 'equipment' | 'status' | 'admin_message_id' | 'published_at'>>): void {
   const sets: string[] = [];
   const values: any[] = [];
   for (const [key, val] of Object.entries(fields)) {

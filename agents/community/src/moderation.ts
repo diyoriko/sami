@@ -529,7 +529,8 @@ export function registerModeration(bot: Bot): void {
       const ratingStr = rating > 0 ? rating.toFixed(1) : '—';
       keyboard = new InlineKeyboard()
         .text(`Я сделаль${count > 0 ? ` · ${count}` : ''}`, `done:${post.video_id}`)
-        .text(`Рейтинг тренировки: ${ratingStr}/10`, `rating:${post.video_id}`);
+        .row()
+        .text(`⭐ ${ratingStr}/10`, `rating:${post.video_id}`);
     } else {
       // Post not tracked in DB (e.g. manual publish) — still show button with channel msg ID
       log.warn('auto-forward: no post in DB, using channel msg ID as fallback', { channelMsgId });
@@ -555,6 +556,73 @@ export function registerModeration(bot: Bot): void {
       } catch { /* may lack pin permissions */ }
     } catch (err) {
       log.error('failed to post completion button in discussion', { postId: post?.id ?? null, error: String(err) });
+    }
+  });
+
+  // --- "Я сделаль" fallback for posts not tracked in DB ---
+  // When auto-forward handler can't find a post in DB, it uses done_msg:{channelMsgId}
+  bot.callbackQuery(/^done_msg:(\d+)$/, async (ctx) => {
+    const channelMsgId = parseInt(ctx.match[1]);
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    // Try to find post by channel message ID
+    const post = getPostByMessageId(channelMsgId);
+    if (post) {
+      // Found it — delegate to the regular done: flow by recording completion
+      if (hasUserCompleted(post.id, userId)) {
+        const count = getCompletionCount(post.id);
+        await ctx.answerCallbackQuery(`Ты уже отметил(а) эту тренировку · ${count}`);
+        return;
+      }
+
+      const COOLDOWN_MS = 60 * 60 * 1000;
+      const lastTime = getLastCompletionTime(userId);
+      if (lastTime) {
+        const elapsed = Date.now() - new Date(lastTime + 'Z').getTime();
+        if (elapsed < COOLDOWN_MS) {
+          const minLeft = Math.ceil((COOLDOWN_MS - elapsed) / 60_000);
+          await ctx.answerCallbackQuery(`Подожди ${minLeft} мин. перед следующей отметкой`);
+          return;
+        }
+      }
+
+      recordCompletion(post.id, post.video_id, userId);
+      const count = getCompletionCount(post.id);
+
+      // Upgrade button to use proper done: callback with video_id
+      const rating = updateVideoRating(post.video_id);
+      const ratingStr = rating > 0 ? rating.toFixed(1) : '—';
+      const keyboard = new InlineKeyboard()
+        .text(`Я сделаль · ${count}`, `done:${post.video_id}`)
+        .row()
+        .text(`⭐ ${ratingStr}/10`, `rating:${post.video_id}`);
+
+      try {
+        await ctx.editMessageText('Сделал(а) тренировку? Нажми кнопку:', { reply_markup: keyboard });
+      } catch {
+        try { await ctx.editMessageReplyMarkup({ reply_markup: keyboard }); } catch {}
+      }
+
+      await ctx.answerCallbackQuery('Тренировка записана.');
+
+      // Buddy invite check
+      const { completions } = getMemberLevel(userId);
+      if (completions === 3 && !wasBuddyInviteSent(userId)) {
+        markBuddyInviteSent(userId);
+        try {
+          await bot.api.sendMessage(userId,
+            `Три тренировки позади — ты уже в ритме.\n\n` +
+            `Если есть кто-то, кому тоже не хватает структуры в движении — ` +
+            `можешь поделиться ссылкой на сообщество:\nhttps://t.me/sami_workouts\n\n` +
+            `Вместе проще держать темп.`
+          );
+        } catch {}
+      }
+    } else {
+      // Post not in DB — graceful degradation, just acknowledge
+      log.warn('done_msg: post not found in DB', { channelMsgId, userId });
+      await ctx.answerCallbackQuery('Тренировка записана!');
     }
   });
 
@@ -623,7 +691,8 @@ export function registerModeration(bot: Bot): void {
     const ratingStr = rating > 0 ? rating.toFixed(1) : '—';
     const keyboard = new InlineKeyboard()
       .text(`Я сделаль · ${count}`, `done:${videoId}`)
-      .text(`Рейтинг тренировки: ${ratingStr}/10`, `rating:${videoId}`);
+      .row()
+      .text(`⭐ ${ratingStr}/10`, `rating:${videoId}`);
 
     try {
       const msgText = ctx.callbackQuery.message?.text;
@@ -647,7 +716,7 @@ export function registerModeration(bot: Bot): void {
     const rating = updateVideoRating(videoId);
     const ratingStr = rating > 0 ? rating.toFixed(1) : '—';
     await ctx.answerCallbackQuery({
-      text: `★ Рейтинг: ${ratingStr} из 10\n\nФормула:\n• 35% — просмотры на YouTube\n• 30% — соотношение лайков\n• 20% — авторитет канала\n• 15% — выполнения в Sami\n\nЧем больше людей делает тренировку, тем выше рейтинг.`,
+      text: `⭐ Рейтинг: ${ratingStr} из 10\n\nФормула:\n• 35% — просмотры на YouTube\n• 30% — соотношение лайков\n• 20% — авторитет канала\n• 15% — выполнения в Sami\n\nЧем больше людей делает тренировку, тем выше рейтинг.`,
       show_alert: true,
     });
   });

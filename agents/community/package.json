@@ -1,6 +1,6 @@
 {
   "name": "sami-community-agent",
-  "version": "1.0.0",
+  "version": "0.6.1",
   "description": "Sami Telegram community bot — daily workout posts, moderation, check-ins",
   "main": "dist/index.js",
   "scripts": {

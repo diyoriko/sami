@@ -65,9 +65,9 @@ export const DIFFICULTY_EMOJI: Record<Difficulty, string> = {
 };
 
 export const DIFFICULTY_BUTTONS: { label: string; value: Difficulty }[] = [
-  { label: '💎 Начинающий', value: 'beginner' },
-  { label: '💎💎 Средний', value: 'intermediate' },
-  { label: '💎💎💎 Продвинутый', value: 'advanced' },
+  { label: '💎 Легко', value: 'beginner' },
+  { label: '💎💎 Средне', value: 'intermediate' },
+  { label: '💎💎💎 Сложно', value: 'advanced' },
 ];
 
 // ─── MUSCLES ─────────────────────────────────────────────────────────────────
@@ -117,6 +117,44 @@ export const EQUIPMENT_PATTERNS: [RegExp, string][] = [
 ];
 
 export const EQUIPMENT_NO_GEAR = 'без инвентаря';
+
+/** Equipment buttons for UGC flow (short values for callback data) */
+export const EQUIPMENT_BUTTONS: { label: string; value: string }[] = [
+  { label: '✋ Без инвентаря', value: 'none' },
+  { label: '🏋️ Гантели', value: 'dumbbells' },
+  { label: '🔗 Резинка', value: 'band' },
+  { label: '🧶 Ролл', value: 'roller' },
+  { label: '🧱 Блок', value: 'block' },
+  { label: '📦 Другое', value: 'other' },
+];
+
+export const EQUIPMENT_VALUES = ['none', 'dumbbells', 'band', 'roller', 'block', 'other'] as const;
+export type EquipmentValue = (typeof EQUIPMENT_VALUES)[number];
+
+export const EQUIPMENT_VALUE_RU: Record<EquipmentValue, string> = {
+  none: EQUIPMENT_NO_GEAR,
+  dumbbells: 'гантели',
+  band: 'резинка',
+  roller: 'ролл',
+  block: 'блок для йоги',
+  other: 'другое',
+};
+
+/** Duration buttons for UGC flow */
+export const DURATION_BUTTONS: { label: string; seconds: number }[] = [
+  { label: '⏱ 5 мин', seconds: 300 },
+  { label: '⏱ 10 мин', seconds: 600 },
+  { label: '⏱ 15 мин', seconds: 900 },
+  { label: '⏱ 20 мин', seconds: 1200 },
+  { label: '⏱ 30 мин', seconds: 1800 },
+  { label: '⏱ 45+ мин', seconds: 2700 },
+];
+
+export function formatDurationLabel(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  if (m < 1) return '< 1 мин';
+  return `${m} мин`;
+}
 
 // ─── YOUTUBE SEARCH KEYWORDS (per category) ─────────────────────────────────
 

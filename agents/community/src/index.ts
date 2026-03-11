@@ -18,6 +18,104 @@ import { recordDeploy, getLatestDeploy, getLatestPost, listImplTasks, getNextImp
 import { isYtDlpAvailable as isYtDlpAvailableCheck } from './downloader';
 import type { ImplTaskStatus, ImplTaskSource } from './db';
 
+/**
+ * Audit channel/group/bot descriptions: add cross-links if missing.
+ * Reads current text, appends footer with links + search keywords.
+ * Idempotent — skips if cross-links already present.
+ */
+async function auditDescriptions(bot: Bot, config: ReturnType<typeof getConfig>): Promise<void> {
+  const auditLog = createLogger('audit-desc');
+  const BOT_HANDLE = '@sami_workout_bot';
+  const CHANNEL_HANDLE = '@sami_workouts';
+  const changes: string[] = [];
+
+  // --- Channel description ---
+  try {
+    const chat = await bot.api.getChat(config.TELEGRAM_CHANNEL_ID);
+    const current = ('description' in chat ? chat.description : '') ?? '';
+    if (!current.includes(BOT_HANDLE)) {
+      const footer = [
+        '',
+        'Обсуждение → «Сами Daily»',
+        `Бот: ${BOT_HANDLE}`,
+        '',
+        'тренировки дома · стретчинг · йога · силовая · мобильность · без инвентаря',
+      ].join('\n');
+      const updated = (current + '\n' + footer).slice(0, 255);
+      await bot.api.setChatDescription(config.TELEGRAM_CHANNEL_ID, updated);
+      changes.push('Канал: + ссылки на группу и бота, ключевые слова');
+    }
+  } catch (err) {
+    auditLog.warn('channel description update failed', { error: String(err) });
+  }
+
+  // --- Group description ---
+  try {
+    const chat = await bot.api.getChat(config.TELEGRAM_GROUP_ID);
+    const current = ('description' in chat ? chat.description : '') ?? '';
+    if (!current.includes(BOT_HANDLE)) {
+      const footer = [
+        '',
+        `Канал: ${CHANNEL_HANDLE}`,
+        `Бот: ${BOT_HANDLE}`,
+        '',
+        'Нажми «Я сделаль» под видео, когда закончишь.',
+      ].join('\n');
+      const updated = (current + '\n' + footer).slice(0, 255);
+      await bot.api.setChatDescription(config.TELEGRAM_GROUP_ID, updated);
+      changes.push('Группа: + ссылки на канал и бота, CTA');
+    }
+  } catch (err) {
+    auditLog.warn('group description update failed', { error: String(err) });
+  }
+
+  // --- Bot description (shown in bot profile, max 512 chars) ---
+  try {
+    const { description: current } = await bot.api.getMyDescription();
+    if (!current?.includes(CHANNEL_HANDLE)) {
+      const newDesc = [
+        'Помощник сообщества Сами — ежедневные тренировки на коврике.',
+        '',
+        'Что умею:',
+        '• Профиль — статистика и уровень',
+        '• Фильтры — по категории, уровню, длительности',
+        '• Предложить тренировку — поделись находкой',
+        '• Мои тренировки — загруженные тобой видео',
+        '',
+        `Канал: ${CHANNEL_HANDLE}`,
+        'Группа: «Сами Daily»',
+      ].join('\n');
+      await bot.api.setMyDescription(newDesc.slice(0, 512));
+      changes.push('Бот (описание): полное обновление с возможностями и ссылками');
+    }
+  } catch (err) {
+    auditLog.warn('bot description update failed', { error: String(err) });
+  }
+
+  // --- Bot short description (shown in chat list, max 120 chars) ---
+  try {
+    const { short_description: current } = await bot.api.getMyShortDescription();
+    if (!current?.includes(CHANNEL_HANDLE)) {
+      const newShort = `Помощник сообщества Сами. Профиль, фильтры, тренировки. ${CHANNEL_HANDLE}`;
+      await bot.api.setMyShortDescription(newShort.slice(0, 120));
+      changes.push('Бот (краткое): + ссылка на канал');
+    }
+  } catch (err) {
+    auditLog.warn('bot short description update failed', { error: String(err) });
+  }
+
+  if (changes.length > 0) {
+    auditLog.info('descriptions updated', { changes });
+    await bot.api.sendMessage(
+      config.TELEGRAM_ADMIN_USER_ID,
+      `*Описания обновлены:*\n${changes.map(c => `• ${c}`).join('\n')}`,
+      { parse_mode: 'Markdown' },
+    ).catch(() => {});
+  } else {
+    auditLog.info('descriptions already up to date');
+  }
+}
+
 async function main(): Promise<void> {
   const config = getConfig();
 
@@ -108,9 +206,9 @@ async function main(): Promise<void> {
     const tomorrow = tomorrowMsk();
 
     // Find which date has approved videos: tomorrow first (where /search writes), then today
-    const categories = ['stretching', 'strength', 'mobility'] as const;
-    const hasTomorrow = categories.some(c => getApprovedVideo(tomorrow, c) !== null);
-    const hasToday = categories.some(c => getApprovedVideo(today, c) !== null);
+    const { CATEGORIES: ALL_CATS, CATEGORY_RU: CAT_RU, CATEGORY_EMOJI: CAT_EMOJI } = await import('./shared');
+    const hasTomorrow = ALL_CATS.some(c => getApprovedVideo(tomorrow, c) !== null);
+    const hasToday = ALL_CATS.some(c => getApprovedVideo(today, c) !== null);
     const date = hasTomorrow ? tomorrow : hasToday ? today : null;
 
     if (!date) {
@@ -121,11 +219,12 @@ async function main(): Promise<void> {
     await ctx.reply(`📤 Публикую видео на ${date}...`);
 
     const report: string[] = [];
-    for (const cat of categories) {
+    for (const cat of ALL_CATS) {
+      const approved = getApprovedVideo(date, cat);
+      if (!approved) continue;
       const result = await postVideoToChannel(bot, date, cat, { force: true });
-      const label = { stretching: 'Стретчинг', strength: 'Силовая', mobility: 'Мобильность' }[cat];
+      const label = `${CAT_EMOJI[cat]} ${CAT_RU[cat]}`;
       if (result === 'posted') report.push(`✅ ${label}`);
-      else if (result === 'no_video') report.push(`⚠️ ${label} — не выбрано`);
       else if (result === 'error') report.push(`❌ ${label} — ошибка`);
       else report.push(`⏭ ${label} — пропущено`);
     }
@@ -395,6 +494,11 @@ async function main(): Promise<void> {
   // Start bot
   log.info('starting bot...');
   await bot.start({
+    allowed_updates: [
+      'message', 'edited_message', 'callback_query',
+      'chat_member',  // Required for captcha: new member join events
+      'channel_post', 'edited_channel_post',
+    ],
     onStart: async (botInfo) => {
       log.info(`bot @${botInfo.username} is running`);
 
@@ -407,26 +511,47 @@ async function main(): Promise<void> {
         { scope: { type: 'all_private_chats' } }
       ).catch(() => {});
 
-      // Notify admin on startup with deploy info
+      // Notify admin on startup with deploy info (admin only, never channel/group)
       const rawCommitMsg = process.env.RAILWAY_GIT_COMMIT_MESSAGE?.trim();
       const commitSha = process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7);
 
-      const deployLines = ['Бот обновлён и запущен.'];
-      if (pkgVersion) deployLines.push(`Версия: ${pkgVersion}`);
-      if (commitSha) deployLines.push(`Коммит: ${commitSha}`);
+      const deployLines = [`*Бот обновлён* ${pkgVersion ? `(v${pkgVersion})` : ''}`];
+      if (commitSha) deployLines[0] += ` · \`${commitSha}\``;
+
       if (rawCommitMsg) {
-        // Extract first meaningful line, clean technical noise
-        const firstLine = rawCommitMsg
+        // Parse all meaningful lines, strip technical noise
+        const changes = rawCommitMsg
           .split('\n')
-          .filter(l => !l.startsWith('Co-Authored-By:') && l.trim() !== '')
-          .map(l => l.trim())[0];
-        if (firstLine) deployLines.push(`Что нового: ${firstLine}`);
+          .map(l => l.trim())
+          .filter(l => l !== '' && !l.startsWith('Co-Authored-By:'));
+
+        if (changes.length > 0) {
+          deployLines.push('');
+          // First line = commit title (bold)
+          deployLines.push(`*${changes[0]}*`);
+          // Remaining lines = details as bullet points
+          for (let i = 1; i < changes.length; i++) {
+            const line = changes[i];
+            // Already a bullet? Keep it. Otherwise add one.
+            if (line.startsWith('- ') || line.startsWith('• ')) {
+              deployLines.push(line);
+            } else {
+              deployLines.push(`• ${line}`);
+            }
+          }
+        }
       }
 
       bot.api.sendMessage(
         config.TELEGRAM_ADMIN_USER_ID,
         deployLines.join('\n'),
+        { parse_mode: 'Markdown' },
       ).catch(() => {});
+
+      // One-time: audit channel/group/bot descriptions — add cross-links if missing
+      auditDescriptions(bot, config).catch(err => {
+        log.error('description audit failed', { error: String(err) });
+      });
 
       // Run download diagnostic — only notify if something is wrong
       runDiagnostic().then((report) => {

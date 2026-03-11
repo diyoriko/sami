@@ -1005,6 +1005,15 @@ const staticData = {
       ]
     },
     {
+      "version": "v0.3.1",
+      "date": "11.03",
+      "status": "deployed",
+      "items": [
+        "Fix: H.264 кодек для Telegram — yt-dlp предпочитает avc1, ffprobe проверяет, ffmpeg перекодирует",
+        "Автопоиск видео отключён — админ ищет и публикует вручную через кнопки бота"
+      ]
+    },
+    {
       "version": "v0.4.0",
       "date": "11.03",
       "status": "deployed",
@@ -1047,7 +1056,7 @@ const staticData = {
         "Пост-онбординг DM новым участникам",
         "Рубрики: #ритуал_недели + #прогресс_пятницы",
         "25 UX smoke-тестов (82 всего)",
-        "Кнопки категорий: 2 в ряд (читаемый текст)",
+        "Proxy без cookies, стратег feedback loop, UGC fixes",
         "Стратег ↔ бэклог: sync-proposal-status.mjs"
       ]
     }
@@ -1285,46 +1294,62 @@ const staticData = {
       "status": "active",
       "groups": [
         {
-          "title": "Критические баги — DONE",
+          "title": "DONE (v0.6.0)",
           "priority": "p0",
           "tasks": [
             { "text": "Публикация: CATEGORIES из shared.ts вместо хардкода 3", "done": true },
             { "text": "UGC: published_at трекинг реальной публикации", "done": true },
             { "text": "\"Я сделаль\": fallback для незарегистрированных постов", "done": true },
-            { "text": "Health dashboard: FK migration crash hotfix", "done": true }
+            { "text": "Health dashboard: FK migration crash hotfix", "done": true },
+            { "text": "UX сообщения при публикации: только выбранные категории + название", "done": true },
+            { "text": "\"Я сделаль\": Loading — handler для done_msg: callback", "done": true },
+            { "text": "\"Другое\" в поиске: resilient session lookup (fallback по message_id)", "done": true },
+            { "text": "Капча: allowed_updates с chat_member в bot.start()", "done": true },
+            { "text": "/post команда: 7 категорий из CATEGORIES", "done": true },
+            { "text": "UGC YouTube: подробное уведомление админа при ошибке публикации", "done": true }
           ]
         },
         {
           "title": "Сломанные core-фичи",
           "priority": "p0",
           "tasks": [
-            { "text": "\"Я сделаль\": Loading и зависание", "done": false },
-            { "text": "Капча не срабатывает для новых участников", "done": false },
-            { "text": "\"Другое\" в поиске: \"Сессия не найдена\"", "done": false },
             { "text": "UGC YouTube: Error 153 при одобрении", "done": false }
           ]
         },
         {
-          "title": "Баги (не блокируют)",
+          "title": "Баги — DONE",
           "priority": "p1",
           "tasks": [
-            { "text": "Поиск видео: дублирует сообщение", "done": false },
-            { "text": "Статус: очередь показывает невыбранные", "done": false },
-            { "text": "Кнопки сложности обрезаются", "done": false },
-            { "text": "Рейтинг: ★ → ⭐ эмодзи", "done": false }
+            { "text": "Поиск видео: убран дубль «Ищу видео...»", "done": true },
+            { "text": "Статус: очередь только approved", "done": true },
+            { "text": "Кнопки сложности: Легко/Средне/Сложно", "done": true },
+            { "text": "Рейтинг: ★ → ⭐ во всех файлах", "done": true }
           ]
         },
         {
-          "title": "UX улучшения",
+          "title": "UX улучшения — DONE",
           "priority": "p1",
           "tasks": [
-            { "text": "Убрать \"Опубликовать\" → inline при выборе", "done": false },
-            { "text": "Формат автора: имя + 📎 YouTube", "done": false },
-            { "text": "UGC: спрашивать мышцы, длительность", "done": false },
-            { "text": "Рейтинг: popup в автокомменте", "done": false },
-            { "text": "Ревью UX автокоммента", "done": false },
-            { "text": "Очеловечить приветствие бота", "done": false },
-            { "text": "Описание канала и bio бота", "done": false },
+            { "text": "\"Опубликовать\" → inline-кнопка в Статус", "done": true },
+            { "text": "Формат автора: имя, 📎 YouTube", "done": true },
+            { "text": "Рейтинг: popup уже в автокомменте", "done": true },
+            { "text": "Приветствие: Ботик Сами, тёплый тон", "done": true }
+          ]
+        },
+        {
+          "title": "UX улучшения — в работе",
+          "priority": "p1",
+          "tasks": [
+            { "text": "UGC: длительность, инвентарь, мышцы", "done": true },
+            { "text": "Ревью UX автокоммента", "done": true },
+            { "text": "Аудит описаний канала, группы и бота", "done": true },
+            { "text": "Deploy notification: changelog + Markdown", "done": true }
+          ]
+        },
+        {
+          "title": "Тестирование",
+          "priority": "p1",
+          "tasks": [
             { "text": "Интеграционные тесты с реальным ботом", "done": false }
           ]
         },
@@ -1337,10 +1362,24 @@ const staticData = {
           ]
         },
         {
+          "title": "Стабильность",
+          "priority": "p1",
+          "tasks": [
+            { "text": "MarkdownV2 — перевести все сообщения бота", "done": false }
+          ]
+        },
+        {
           "title": "Автоматизация",
           "priority": "p2",
           "tasks": [
             { "text": "Стратег: предложения → одобрение → бэклог", "done": false }
+          ]
+        },
+        {
+          "title": "Капча и модерация (отложено до роста аудитории)",
+          "priority": "p2",
+          "tasks": [
+            { "text": "Капча не срабатывает при вступлении через канал", "done": false }
           ]
         },
         {
@@ -1360,7 +1399,6 @@ const staticData = {
             { "text": "Монетизация", "done": false },
             { "text": "Weekly personal stats DM", "done": false },
             { "text": "Attribution flow для тренеров", "done": false },
-            { "text": "MarkdownV2", "done": false },
             { "text": "Лендинг Sami", "done": false },
             { "text": "Ручной посев — 10 приглашений", "done": false }
           ]

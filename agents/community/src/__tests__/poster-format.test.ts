@@ -26,8 +26,8 @@ describe('post format vision compliance', () => {
     expect(posterSource).toMatch(/🎾/);
   });
 
-  it('has rating display with star', () => {
-    expect(posterSource).toContain('★');
+  it('has rating display with star emoji', () => {
+    expect(posterSource).toContain('⭐');
     expect(posterSource).toContain('ratingStr');
   });
 

@@ -40,10 +40,13 @@ import {
   type UgcStep,
 } from './db';
 import {
-  type Category, type Difficulty,
+  type Category, type Difficulty, type EquipmentValue,
   CATEGORIES, DIFFICULTIES,
   CATEGORY_RU, CATEGORY_EMOJI, DIFFICULTY_RU,
   CATEGORY_BUTTONS, DIFFICULTY_BUTTONS,
+  EQUIPMENT_BUTTONS, EQUIPMENT_VALUES, EQUIPMENT_VALUE_RU, EQUIPMENT_NO_GEAR,
+  DURATION_BUTTONS, formatDurationLabel,
+  MUSCLE_PATTERNS, MUSCLE_DEFAULTS,
   escapeMarkdown, decodeHtmlEntities,
 } from './shared';
 
@@ -57,9 +60,7 @@ function mainKeyboard(isAdmin = false): Keyboard {
     .text('Предложить тренировку');
   if (isAdmin) {
     kb.row()
-      .text('Статус').text('Поиск видео').text('Опубликовать')
-      .row()
-      .text('Сбросить выбор').text('Аналитика');
+      .text('Статус').text('Поиск видео').text('Аналитика');
   }
   return kb.resized().persistent();
 }
@@ -88,6 +89,26 @@ function buildCategoryKeyboard(subId: number): InlineKeyboard {
   return kb;
 }
 
+/** Build duration inline keyboard: 2 buttons per row */
+function buildDurationKeyboard(subId: number): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  DURATION_BUTTONS.forEach((btn, i) => {
+    kb.text(btn.label, `ugc_dur:${subId}:${btn.seconds}`);
+    if (i % 2 === 1) kb.row();
+  });
+  return kb;
+}
+
+/** Build equipment inline keyboard: 2 buttons per row */
+function buildEquipmentKeyboard(subId: number): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  EQUIPMENT_BUTTONS.forEach((btn, i) => {
+    kb.text(btn.label, `ugc_equip:${subId}:${btn.value}`);
+    if (i % 2 === 1) kb.row();
+  });
+  return kb;
+}
+
 // --- Register handlers ---
 
 export function registerBotMenu(bot: Bot): void {
@@ -99,8 +120,14 @@ export function registerBotMenu(bot: Bot): void {
   bot.command('start', async (ctx) => {
     if (ctx.chat.type !== 'private') return;
     deleteUgcState(ctx.from!.id);
+    const firstName = ctx.from?.first_name ?? '';
+    const greeting = firstName ? `Привет, ${firstName}!` : 'Привет!';
     await ctx.reply(
-      'Привет! Я бот Sami.\n\nВыбери действие:',
+      `${greeting} Я Ботик Сами — твой помощник в мире ежедневных тренировок.\n\n` +
+      `Что умею:\n` +
+      `• Показать твои загруженные тренировки\n` +
+      `• Принять предложение новой тренировки\n\n` +
+      `Выбирай:`,
       { reply_markup: mainKeyboard(isAdmin(ctx.from!.id)) }
     );
   });
@@ -182,6 +209,13 @@ export function registerBotMenu(bot: Bot): void {
       queueText = '\n\nОчередь пуста.';
     }
 
+    // Inline actions if there are approved videos
+    const { getApprovedVideo } = await import('./db');
+    const hasApproved = CATEGORIES.some(c => getApprovedVideo(date, c) !== null || getApprovedVideo(tomorrow, c) !== null);
+    const statusKb = hasApproved
+      ? new InlineKeyboard().text('Опубликовать', 'btn_publish').text('Сбросить выбор', 'btn_reset')
+      : undefined;
+
     await ctx.reply(
       [
         `*Sami — статус*`,
@@ -195,8 +229,56 @@ export function registerBotMenu(bot: Bot): void {
         `Аптайм: ${uptimeStr}`,
         queueText,
       ].join('\n'),
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'Markdown', ...(statusKb ? { reply_markup: statusKb } : {}) }
     );
+  });
+
+  // Inline publish button from status message
+  bot.callbackQuery('btn_publish', async (ctx) => {
+    if (ctx.from!.id !== config.TELEGRAM_ADMIN_USER_ID) return;
+    await ctx.answerCallbackQuery('Публикую...');
+    const { todayMsk, tomorrowMsk } = await import('./dates');
+    const { postVideoToChannel } = await import('./poster');
+    const { getApprovedVideo } = await import('./db');
+
+    const today = todayMsk();
+    const tomorrow = tomorrowMsk();
+    const hasTomorrow = CATEGORIES.some(c => getApprovedVideo(tomorrow, c) !== null);
+    const hasToday = CATEGORIES.some(c => getApprovedVideo(today, c) !== null);
+    const date = hasTomorrow ? tomorrow : hasToday ? today : null;
+
+    if (!date) {
+      try { await ctx.editMessageText('Нет одобренных видео.'); } catch {}
+      return;
+    }
+
+    const report: string[] = [];
+    for (const cat of CATEGORIES) {
+      const approved = getApprovedVideo(date, cat);
+      if (!approved) continue;
+      const result = await postVideoToChannel(bot, date, cat, { force: true });
+      const label = `${CATEGORY_EMOJI[cat]} ${CATEGORY_RU[cat]}`;
+      if (result === 'posted') report.push(`${label} — ${approved.title}`);
+      else if (result === 'error') report.push(`${label} — ошибка`);
+      else report.push(`${label} — пропущено`);
+    }
+    try {
+      await ctx.editMessageText(report.length > 0 ? report.join('\n') : 'Нет одобренных видео.');
+    } catch {}
+  });
+
+  // Inline reset button from status message
+  bot.callbackQuery('btn_reset', async (ctx) => {
+    if (ctx.from!.id !== config.TELEGRAM_ADMIN_USER_ID) return;
+    await ctx.answerCallbackQuery('Сброшено');
+    const { todayMsk, tomorrowMsk } = await import('./dates');
+    const { resetApprovalSessions } = await import('./db');
+    const today = todayMsk();
+    const tomorrow = tomorrowMsk();
+    const total = resetApprovalSessions(today) + resetApprovalSessions(tomorrow);
+    try {
+      await ctx.editMessageText(`Сброшено ${total} сессий. Нажми «Поиск видео» для нового поиска.`);
+    } catch {}
   });
 
   bot.hears('Поиск видео', async (ctx) => {
@@ -204,7 +286,7 @@ export function registerBotMenu(bot: Bot): void {
     const { tomorrowMsk } = await import('./dates');
     const { runApprovalFlow } = await import('./approval');
     const date = tomorrowMsk();
-    await ctx.reply(`Ищу видео на ${date}...`);
+    // Note: runApprovalFlow already sends "Ищу видео..." message
     await runApprovalFlow(bot, date);
   });
 
@@ -394,7 +476,11 @@ export function registerBotMenu(bot: Bot): void {
     // Create UGC submission with file_id as video_url (bot can re-send by file_id)
     const subId = createUgcSubmission(userId, ctx.from!.username ?? null, `tg:${fileId}`, null);
     if (duration) {
-      updateUgcSubmission(subId, { title: `Видео (${Math.floor(duration / 60)}:${String(duration % 60).padStart(2, '0')})` });
+      updateUgcSubmission(subId, {
+        title: `Видео (${Math.floor(duration / 60)}:${String(duration % 60).padStart(2, '0')})`,
+        duration_seconds: duration,
+        duration_label: formatDurationLabel(duration),
+      });
     }
     saveUgcState(userId, 'waiting_category', subId);
 
@@ -460,13 +546,25 @@ export function registerBotMenu(bot: Bot): void {
       return;
     }
 
-    // Step 3: waiting for title (free text)
+    // Step 5: waiting for title (free text) — last step before submission
     if (state.step === 'waiting_title') {
       if (text.length < 3 || text.length > 200) {
         await ctx.reply('Название должно быть от 3 до 200 символов.');
         return;
       }
-      updateUgcSubmission(state.submission_id!, { title: text, status: 'pending' });
+
+      // Auto-detect muscles from title using shared patterns
+      const detectedMuscles = MUSCLE_PATTERNS
+        .filter(([re]) => re.test(text))
+        .map(([, label]) => label);
+
+      const subBeforeTitle = getUgcSubmission(state.submission_id!);
+      const category = subBeforeTitle?.category ?? 'stretching';
+      const muscles = detectedMuscles.length > 0
+        ? detectedMuscles.join(', ')
+        : (MUSCLE_DEFAULTS[category]?.join(', ') ?? 'всё тело');
+
+      updateUgcSubmission(state.submission_id!, { title: text, muscles, status: 'pending' });
       deleteUgcState(userId);
 
       const sub = getUgcSubmission(state.submission_id!);
@@ -525,6 +623,65 @@ export function registerBotMenu(bot: Bot): void {
     }
     await ctx.answerCallbackQuery();
     updateUgcSubmission(subId, { difficulty });
+
+    // Check if duration was auto-detected from video file metadata
+    const sub = getUgcSubmission(subId);
+    if (sub?.duration_seconds) {
+      // Skip duration step — go directly to equipment
+      saveUgcState(userId, 'waiting_equipment', subId);
+      const kb = buildEquipmentKeyboard(subId);
+      try {
+        await ctx.editMessageText('Нужен ли инвентарь?', { reply_markup: kb });
+      } catch {
+        await ctx.reply('Нужен ли инвентарь?', { reply_markup: kb });
+      }
+    } else {
+      saveUgcState(userId, 'waiting_duration', subId);
+      const kb = buildDurationKeyboard(subId);
+      try {
+        await ctx.editMessageText('Сколько длится тренировка?', { reply_markup: kb });
+      } catch {
+        await ctx.reply('Сколько длится тренировка?', { reply_markup: kb });
+      }
+    }
+  });
+
+  // --- UGC duration callback ---
+  bot.callbackQuery(/^ugc_dur:(\d+):(\d+)$/, async (ctx) => {
+    const subId = parseInt(ctx.match[1]);
+    const seconds = parseInt(ctx.match[2]);
+    const userId = ctx.from!.id;
+    const state = getUgcState(userId);
+    if (!state || state.submission_id !== subId) {
+      await ctx.answerCallbackQuery('Сессия устарела');
+      return;
+    }
+    await ctx.answerCallbackQuery();
+    const label = formatDurationLabel(seconds);
+    updateUgcSubmission(subId, { duration_seconds: seconds, duration_label: label });
+    saveUgcState(userId, 'waiting_equipment', subId);
+
+    const kb = buildEquipmentKeyboard(subId);
+    try {
+      await ctx.editMessageText('Нужен ли инвентарь?', { reply_markup: kb });
+    } catch {
+      await ctx.reply('Нужен ли инвентарь?', { reply_markup: kb });
+    }
+  });
+
+  // --- UGC equipment callback ---
+  const equipPattern = new RegExp(`^ugc_equip:(\\d+):(${EQUIPMENT_VALUES.join('|')})$`);
+  bot.callbackQuery(equipPattern, async (ctx) => {
+    const subId = parseInt(ctx.match[1]);
+    const equipValue = ctx.match[2] as EquipmentValue;
+    const userId = ctx.from!.id;
+    const state = getUgcState(userId);
+    if (!state || state.submission_id !== subId) {
+      await ctx.answerCallbackQuery('Сессия устарела');
+      return;
+    }
+    await ctx.answerCallbackQuery();
+    updateUgcSubmission(subId, { equipment: EQUIPMENT_VALUE_RU[equipValue] ?? equipValue });
     saveUgcState(userId, 'waiting_title', subId);
 
     try {
@@ -559,16 +716,26 @@ export function registerBotMenu(bot: Bot): void {
       let published = false;
       let publishError = '';
       try {
-        const categoryRu = CATEGORY_RU[sub.category as Category] ?? sub.category ?? '—';
+        const cat = sub.category as Category;
+        const catEmoji = CATEGORY_EMOJI[cat] ?? '🏷';
+        const categoryRu = CATEGORY_RU[cat] ?? sub.category ?? '—';
         const difficultyRu = DIFFICULTY_RU[sub.difficulty as Difficulty] ?? sub.difficulty ?? '—';
         const title = escapeMarkdown(sub.title ?? 'Тренировка');
+        const equipmentTag = sub.equipment ?? EQUIPMENT_NO_GEAR;
+
+        const tagLines = [
+          `\`${catEmoji} ${categoryRu}\``,
+          ...(sub.duration_label ? [`\`⏱️ ${sub.duration_label}\``] : []),
+          ...(sub.muscles ? [`\`🦴 ${sub.muscles}\``] : []),
+          `\`💎 ${difficultyRu}\``,
+          `\`🎾 ${equipmentTag}\``,
+        ];
 
         const caption = [
           `*${title}*`,
           '',
-          `\`🏷 ${categoryRu}\``,
-          `\`📊 ${difficultyRu}\``,
-          `Сделали: 0`,
+          ...tagLines,
+          `✅ Сделали: 0`,
           '',
           `Автор: ${authorDisplay}`,
         ].join('\n');
@@ -586,11 +753,11 @@ export function registerBotMenu(bot: Bot): void {
           title: sub.title ?? 'UGC Тренировка',
           channel_name: authorDisplay,
           channel_url: null,
-          duration_seconds: null,
-          duration_label: null,
+          duration_seconds: sub.duration_seconds ?? null,
+          duration_label: sub.duration_label ?? null,
           difficulty: (sub.difficulty as Difficulty) ?? 'beginner',
           category: (sub.category as Category) ?? 'stretching',
-          muscles: null,
+          muscles: sub.muscles ?? null,
           thumbnail_url: null,
           video_url: sub.video_url,
           view_count: 0,
@@ -663,7 +830,18 @@ export function registerBotMenu(bot: Bot): void {
         log.info('UGC published to channel', { subId, videoId });
       } catch (err) {
         publishError = String(err);
-        log.error('UGC publish to channel failed', { subId, error: publishError });
+        log.error('UGC publish to channel failed', { subId, videoUrl: sub.video_url, error: publishError });
+        // Detailed admin notification for debugging
+        try {
+          const isTg = sub.video_url.startsWith('tg:');
+          const details = [
+            `Не удалось опубликовать UGC #${subId}`,
+            `Тип: ${isTg ? 'видеофайл' : 'YouTube'}`,
+            `Видео: ${isTg ? '(file_id)' : sub.video_url}`,
+            `Ошибка: ${publishError.slice(0, 300)}`,
+          ].join('\n');
+          await bot.api.sendMessage(config.TELEGRAM_ADMIN_USER_ID, details);
+        } catch {}
       }
 
       // Update admin message
@@ -776,6 +954,9 @@ async function sendUgcToAdmin(bot: Bot, sub: UgcSubmission): Promise<void> {
     `Название: ${safeTitle}`,
     `Тип: ${catRu}`,
     `Уровень: ${diff}`,
+    ...(sub.duration_label ? [`Длительность: ${sub.duration_label}`] : []),
+    ...(sub.muscles ? [`Мышцы: ${sub.muscles}`] : []),
+    ...(sub.equipment ? [`Инвентарь: ${sub.equipment}`] : []),
     `Видео: ${videoLink}`,
   ].join('\n');
 
@@ -830,7 +1011,7 @@ async function sendFilterResults(ctx: any, videos: ReturnType<typeof filterVideo
     const link = v.channel_message_id
       ? `[${escapeMarkdown(shortTitle)}](https://t.me/${channelHandle}/${v.channel_message_id})`
       : escapeMarkdown(shortTitle);
-    return `${i + 1}. ${link}\n   ${catRu} · ${dur} · ★${v.rating.toFixed(1)}`;
+    return `${i + 1}. ${link}\n   ${catRu} · ${dur} · ⭐${v.rating.toFixed(1)}`;
   });
 
   const text = `*${label}* (${videos.length})\n\n` + lines.join('\n\n');
