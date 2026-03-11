@@ -556,9 +556,8 @@ export function registerBotMenu(bot: Bot): void {
           channel_subscribers: 0,
         });
 
-        const keyboard = new InlineKeyboard()
-          .text('Я сделаль', `done:${videoId}`)
-          .text('Сохранить', `fav:${videoId}`);
+        // No inline keyboard — Telegram hides "Comments" button when reply_markup is present.
+        // Bot posts "Я сделаль" button as a comment in the discussion group (see moderation.ts).
 
         let channelMsg: { message_id: number };
 
@@ -572,7 +571,6 @@ export function registerBotMenu(bot: Bot): void {
               caption,
               parse_mode: 'Markdown',
               supports_streaming: true,
-              reply_markup: keyboard,
             }
           );
         } else if (isYouTubeUrl && isYtDlpAvailable()) {
@@ -589,7 +587,6 @@ export function registerBotMenu(bot: Bot): void {
                 duration: download.meta.duration ?? undefined,
                 width: download.meta.width ?? undefined,
                 height: download.meta.height ?? undefined,
-                reply_markup: keyboard,
               }
             );
           } finally {
@@ -603,7 +600,6 @@ export function registerBotMenu(bot: Bot): void {
             {
               parse_mode: 'Markdown',
               link_preview_options: { is_disabled: true },
-              reply_markup: keyboard,
             }
           );
         }

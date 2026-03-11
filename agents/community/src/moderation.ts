@@ -8,8 +8,8 @@ import { moscowHour } from './dates';
 const log = createLogger('moderation');
 import {
   upsertMember, setMemberGoal, addWarning, muteMember,
-  recordCompletion, getCompletionCount, hasUserCompleted, getPostByMessageId, getLatestPostByVideoId,
-  toggleFavorite,
+  recordCompletion, getCompletionCount, hasUserCompleted,
+  getPostByMessageId, getLatestPostByVideoId, getPostByGroupCommentId, setGroupCommentId,
   saveCaptcha, getCaptcha, deleteCaptcha, getExpiredCaptchas,
   getLatestPostForDate,
   getMemberLevel, getMemberJoinedAt,
@@ -467,16 +467,51 @@ export function registerModeration(bot: Bot): void {
     try { await ctx.deleteMessage(); } catch {}
   });
 
+  // --- Auto-forward from channel → post "Я сделаль" button as comment in discussion group ---
+  bot.on('message', async (ctx) => {
+    // Only handle auto-forwarded channel posts in the discussion group
+    if (ctx.chat.id !== Number(config.TELEGRAM_GROUP_ID)) return;
+    if (!ctx.message.is_automatic_forward) return;
+
+    // Find the original channel message_id from forward_origin
+    const origin = ctx.message.forward_origin;
+    if (!origin || origin.type !== 'channel') return;
+
+    const channelMsgId = origin.message_id;
+    const post = getPostByMessageId(channelMsgId);
+    if (!post) return;
+
+    const count = getCompletionCount(post.id);
+    const keyboard = new InlineKeyboard()
+      .text(`Я сделаль${count > 0 ? ` · ${count}` : ''}`, `done:${post.video_id}`);
+
+    try {
+      const comment = await bot.api.sendMessage(
+        config.TELEGRAM_GROUP_ID,
+        'Сделал(а) тренировку? Нажми кнопку:',
+        {
+          message_thread_id: ctx.message.message_id,
+          reply_markup: keyboard,
+        }
+      );
+      setGroupCommentId(post.id, comment.message_id);
+    } catch (err) {
+      log.error('failed to post completion button in discussion', { postId: post.id, error: String(err) });
+    }
+  });
+
   // --- "Сделано ✓" button on video posts ---
   bot.callbackQuery(/^done:(\d+)$/, async (ctx) => {
     const videoId = parseInt(ctx.match[1]);
     const userId = ctx.from?.id;
     if (!userId) return;
 
-    // Find the post by message_id first, fallback to video_id
-    // (message_id may differ if viewed from linked group vs channel)
+    // Find post: by group comment, by channel message, or by video_id
     const msg = ctx.callbackQuery.message;
-    let post = msg ? getPostByMessageId(msg.message_id) : null;
+    let post = msg ? getPostByGroupCommentId(msg.message_id) : null;
+    if (!post) {
+      post = msg ? getPostByMessageId(msg.message_id) : null;
+    }
     if (!post) {
       post = getLatestPostByVideoId(videoId);
     }
@@ -513,45 +548,24 @@ export function registerModeration(bot: Bot): void {
 
     const count = getCompletionCount(post.id);
 
-    // Update buttons — preserve favorites button
+    // Update the button with new count
     const keyboard = new InlineKeyboard()
-      .text(`Я сделаль · ${count}`, `done:${videoId}`)
-      .text('Сохранить', `fav:${videoId}`);
+      .text(`Я сделаль · ${count}`, `done:${videoId}`);
 
-    // Try to update caption (with new count) + keyboard
     try {
-      const caption = ctx.callbackQuery.message?.caption;
-      if (caption) {
-        const updatedCaption = caption.replace(/Сделали: \d+/, `Сделали: ${count}`);
-        await ctx.editMessageCaption({ caption: updatedCaption, parse_mode: 'Markdown', reply_markup: keyboard });
+      const msgText = ctx.callbackQuery.message?.text;
+      if (msgText) {
+        await ctx.editMessageText('Сделал(а) тренировку? Нажми кнопку:', { reply_markup: keyboard });
       } else {
         await ctx.editMessageReplyMarkup({ reply_markup: keyboard });
       }
     } catch {
-      // Fallback: at least try to update the keyboard
       try {
         await ctx.editMessageReplyMarkup({ reply_markup: keyboard });
       } catch { /* message too old, that's ok */ }
     }
 
     await ctx.answerCallbackQuery('Тренировка записана.');
-  });
-
-  // --- "Сохранить" button — toggle favorite ---
-  bot.callbackQuery(/^fav:(\d+)$/, async (ctx) => {
-    const videoId = parseInt(ctx.match[1]);
-    const userId = ctx.from?.id;
-    if (!userId) return;
-
-    // Find post for this video
-    const msg = ctx.callbackQuery.message;
-    let post = msg ? getPostByMessageId(msg.message_id) : null;
-    if (!post) {
-      post = getLatestPostByVideoId(videoId);
-    }
-
-    const added = toggleFavorite(userId, videoId, post?.id);
-    await ctx.answerCallbackQuery(added ? 'Сохранено в избранное' : 'Убрано из избранного');
   });
 
   log.info('handlers registered');

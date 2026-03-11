@@ -31,8 +31,13 @@ describe('post format vision compliance', () => {
     expect(posterSource).toContain('ratingStr');
   });
 
-  it('button text is "Я сделаль"', () => {
-    expect(posterSource).toContain("'Я сделаль'");
+  it('button text is "Я сделаль" (in discussion comment, not in channel post)', () => {
+    const moderationSource = readSrc('moderation.ts');
+    expect(moderationSource).toContain('Я сделаль');
+    // Channel posts have no inline keyboard — "Comments" button from Telegram is visible
+    // reply_markup appears only in a comment explaining why it was removed
+    const codeLines = posterSource.split('\n').filter(l => !l.trim().startsWith('//'));
+    expect(codeLines.join('\n')).not.toContain('reply_markup');
   });
 
   it('has author line with linked channel name', () => {

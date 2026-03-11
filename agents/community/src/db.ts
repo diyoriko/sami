@@ -185,6 +185,9 @@ function migrate(db: Database.Database): void {
   try { db.exec('ALTER TABLE members ADD COLUMN completions_total INTEGER DEFAULT 0'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE members ADD COLUMN buddy_invite_sent INTEGER DEFAULT 0'); } catch { /* already exists */ }
 
+  // Discussion comment message ID (bot's reply in group thread)
+  try { db.exec('ALTER TABLE posts ADD COLUMN group_comment_id INTEGER'); } catch { /* already exists */ }
+
   // Soft delete columns
   try { db.exec('ALTER TABLE ugc_submissions ADD COLUMN deleted_at TEXT'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE approval_sessions ADD COLUMN deleted_at TEXT'); } catch { /* already exists */ }
@@ -807,6 +810,18 @@ export function getLatestPostByVideoId(videoId: number): { id: number; video_id:
   return (getDb().prepare(
     `SELECT id, video_id, category, date FROM posts WHERE video_id = ? ORDER BY posted_at DESC LIMIT 1`
   ).get(videoId) as { id: number; video_id: number; category: string; date: string } | undefined) ?? null;
+}
+
+/** Save the bot's comment message_id in the discussion group */
+export function setGroupCommentId(postId: number, groupCommentId: number): void {
+  getDb().prepare('UPDATE posts SET group_comment_id = ? WHERE id = ?').run(groupCommentId, postId);
+}
+
+/** Find post by its group comment message_id */
+export function getPostByGroupCommentId(commentId: number): { id: number; video_id: number; category: string; date: string } | null {
+  return (getDb().prepare(
+    `SELECT id, video_id, category, date FROM posts WHERE group_comment_id = ?`
+  ).get(commentId) as { id: number; video_id: number; category: string; date: string } | undefined) ?? null;
 }
 
 // --- Rating ---

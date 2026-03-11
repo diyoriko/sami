@@ -1,4 +1,4 @@
-import { Bot, InlineKeyboard } from 'grammy';
+import { Bot } from 'grammy';
 import { InputFile } from 'grammy';
 import { getConfig } from './config';
 import {
@@ -84,9 +84,9 @@ export async function postVideoToChannel(
   }
 
   const caption = await formatCaption(video);
-  const keyboard = new InlineKeyboard()
-    .text('Я сделаль', `done:${video.id}`)
-    .text('Сохранить', `fav:${video.id}`);
+
+  // No inline keyboard on channel posts — Telegram hides "Comments" button when reply_markup is present.
+  // Bot posts "Я сделаль" button as a comment in the discussion group instead (see moderation.ts).
 
   // Try to download and post as video file (with 1 retry)
   const MAX_VIDEO_ATTEMPTS = 2;
@@ -108,7 +108,6 @@ export async function postVideoToChannel(
               duration: download.meta.duration ?? video.duration_seconds ?? undefined,
               width: download.meta.width ?? undefined,
               height: download.meta.height ?? undefined,
-              reply_markup: keyboard,
             }
           );
           videoSent = true;
@@ -157,7 +156,6 @@ export async function postVideoToChannel(
       {
         parse_mode: 'Markdown',
         link_preview_options: { is_disabled: true },
-        reply_markup: keyboard,
       }
     );
 
