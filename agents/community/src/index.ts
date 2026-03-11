@@ -127,6 +127,11 @@ async function main(): Promise<void> {
       else report.push(`⏭ ${label} — пропущено`);
     }
 
+    // Clean up remaining pending/approved sessions for this date (unpublished categories)
+    const { cleanupUnpostedSessions } = await import('./db');
+    const cleaned = cleanupUnpostedSessions(date);
+    if (cleaned > 0) report.push(`🧹 Очищено ${cleaned} неиспользованных сессий`);
+
     await ctx.reply(report.join('\n'));
   });
 

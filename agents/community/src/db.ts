@@ -484,6 +484,15 @@ export function cleanupOldApprovalSessions(olderThanDays: number = 2): number {
   return result.changes;
 }
 
+/** Soft-delete all non-posted sessions for a date — called after /post to clean up queue. */
+export function cleanupUnpostedSessions(date: string): number {
+  const result = getDb().prepare(`
+    UPDATE approval_sessions SET deleted_at = datetime('now')
+    WHERE date = ? AND status IN ('pending', 'approved') AND deleted_at IS NULL
+  `).run(date);
+  return result.changes;
+}
+
 /** Soft-delete pending sessions for a (date, category) pair — used before creating replacement. */
 export function softDeletePendingSessions(date: string, category: string): number {
   const result = getDb().prepare(`
@@ -797,6 +806,13 @@ export function hasUserCompleted(postId: number, userId: number): boolean {
     `SELECT COUNT(*) as cnt FROM completions WHERE post_id = ? AND telegram_user_id = ?`
   ).get(postId, userId) as { cnt: number };
   return row.cnt > 0;
+}
+
+export function getLastCompletionTime(userId: number): string | null {
+  const row = getDb().prepare(
+    `SELECT completed_at FROM completions WHERE telegram_user_id = ? ORDER BY completed_at DESC LIMIT 1`
+  ).get(userId) as { completed_at: string } | undefined;
+  return row?.completed_at ?? null;
 }
 
 export function getPostByMessageId(channelMessageId: number): { id: number; video_id: number; category: string; date: string } | null {

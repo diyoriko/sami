@@ -108,6 +108,7 @@ export async function postVideoToChannel(
               duration: download.meta.duration ?? video.duration_seconds ?? undefined,
               width: download.meta.width ?? undefined,
               height: download.meta.height ?? undefined,
+              thumbnail: video.thumbnail_url ? new InputFile(new URL(video.thumbnail_url)) : undefined,
             }
           );
           videoSent = true;

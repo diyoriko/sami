@@ -32,8 +32,6 @@ import {
   deleteUgcState,
   getPendingUgcCount,
   getLastStrategistTimestamp,
-  getUserFavorites,
-  getUserFavoriteTotal,
   getMemberProfile,
   getMemberLevel,
   filterVideos,
@@ -248,19 +246,6 @@ export function registerBotMenu(bot: Bot): void {
     await runDailyAnalytics(bot, todayMsk());
   });
 
-  // --- "Сохранённое" button ---
-  bot.hears('Сохранённое', async (ctx) => {
-    if (ctx.chat.type !== 'private') return;
-    deleteUgcState(ctx.from!.id);
-    await sendFavorites(ctx, ctx.from!.id, 0);
-  });
-
-  bot.callbackQuery(/^myfav:(\d+)$/, async (ctx) => {
-    const offset = parseInt(ctx.match[1]);
-    await ctx.answerCallbackQuery();
-    await sendFavorites(ctx, ctx.from!.id, offset, ctx.callbackQuery.message?.message_id);
-  });
-
   // --- "Профиль" button ---
   bot.hears('Профиль', async (ctx) => {
     if (ctx.chat.type !== 'private') return;
@@ -276,7 +261,6 @@ export function registerBotMenu(bot: Bot): void {
       observer: 'исследователь',
     };
 
-    const favTotal = getUserFavoriteTotal(userId);
     const subTotal = getUserSubmissionTotal(userId);
 
     const lines = [
@@ -285,7 +269,6 @@ export function registerBotMenu(bot: Bot): void {
       `Имя: ${profile?.first_name ?? 'не указано'}`,
       `Уровень: ${level}`,
       `Тренировок: ${completions}`,
-      `Сохранённых: ${favTotal}`,
       `Предложено: ${subTotal}`,
     ];
 
@@ -345,13 +328,26 @@ export function registerBotMenu(bot: Bot): void {
   bot.hears('Предложить тренировку', async (ctx) => {
     if (ctx.chat.type !== 'private') return;
     saveUgcState(ctx.from!.id, 'waiting_link');
+    const cancelKb = new InlineKeyboard().text('Отменить', 'ugc_cancel');
     await ctx.reply(
-      'Отправь ссылку на YouTube-видео или загрузи видеофайл напрямую.\n\n_Отмена: /cancel_',
-      { parse_mode: 'Markdown' }
+      'Отправь ссылку на YouTube-видео или загрузи видеофайл напрямую.',
+      { reply_markup: cancelKb }
     );
   });
 
-  // /cancel — abort UGC flow
+  // Cancel UGC flow — inline button or /cancel command
+  bot.callbackQuery('ugc_cancel', async (ctx) => {
+    const state = getUgcState(ctx.from.id);
+    if (state?.submission_id) {
+      deleteUgcSubmission(state.submission_id);
+    }
+    deleteUgcState(ctx.from.id);
+    await ctx.answerCallbackQuery('Отменено');
+    try {
+      await ctx.editMessageText('Отменено.');
+    } catch {}
+  });
+
   bot.command('cancel', async (ctx) => {
     if (ctx.chat.type !== 'private') return;
     const state = getUgcState(ctx.from!.id);
@@ -768,54 +764,6 @@ function formatUptime(seconds: number): string {
   if (h > 0) parts.push(`${h}ч`);
   parts.push(`${m}м`);
   return parts.join(' ');
-}
-
-async function sendFavorites(
-  ctx: any,
-  userId: number,
-  offset: number,
-  editMessageId?: number,
-): Promise<void> {
-  const total = getUserFavoriteTotal(userId);
-  if (total === 0) {
-    const text = 'У тебя пока нет сохранённых тренировок.\n\nНажми «Сохранить» под видео в канале, чтобы добавить.';
-    if (editMessageId) {
-      try { await ctx.api.editMessageText(ctx.chat!.id, editMessageId, text); } catch {}
-    } else {
-      await ctx.reply(text);
-    }
-    return;
-  }
-
-  const items = getUserFavorites(userId, PAGE_SIZE, offset);
-  const config = getConfig();
-  const channelHandle = config.TELEGRAM_CHANNEL_ID.startsWith('@')
-    ? config.TELEGRAM_CHANNEL_ID.slice(1)
-    : `c/${config.TELEGRAM_CHANNEL_ID.replace(/^-100/, '')}`;
-
-  const lines = items.map((item, i) => {
-    const num = offset + i + 1;
-    const catRu = CATEGORY_RU[item.category] ?? item.category;
-    const title = decodeHtmlEntities(item.title);
-    const shortTitle = title.length > 40 ? title.slice(0, 37) + '...' : title;
-    const link = item.channel_message_id
-      ? `[${escapeMarkdown(shortTitle)}](https://t.me/${channelHandle}/${item.channel_message_id})`
-      : escapeMarkdown(shortTitle);
-    return `${num}. ${link}\n   ${catRu}`;
-  });
-
-  const text = `*Сохранённое* (${total})\n\n` + lines.join('\n\n');
-
-  const kb = new InlineKeyboard();
-  if (offset > 0) kb.text('← Назад', `myfav:${Math.max(0, offset - PAGE_SIZE)}`);
-  if (offset + PAGE_SIZE < total) kb.text('Дальше →', `myfav:${offset + PAGE_SIZE}`);
-
-  const opts: any = { parse_mode: 'Markdown', reply_markup: kb };
-  if (editMessageId) {
-    try { await ctx.api.editMessageText(ctx.chat!.id, editMessageId, text, opts); } catch {}
-  } else {
-    await ctx.reply(text, opts);
-  }
 }
 
 async function sendFilterResults(ctx: any, videos: ReturnType<typeof filterVideos>, label: string): Promise<void> {

@@ -9,7 +9,7 @@ const log = createLogger('moderation');
 import {
   upsertMember, setMemberGoal, addWarning, muteMember,
   recordCompletion, getCompletionCount, hasUserCompleted,
-  getPostByMessageId, getLatestPostByVideoId, getPostByGroupCommentId, setGroupCommentId, updateVideoRating,
+  getPostByMessageId, getLatestPostByVideoId, getPostByGroupCommentId, setGroupCommentId, updateVideoRating, getLastCompletionTime,
   saveCaptcha, getCaptcha, deleteCaptcha, getExpiredCaptchas,
   getLatestPostForDate,
   getMemberLevel, getMemberJoinedAt,
@@ -554,6 +554,18 @@ export function registerModeration(bot: Bot): void {
       const count = getCompletionCount(post.id);
       await ctx.answerCallbackQuery(`Ты уже отметил(а) эту тренировку · ${count}`);
       return;
+    }
+
+    // Cooldown: max 1 completion per hour (across all posts)
+    const COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
+    const lastTime = getLastCompletionTime(userId);
+    if (lastTime) {
+      const elapsed = Date.now() - new Date(lastTime + 'Z').getTime();
+      if (elapsed < COOLDOWN_MS) {
+        const minLeft = Math.ceil((COOLDOWN_MS - elapsed) / 60_000);
+        await ctx.answerCallbackQuery(`Подожди ${minLeft} мин. перед следующей отметкой`);
+        return;
+      }
     }
 
     recordCompletion(post.id, videoId, userId);
