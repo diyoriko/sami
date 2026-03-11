@@ -949,21 +949,34 @@ const staticData = {
       ]
     },
     {
-      "version": "v0.3.1",
+      "version": "v0.4.0",
       "date": "11.03",
       "status": "deployed",
       "items": [
-        "Fix: H.264 кодек для Telegram — yt-dlp предпочитает avc1, ffprobe проверяет, ffmpeg перекодирует если VP9/AV1",
-        "Автопоиск видео отключён — админ ищет и публикует вручную через кнопки бота",
-        "Стратег v2: actions[] в COMMUNITY_PACKET, кнопки одобрения, исполнение (poll/welcome/limits/digest)",
-        "UX: кнопки \"Сохранить\" + \"★ рейтинг\" под постами, popup с формулой",
-        "Фильтры: категория, уровень, длительность + 4 пресета в меню бота",
-        "Профили: уровни (новичок/практик/наставник), кнопка \"Профиль\" в боте",
-        "Избранное: кнопка \"Сохранённое\" в боте, пагинация, ссылки на посты",
-        "UGC: загрузка видеофайла напрямую + YouTube-ссылка, автор в подтверждении",
-        "Tech debt: shared.ts, HTML entities, типизация, channel URL",
-        "Deploy notification: очеловечен формат, диагностика только при ошибках",
+        "Стратег v2: actions[] в COMMUNITY_PACKET, кнопки одобрения, исполнение",
+        "UX: кнопки \"Сохранить\" + \"★ рейтинг\" под постами",
+        "Фильтры: категория, уровень, длительность + 4 пресета",
+        "Профили: уровни (новичок/практик/наставник)",
+        "Избранное: \"Сохранённое\" в боте, пагинация",
+        "UGC: загрузка видеофайла + YouTube-ссылка",
+        "Tech debt: shared.ts, HTML entities, типизация",
         "57 тестов"
+      ]
+    },
+    {
+      "version": "v0.5.0",
+      "date": "11.03",
+      "status": "deployed",
+      "items": [
+        "Модерация Phase 2: антифлуд, cooldown, репутация, ночной режим, стоп-лист",
+        "Buddy invite после 3-го выполнения",
+        "Имплементатор: impl_tasks, HTTP endpoints, action type",
+        "GitHub Actions: стратег + имплементатор, self-hosted runner ($0)",
+        "Убраны inline-кнопки из канала — кнопка \"Комментировать\" видна",
+        "Бот пишет \"Я сделаль\" кнопку как комментарий в discussion group",
+        "Убрана кнопка \"Сохранить\" из постов",
+        "UGC auto-publish при одобрении",
+        "Архитектура канал+группа зафиксирована до 50 подписчиков"
       ]
     }
   ],
@@ -1178,250 +1191,73 @@ const staticData = {
     },
     {
       "name": "Sprint 5 — стабильная версия, затем рост",
+      "status": "completed",
+      "groups": [
+        {
+          "title": "Всё выполнено — см. v0.5.0",
+          "priority": "p1",
+          "tasks": [
+            { "text": "Модерация Phase 2", "done": true },
+            { "text": "Buddy invite", "done": true },
+            { "text": "Имплементатор agent", "done": true },
+            { "text": "GitHub Actions workflows", "done": true },
+            { "text": "Inline-кнопки убраны из канала", "done": true },
+            { "text": "Кнопка \"Сохранить\" убрана", "done": true },
+            { "text": "Архитектура зафиксирована", "done": true }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Sprint 6 — Growth + UX-фиксы",
       "status": "active",
       "groups": [
         {
-          "title": "Архитектура Telegram-присутствия — стратег решает (Фаза 1: стабильная версия)",
+          "title": "Баги (от пользователя)",
           "priority": "p0",
           "tasks": [
-            {
-              "text": "Стратег: анализ и рекомендация",
-              "done": false
-            }
+            { "text": "\"Мои тренировки\" показывает UGC вместо completions", "done": false },
+            { "text": "UGC: видеофайл не обрабатывается после загрузки", "done": false },
+            { "text": "Превью видео на десктопе (thumbnail)", "done": false }
           ]
         },
         {
-          "title": "Баги",
+          "title": "UX",
           "priority": "p1",
           "tasks": [
-            {
-              "text": "UGC не публикуется после одобрения",
-              "done": true
-            },
-            {
-              "text": "Persistent menu не обновляется",
-              "done": true
-            }
+            { "text": "Отмена как inline-кнопка (не /cancel)", "done": false },
+            { "text": "Убрать \"Сохранённое\" из persistent menu", "done": false },
+            { "text": "\"Мои тренировки\" редизайн — выполненные тренировки", "done": false }
           ]
         },
         {
-          "title": "UX постов",
+          "title": "Growth (ручная работа)",
           "priority": "p1",
           "tasks": [
-            {
-              "text": "Рейтинг видео: редизайн",
-              "done": true
-            },
-            {
-              "text": "\"Сохранить\" → закреп",
-              "done": false
-            },
-            {
-              "text": "\"Мои тренировки\" → видео + стата",
-              "done": false
-            }
+            { "text": "Ручной посев — 10 личных приглашений", "done": false },
+            { "text": "Cross-promo с 3 микро-каналами", "done": false },
+            { "text": "Посевной пост-подборка", "done": false },
+            { "text": "Контент-расписание на 2 недели", "done": false }
           ]
         },
         {
-          "title": "Технический долг (из code review)",
-          "priority": "p1",
-          "tasks": [
-            {
-              "text": "Дубликаты констант",
-              "done": true
-            },
-            {
-              "text": "Дубликат escapeMarkdown",
-              "done": true
-            },
-            {
-              "text": "Убрать `as any`",
-              "done": true
-            },
-            {
-              "text": "Timeout на Google Translate",
-              "done": true
-            },
-            {
-              "text": "Мёртвый Google-код",
-              "done": true
-            },
-            {
-              "text": "CLAUDE_AUTH_TOKEN",
-              "done": true
-            },
-            {
-              "text": "Капча в канале",
-              "done": true
-            }
-          ]
-        },
-        {
-          "title": "Безопасность",
-          "priority": "p1",
-          "tasks": [
-            {
-              "text": "google-oauth-client.json в репо",
-              "done": true
-            },
-            {
-              "text": ".env.production",
-              "done": true
-            },
-            {
-              "text": ".gitignore",
-              "done": true
-            }
-          ]
-        },
-        {
-          "title": "Продвинутая модерация (Фаза 2: рост)",
-          "priority": "p1",
-          "tasks": [
-            {
-              "text": "Content-based фильтрация",
-              "done": true
-            },
-            {
-              "text": "Cooldown для новичков",
-              "done": true
-            },
-            {
-              "text": "Антифлуд",
-              "done": true
-            },
-            {
-              "text": "Репутационная система",
-              "done": true
-            },
-            {
-              "text": "Логирование удалений",
-              "done": true
-            },
-            {
-              "text": "Стоп-лист фраз",
-              "done": true
-            },
-            {
-              "text": "Ночной режим",
-              "done": true
-            }
-          ]
-        },
-        {
-          "title": "Growth — стратег планирует",
-          "priority": "p1",
-          "tasks": [
-            {
-              "text": "Определить первый канал привлечения (личный круг / кросс-пост / outreach к тренерам)",
-              "done": false
-            },
-            {
-              "text": "Buddy invite после 3-го выполнения — DM с ссылкой на сообщество, один раз",
-              "done": true
-            },
-            {
-              "text": "Cross-promotion с микро-тренерами",
-              "done": false
-            }
-          ]
-        },
-        {
-          "title": "Рубрики",
+          "title": "Контент и рубрики",
           "priority": "p2",
           "tasks": [
-            {
-              "text": "#ритуал_недели (пн) — одна практика-фокус",
-              "done": false
-            },
-            {
-              "text": "#механика (ср) — разбор упражнения",
-              "done": false
-            },
-            {
-              "text": "#прогресс_пятницы (пт) — итоги, признание активных",
-              "done": false
-            }
+            { "text": "#ритуал_недели (пн)", "done": false },
+            { "text": "#механика (ср)", "done": false },
+            { "text": "#прогресс_пятницы (пт)", "done": false }
           ]
         },
         {
-          "title": "Лендинг Sami",
-          "priority": "p2",
-          "tasks": [
-            {
-              "text": "Pixel-perfect вёрстка",
-              "done": false
-            },
-            {
-              "text": "Деплой",
-              "done": false
-            }
-          ]
-        },
-        {
-          "title": "Имплементатор — автономный агент-разработчик (Фаза 3: автоматизация)",
-          "priority": "p1",
-          "tasks": [
-            {
-              "text": "Таблица `impl_tasks` в db.ts + миграция",
-              "done": true
-            },
-            {
-              "text": "Action type `create_impl_task` в strategist.ts",
-              "done": true
-            },
-            {
-              "text": "HTTP endpoints: `/impl/next`, `/impl/result`, `/impl/tasks`, `/impl/create`",
-              "done": true
-            },
-            {
-              "text": "GitHub Actions workflow `implementor.yml` — cron (14:00 МСК), webhook, manual dispatch",
-              "done": false
-            },
-            {
-              "text": "DM-уведомления: задача взята / реализована / failed",
-              "done": true
-            },
-            {
-              "text": "backlog.html: секция \"Задачи\" — fetch с Railway `/impl/tasks`",
-              "done": false
-            }
-          ]
-        },
-        {
-          "title": "Миграция агентов на GitHub Actions",
-          "priority": "p1",
-          "tasks": [
-            {
-              "text": "Стратег: `.github/workflows/strategist.yml` (12:30 МСК = 09:30 UTC)",
-              "done": true
-            },
-            {
-              "text": "Имплементатор: `.github/workflows/implementor.yml` (14:00 МСК = 11:00 UTC)",
-              "done": true
-            },
-            {
-              "text": "Self-hosted runner на Mac (launchd, `mac-diyoriko`) — Claude CLI через Max подписку, $0",
-              "done": true
-            },
-            {
-              "text": "GitHub Secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_ADMIN_USER_ID, STRATEGIST_API_KEY, GH_PAT",
-              "done": true
-            }
-          ]
-        },
-        {
-          "title": "Монетизация (после 50+ участников)",
+          "title": "Отложено (после 50+ участников)",
           "priority": "p3",
           "tasks": [
-            {
-              "text": "Опрос в группе",
-              "done": false
-            },
-            {
-              "text": "Архитектура: бесплатный/premium",
-              "done": false
-            }
+            { "text": "Монетизация", "done": false },
+            { "text": "Фильтры и профили вернуть в меню", "done": false },
+            { "text": "Категория \"Йога\" / \"Восстановление\"", "done": false },
+            { "text": "Weekly personal stats DM", "done": false },
+            { "text": "Лендинг Sami", "done": false }
           ]
         }
       ]
