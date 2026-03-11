@@ -8,7 +8,7 @@ const log = createLogger('moderation');
 import {
   upsertMember, setMemberGoal, addWarning, muteMember,
   recordCompletion, getCompletionCount, hasUserCompleted, getPostByMessageId, getLatestPostByVideoId,
-  updateVideoRating, toggleFavorite, isUserFavorite,
+  toggleFavorite,
   saveCaptcha, getCaptcha, deleteCaptcha, getExpiredCaptchas,
   getLatestPostForDate,
 } from './db';
@@ -345,7 +345,6 @@ export function registerModeration(bot: Bot): void {
     }
 
     recordCompletion(post.id, videoId, userId);
-    updateVideoRating(videoId); // Recalculate rating with new completion
     const count = getCompletionCount(post.id);
 
     // Update buttons — preserve favorites button
@@ -387,14 +386,6 @@ export function registerModeration(bot: Bot): void {
 
     const added = toggleFavorite(userId, videoId, post?.id);
     await ctx.answerCallbackQuery(added ? 'Сохранено в избранное' : 'Убрано из избранного');
-  });
-
-  // --- Rating info popup ---
-  bot.callbackQuery(/^rating_info$/, async (ctx) => {
-    await ctx.answerCallbackQuery({
-      text: 'Рейтинг: 0-10\n\n40% просмотры\n30% лайки\n20% канал\n10% выполнения\n\nЧем больше людей делают тренировку, тем выше рейтинг.',
-      show_alert: true,
-    });
   });
 
   log.info('handlers registered');

@@ -14,6 +14,7 @@ import {
 import { searchAllCategories, searchVideos, detectEquipment, Category, ScoredVideo } from './youtube';
 import { rewriteTitle, formatChannelName } from './translate';
 import { createLogger, generateCorrelationId } from './logger';
+import { CATEGORY_RU, DIFFICULTY_RU } from './shared';
 
 const log = createLogger('approval');
 
@@ -21,18 +22,6 @@ const CATEGORY_EMOJI: Record<Category, string> = {
   stretching: '🧘',
   strength: '💪',
   mobility: '🔄',
-};
-
-const CATEGORY_RU: Record<Category, string> = {
-  stretching: 'Стретчинг',
-  strength: 'Силовая',
-  mobility: 'Мобильность',
-};
-
-const DIFFICULTY_RU: Record<string, string> = {
-  beginner: 'Начинающий',
-  intermediate: 'Средний',
-  advanced: 'Продвинутый',
 };
 
 function formatViews(n: number): string {
@@ -47,7 +36,8 @@ function escMd(text: string): string {
 
 async function formatApprovalMessage(video: ScoredVideo, category: Category): Promise<string> {
   const emoji = CATEGORY_EMOJI[category];
-  const categoryRu = CATEGORY_RU[category];
+  const rawCategoryRu = CATEGORY_RU[category] ?? category;
+  const categoryRu = rawCategoryRu.charAt(0).toUpperCase() + rawCategoryRu.slice(1);
   let muscles = '';
   try {
     const arr = JSON.parse(video.muscles ?? '[]') as string[];
@@ -70,7 +60,7 @@ async function formatApprovalMessage(video: ScoredVideo, category: Category): Pr
     `${channel}`,
     `${video.video_url}`,
     '',
-    `${video.duration_label}  •  ${DIFFICULTY_RU[video.difficulty] ?? video.difficulty}`,
+    `${video.duration_label}  •  ${(DIFFICULTY_RU[video.difficulty] ?? video.difficulty).replace(/^./, c => c.toUpperCase())}`,
     `${escMd(muscles)}`,
     equipmentLine,
     `${formatViews(video.view_count)} просмотров`,

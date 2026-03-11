@@ -990,7 +990,7 @@ const staticData = {
           ]
         },
         {
-          "title": "Баги (11.03)",
+          "title": "Баги (11.03) — частично решены",
           "priority": "p2",
           "tasks": [
             {
@@ -1010,20 +1010,8 @@ const staticData = {
               "done": true
             },
             {
-              "text": "UGC не публикуется после одобрения",
-              "done": false
-            },
-            {
               "text": "Комментарии в канале",
               "done": true
-            },
-            {
-              "text": "Капча при вступлении в канал",
-              "done": false
-            },
-            {
-              "text": "Persistent menu не обновляется",
-              "done": false
             }
           ]
         },
@@ -1110,11 +1098,105 @@ const staticData = {
       ]
     },
     {
-      "name": "Sprint 5 — вовлечение, рост, лендинг",
-      "status": "planned",
+      "name": "Sprint 5 — стабильная версия, затем рост",
+      "status": "active",
       "groups": [
         {
-          "title": "Продвинутая модерация группы",
+          "title": "Архитектура Telegram-присутствия — стратег решает (Фаза 1: стабильная версия)",
+          "priority": "p0",
+          "tasks": [
+            {
+              "text": "Стратег: анализ и рекомендация",
+              "done": false
+            }
+          ]
+        },
+        {
+          "title": "Баги",
+          "priority": "p1",
+          "tasks": [
+            {
+              "text": "UGC не публикуется после одобрения",
+              "done": true
+            },
+            {
+              "text": "Persistent menu не обновляется",
+              "done": true
+            }
+          ]
+        },
+        {
+          "title": "UX постов",
+          "priority": "p1",
+          "tasks": [
+            {
+              "text": "Рейтинг видео: редизайн",
+              "done": true
+            },
+            {
+              "text": "\"Сохранить\" → закреп",
+              "done": false
+            },
+            {
+              "text": "\"Мои тренировки\" → видео + стата",
+              "done": false
+            }
+          ]
+        },
+        {
+          "title": "Технический долг (из code review)",
+          "priority": "p1",
+          "tasks": [
+            {
+              "text": "Дубликаты констант",
+              "done": true
+            },
+            {
+              "text": "Дубликат escapeMarkdown",
+              "done": true
+            },
+            {
+              "text": "Убрать `as any`",
+              "done": true
+            },
+            {
+              "text": "Timeout на Google Translate",
+              "done": true
+            },
+            {
+              "text": "Мёртвый Google-код",
+              "done": true
+            },
+            {
+              "text": "CLAUDE_AUTH_TOKEN",
+              "done": false
+            },
+            {
+              "text": "Капча в канале",
+              "done": true
+            }
+          ]
+        },
+        {
+          "title": "Безопасность",
+          "priority": "p1",
+          "tasks": [
+            {
+              "text": "google-oauth-client.json в репо",
+              "done": true
+            },
+            {
+              "text": ".env.production",
+              "done": true
+            },
+            {
+              "text": ".gitignore",
+              "done": true
+            }
+          ]
+        },
+        {
+          "title": "Продвинутая модерация (Фаза 2: рост)",
           "priority": "p1",
           "tasks": [
             {
@@ -1148,15 +1230,19 @@ const staticData = {
           ]
         },
         {
-          "title": "Figma → лендинг Sami",
+          "title": "Growth — стратег планирует",
           "priority": "p1",
           "tasks": [
             {
-              "text": "Pixel-perfect вёрстка лендинга",
+              "text": "Определить первый канал привлечения (личный круг / кросс-пост / outreach к тренерам)",
               "done": false
             },
             {
-              "text": "Деплой лендинга",
+              "text": "Buddy invite после 3-го выполнения",
+              "done": false
+            },
+            {
+              "text": "Cross-promotion с микро-тренерами",
               "done": false
             }
           ]
@@ -1180,19 +1266,77 @@ const staticData = {
           ]
         },
         {
-          "title": "Growth",
+          "title": "Лендинг Sami",
           "priority": "p2",
           "tasks": [
             {
-              "text": "Buddy invite после 3-го выполнения",
+              "text": "Pixel-perfect вёрстка",
               "done": false
             },
             {
-              "text": "Cross-promotion с микро-тренерами",
+              "text": "Деплой",
+              "done": false
+            }
+          ]
+        },
+        {
+          "title": "Имплементатор — автономный агент-разработчик (Фаза 3: автоматизация)",
+          "priority": "p1",
+          "tasks": [
+            {
+              "text": "Таблица `impl_tasks` в db.ts + миграция",
               "done": false
             },
             {
-              "text": "Оффлайн-мероприятия",
+              "text": "Action type `create_impl_task` в strategist.ts",
+              "done": false
+            },
+            {
+              "text": "HTTP endpoints: `/impl/next`, `/impl/result`, `/impl/tasks`, `/impl/create`",
+              "done": false
+            },
+            {
+              "text": "GitHub Actions workflow `implementor.yml` — cron (14:00 МСК), webhook, manual dispatch",
+              "done": false
+            },
+            {
+              "text": "DM-уведомления: задача взята / реализована / failed",
+              "done": false
+            },
+            {
+              "text": "backlog.html: секция \"Задачи\" — fetch с Railway `/impl/tasks`",
+              "done": false
+            }
+          ]
+        },
+        {
+          "title": "Миграция агентов на GitHub Actions",
+          "priority": "p1",
+          "tasks": [
+            {
+              "text": "Стратег: `strategist.sh` → `.github/workflows/strategist.yml` (12:30 МСК)",
+              "done": false
+            },
+            {
+              "text": "Имплементатор: `.github/workflows/implementor.yml` (14:00 МСК)",
+              "done": false
+            },
+            {
+              "text": "Общая инфраструктура: секреты (Claude CLI, Telegram token), контекст проекта",
+              "done": false
+            }
+          ]
+        },
+        {
+          "title": "Монетизация (после 50+ участников)",
+          "priority": "p3",
+          "tasks": [
+            {
+              "text": "Опрос в группе",
+              "done": false
+            },
+            {
+              "text": "Архитектура: бесплатный/premium",
               "done": false
             }
           ]

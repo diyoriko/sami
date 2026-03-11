@@ -6,13 +6,20 @@
  * No hype, no clickbait, no ALL CAPS.
  */
 
+import { escapeMarkdown } from './shared';
+
 function isLatin(text: string): boolean {
   const latin = text.match(/[a-zA-Z]/g)?.length ?? 0;
   const cyrillic = text.match(/[а-яА-ЯёЁ]/g)?.length ?? 0;
   return latin > cyrillic;
 }
 
+const TRANSLATE_TIMEOUT_MS = 10_000;
+
 async function googleTranslate(text: string): Promise<string> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TRANSLATE_TIMEOUT_MS);
+
   try {
     const url = new URL('https://translate.googleapis.com/translate_a/single');
     url.searchParams.set('client', 'gtx');
@@ -21,13 +28,15 @@ async function googleTranslate(text: string): Promise<string> {
     url.searchParams.set('dt', 't');
     url.searchParams.set('q', text);
 
-    const res = await fetch(url.toString());
+    const res = await fetch(url.toString(), { signal: controller.signal });
     if (!res.ok) return text;
 
     const data = await res.json() as any[][];
     return data[0]?.map((s: any[]) => s[0]).join('') ?? text;
   } catch {
     return text;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -102,10 +111,6 @@ function cleanTitle(text: string): string {
   }
 
   return result.trim().replace(/\s{2,}/g, ' ');
-}
-
-function escapeMarkdown(text: string): string {
-  return text.replace(/([*_`\[\]])/g, '\\$1');
 }
 
 /**

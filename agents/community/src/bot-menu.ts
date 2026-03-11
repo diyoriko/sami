@@ -4,11 +4,18 @@
  * Persistent keyboard buttons (ReplyKeyboard) shown in private chat:
  * - "Мои тренировки" — completed workouts list
  * - "Предложить тренировку" — UGC submission flow
+ *
+ * NOTE: ReplyKeyboard (persistent menu) is per-chat and only appears after
+ * the user sends /start. This is a Telegram platform limitation — there is
+ * no API to push a ReplyKeyboard to all users proactively. Bot commands
+ * (the "/" menu) are registered globally via setMyCommands in index.ts.
  */
 
-import { Bot, Keyboard, InlineKeyboard } from 'grammy';
+import { Bot, Keyboard, InlineKeyboard, InputFile } from 'grammy';
 import { getConfig } from './config';
 import { createLogger } from './logger';
+import { downloadVideo, isYtDlpAvailable } from './downloader';
+import { todayMsk } from './dates';
 
 const log = createLogger('bot-menu');
 import {
@@ -29,6 +36,9 @@ import {
   getMemberLevel,
   filterVideos,
   getNewMembersToday,
+  upsertVideo,
+  recordPost,
+  withTransaction,
   type UgcSubmission,
   type UgcStep,
 } from './db';
@@ -41,11 +51,7 @@ const PAGE_SIZE = 5;
 function mainKeyboard(isAdmin = false): Keyboard {
   const kb = new Keyboard()
     .text('Мои тренировки')
-    .text('Предложить тренировку')
-    .row()
-    .text('Фильтры')
-    .text('Сохранённое')
-    .text('Профиль');
+    .text('Предложить тренировку');
   if (isAdmin) {
     kb.row()
       .text('Статус').text('Поиск видео').text('Опубликовать')
@@ -504,19 +510,137 @@ export function registerBotMenu(bot: Bot): void {
       await ctx.answerCallbackQuery('Одобрено');
 
       const author = sub.username ? `@${sub.username}` : (sub.telegram_user_id ? `id:${sub.telegram_user_id}` : '');
+      const authorDisplay = sub.username ? `@${sub.username}` : 'участник';
+
+      // --- Publish to channel ---
+      let published = false;
+      let publishError = '';
+      try {
+        const categoryRu = CATEGORY_RU[sub.category ?? ''] ?? sub.category ?? '—';
+        const difficultyRu = DIFFICULTY_RU[sub.difficulty ?? ''] ?? sub.difficulty ?? '—';
+        const title = escapeMarkdown(sub.title ?? 'Тренировка');
+
+        const caption = [
+          `*${title}*`,
+          '',
+          `\`🏷 ${categoryRu}\``,
+          `\`📊 ${difficultyRu}\``,
+          `Сделали: 0`,
+          '',
+          `Автор: ${authorDisplay}`,
+        ].join('\n');
+
+        const isTgFileId = sub.video_url.startsWith('tg:');
+        const isYouTubeUrl = /youtube\.com|youtu\.be/.test(sub.video_url);
+
+        // Create a video record in DB for tracking (completions, favorites)
+        const syntheticYoutubeId = isTgFileId
+          ? `ugc-${subId}`
+          : (sub.youtube_id ?? `ugc-${subId}`);
+
+        const videoId = upsertVideo({
+          youtube_id: syntheticYoutubeId,
+          title: sub.title ?? 'UGC Тренировка',
+          channel_name: authorDisplay,
+          channel_url: null,
+          duration_seconds: null,
+          duration_label: null,
+          difficulty: (sub.difficulty as 'beginner' | 'intermediate' | 'advanced') ?? 'beginner',
+          category: (sub.category as 'stretching' | 'strength' | 'mobility') ?? 'stretching',
+          muscles: null,
+          thumbnail_url: null,
+          video_url: sub.video_url,
+          view_count: 0,
+          rating: 0,
+          like_ratio: 0,
+          channel_subscribers: 0,
+        });
+
+        const keyboard = new InlineKeyboard()
+          .text('Я сделаль', `done:${videoId}`)
+          .text('Сохранить', `fav:${videoId}`);
+
+        let channelMsg: { message_id: number };
+
+        if (isTgFileId) {
+          // Re-send Telegram file_id directly
+          const fileId = sub.video_url.slice(3); // strip "tg:" prefix
+          channelMsg = await bot.api.sendVideo(
+            config.TELEGRAM_CHANNEL_ID,
+            fileId,
+            {
+              caption,
+              parse_mode: 'Markdown',
+              supports_streaming: true,
+              reply_markup: keyboard,
+            }
+          );
+        } else if (isYouTubeUrl && isYtDlpAvailable()) {
+          // Download via yt-dlp and upload
+          const download = await downloadVideo(sub.video_url, syntheticYoutubeId);
+          try {
+            channelMsg = await bot.api.sendVideo(
+              config.TELEGRAM_CHANNEL_ID,
+              new InputFile(download.filePath),
+              {
+                caption,
+                parse_mode: 'Markdown',
+                supports_streaming: true,
+                duration: download.meta.duration ?? undefined,
+                width: download.meta.width ?? undefined,
+                height: download.meta.height ?? undefined,
+                reply_markup: keyboard,
+              }
+            );
+          } finally {
+            download.cleanup();
+          }
+        } else {
+          // Fallback: post as text with link
+          channelMsg = await bot.api.sendMessage(
+            config.TELEGRAM_CHANNEL_ID,
+            caption,
+            {
+              parse_mode: 'Markdown',
+              link_preview_options: { is_disabled: true },
+              reply_markup: keyboard,
+            }
+          );
+        }
+
+        // Record post in DB
+        try {
+          const date = todayMsk();
+          const postType = isTgFileId || (isYouTubeUrl && isYtDlpAvailable()) ? 'video' as const : 'link' as const;
+          withTransaction(() => {
+            recordPost(date, sub.category ?? 'stretching', videoId, channelMsg.message_id, postType);
+          });
+        } catch (dbErr) {
+          log.error('UGC publish: DB write failed (video already sent)', { subId, error: String(dbErr) });
+        }
+
+        published = true;
+        log.info('UGC published to channel', { subId, videoId });
+      } catch (err) {
+        publishError = String(err);
+        log.error('UGC publish to channel failed', { subId, error: publishError });
+      }
+
+      // Update admin message
+      const statusText = published ? 'Одобрено и опубликовано' : `Одобрено (публикация не удалась: ${publishError})`;
       try {
         await ctx.editMessageText(
-          ctx.callbackQuery.message?.text + `\n\n_Одобрено_ · Предложил(а): ${author}`,
+          ctx.callbackQuery.message?.text + `\n\n_${escapeMarkdown(statusText)}_ · Предложил(а): ${author}`,
           { parse_mode: 'Markdown' }
         );
       } catch {}
 
       // Notify author
       try {
-        await bot.api.sendMessage(
-          sub.telegram_user_id,
-          `Твоя тренировка «${sub.title}» одобрена и будет опубликована!`
-        );
+        const notifyText = published
+          ? `Твоя тренировка «${sub.title}» одобрена и опубликована в канале!`
+          : `Твоя тренировка «${sub.title}» одобрена и будет опубликована!`;
+        await bot.api.sendMessage(sub.telegram_user_id, notifyText);
       } catch {}
     } else {
       updateUgcSubmission(subId, { status: 'rejected' });

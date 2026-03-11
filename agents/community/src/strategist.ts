@@ -72,9 +72,9 @@ export function setActionMessageId(actionId: number, messageId: number): void {
 export function getActionByMessageId(messageId: number): {
   id: number; type: StrategistActionType; description: string; params: string; status: string;
 } | null {
-  return getDb().prepare(
+  return (getDb().prepare(
     `SELECT id, type, description, params, status FROM strategist_actions WHERE admin_message_id = ?`
-  ).get(messageId) as any ?? null;
+  ).get(messageId) as { id: number; type: StrategistActionType; description: string; params: string; status: string } | undefined) ?? null;
 }
 
 export function setActionStatus(actionId: number, status: 'approved' | 'rejected' | 'executed' | 'failed', result?: string): void {
@@ -94,7 +94,7 @@ export function getPendingActions(): Array<{
 }> {
   return getDb().prepare(
     `SELECT id, type, description, params FROM strategist_actions WHERE status = 'approved'`
-  ).all() as any[];
+  ).all() as Array<{ id: number; type: StrategistActionType; description: string; params: string }>;
 }
 
 export function getActionById(actionId: number): StrategistAction | null {
@@ -148,7 +148,14 @@ export function getLatestPacket(): StrategistPacket {
            search_keywords, community_priority
     FROM strategist_packets
     ORDER BY created_at DESC LIMIT 1
-  `).get() as any | undefined;
+  `).get() as {
+    week_focus: string | null;
+    content_themes: string | null;
+    challenge_active: number;
+    challenge_name: string | null;
+    search_keywords: string | null;
+    community_priority: string | null;
+  } | undefined;
 
   if (!row) return DEFAULT_PACKET;
 
@@ -234,11 +241,11 @@ function buildPrompt(): string {
 
   const channelStats = db.prepare(
     'SELECT * FROM channel_stats ORDER BY date DESC LIMIT 1'
-  ).get() as any;
+  ).get() as { subscriber_count: number; group_member_count: number; date: string } | undefined;
 
   const recentPosts = db.prepare(
     'SELECT date, category, COUNT(*) as cnt FROM posts WHERE date >= date(?, "-7 days") GROUP BY date, category'
-  ).all(today) as any[];
+  ).all(today) as Array<{ date: string; category: string; cnt: number }>;
 
   const topVideos = db.prepare(`
     SELECT v.title, v.category, v.rating, COUNT(c.id) as completions
@@ -247,7 +254,7 @@ function buildPrompt(): string {
     GROUP BY v.id
     ORDER BY completions DESC
     LIMIT 5
-  `).all() as any[];
+  `).all() as Array<{ title: string; category: string; rating: number; completions: number }>;
 
   const completionsByCategory = db.prepare(`
     SELECT v.category, COUNT(c.id) as completions, COUNT(DISTINCT c.telegram_user_id) as users
@@ -256,7 +263,7 @@ function buildPrompt(): string {
     JOIN posts p ON p.id = c.post_id
     WHERE p.date >= date(?, '-7 days')
     GROUP BY v.category
-  `).all(today) as any[];
+  `).all(today) as Array<{ category: string; completions: number; users: number }>;
 
   const metricsBlock = [
     '## Live Metrics (from DB)',
@@ -267,17 +274,17 @@ function buildPrompt(): string {
     '',
     '### Posts last 7 days',
     recentPosts.length > 0
-      ? recentPosts.map((r: any) => `- ${r.date} ${r.category}: ${r.cnt}`).join('\n')
+      ? recentPosts.map(r => `- ${r.date} ${r.category}: ${r.cnt}`).join('\n')
       : 'No posts in last 7 days',
     '',
     '### Top videos by completions',
     topVideos.length > 0
-      ? topVideos.map((v: any) => `- "${v.title}" (${v.category}) — ${v.completions} completions, rating ${v.rating}`).join('\n')
+      ? topVideos.map(v => `- "${v.title}" (${v.category}) — ${v.completions} completions, rating ${v.rating}`).join('\n')
       : 'No completion data yet',
     '',
     '### Completions by category (7 days)',
     completionsByCategory.length > 0
-      ? completionsByCategory.map((c: any) => `- ${c.category}: ${c.completions} completions (${c.users} unique users)`).join('\n')
+      ? completionsByCategory.map(c => `- ${c.category}: ${c.completions} completions (${c.users} unique users)`).join('\n')
       : 'No data',
   ].join('\n');
 

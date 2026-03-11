@@ -753,16 +753,16 @@ export function hasUserCompleted(postId: number, userId: number): boolean {
 }
 
 export function getPostByMessageId(channelMessageId: number): { id: number; video_id: number; category: string; date: string } | null {
-  return getDb().prepare(
+  return (getDb().prepare(
     `SELECT id, video_id, category, date FROM posts WHERE channel_message_id = ?`
-  ).get(channelMessageId) as any ?? null;
+  ).get(channelMessageId) as { id: number; video_id: number; category: string; date: string } | undefined) ?? null;
 }
 
 /** Fallback: find most recent post by video_id (for when message_id lookup fails, e.g. forwarded messages) */
 export function getLatestPostByVideoId(videoId: number): { id: number; video_id: number; category: string; date: string } | null {
-  return getDb().prepare(
+  return (getDb().prepare(
     `SELECT id, video_id, category, date FROM posts WHERE video_id = ? ORDER BY posted_at DESC LIMIT 1`
-  ).get(videoId) as any ?? null;
+  ).get(videoId) as { id: number; video_id: number; category: string; date: string } | undefined) ?? null;
 }
 
 // --- Rating ---
@@ -773,21 +773,9 @@ export function computeRating(video: VideoRow): number {
   const channelScore = video.channel_subscribers > 0
     ? Math.min(Math.log10(video.channel_subscribers) / 7, 1)
     : 0.3;
-  const completionRate = getVideoCompletionRate(video.id);
 
-  const raw = 0.4 * viewScore + 0.3 * likeScore + 0.2 * channelScore + 0.1 * completionRate;
+  const raw = 0.50 * viewScore + 0.30 * likeScore + 0.20 * channelScore;
   return Math.round(Math.min(raw * 10, 10) * 10) / 10; // 0.0 .. 10.0
-}
-
-function getVideoCompletionRate(videoId: number): number {
-  // ratio of completions to total posts of this video
-  const row = getDb().prepare(`
-    SELECT
-      (SELECT COUNT(*) FROM completions WHERE video_id = ?) as completions,
-      (SELECT COUNT(*) FROM posts WHERE video_id = ?) as posts
-  `).get(videoId, videoId) as { completions: number; posts: number };
-  if (row.posts === 0) return 0;
-  return Math.min(row.completions / Math.max(row.posts, 1), 1);
 }
 
 export function updateVideoRating(videoId: number): number {

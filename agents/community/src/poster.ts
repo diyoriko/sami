@@ -3,7 +3,7 @@ import { InputFile } from 'grammy';
 import { getConfig } from './config';
 import {
   getApprovedVideo, recordPost, wasPostedToday, VideoRow,
-  updateVideoRating, markApprovalPosted, withTransaction, getCompletionCount,
+  updateVideoRating, markApprovalPosted, withTransaction,
 } from './db';
 import { downloadVideo, isYtDlpAvailable } from './downloader';
 import { detectEquipment } from './youtube';
@@ -84,14 +84,9 @@ export async function postVideoToChannel(
   }
 
   const caption = await formatCaption(video);
-  const rating = updateVideoRating(video.id);
-  const ratingLabel = formatRating(rating);
   const keyboard = new InlineKeyboard()
     .text('Я сделаль', `done:${video.id}`)
     .text('Сохранить', `fav:${video.id}`);
-  if (ratingLabel) {
-    keyboard.row().text(`★ ${ratingLabel}`, `rating_info`);
-  }
 
   // Try to download and post as video file (with 1 retry)
   const MAX_VIDEO_ATTEMPTS = 2;
