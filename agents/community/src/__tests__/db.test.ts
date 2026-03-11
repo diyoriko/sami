@@ -262,6 +262,67 @@ describe('scoring cap', () => {
   });
 });
 
+describe('user favorites', () => {
+  it('toggles favorite on and off', async () => {
+    const db = await import('../db');
+    // Add favorite
+    const added = db.toggleFavorite(11111, 1);
+    expect(added).toBe(true);
+    expect(db.isUserFavorite(11111, 1)).toBe(true);
+    expect(db.getUserFavoriteTotal(11111)).toBe(1);
+
+    // Remove favorite
+    const removed = db.toggleFavorite(11111, 1);
+    expect(removed).toBe(false);
+    expect(db.isUserFavorite(11111, 1)).toBe(false);
+    expect(db.getUserFavoriteTotal(11111)).toBe(0);
+  });
+
+  it('returns paginated favorites', async () => {
+    const db = await import('../db');
+    db.toggleFavorite(22222, 1);
+    const favs = db.getUserFavorites(22222, 5, 0);
+    expect(favs.length).toBe(1);
+    expect(favs[0].video_id).toBe(1);
+    // cleanup
+    db.toggleFavorite(22222, 1);
+  });
+});
+
+describe('member levels', () => {
+  it('returns новичок for users with few completions', async () => {
+    const db = await import('../db');
+    const { level } = db.getMemberLevel(99999);
+    expect(level).toBe('новичок');
+  });
+});
+
+describe('filter videos', () => {
+  it('filters by category', async () => {
+    const db = await import('../db');
+    const results = db.filterVideos({ category: 'stretching', limit: 10 });
+    for (const v of results) {
+      expect(v.category).toBe('stretching');
+    }
+  });
+
+  it('returns empty for impossible criteria', async () => {
+    const db = await import('../db');
+    const results = db.filterVideos({ minDuration: 999999, limit: 5 });
+    expect(results.length).toBe(0);
+  });
+});
+
+describe('shared constants', () => {
+  it('exports CATEGORY_RU and DIFFICULTY_RU', async () => {
+    const { CATEGORY_RU, DIFFICULTY_RU, decodeHtmlEntities, escapeMarkdown } = await import('../shared');
+    expect(CATEGORY_RU.stretching).toBe('стретчинг');
+    expect(DIFFICULTY_RU.beginner).toBe('начинающий');
+    expect(decodeHtmlEntities('&amp;&quot;')).toBe('&"');
+    expect(escapeMarkdown('*bold*')).toBe('\\*bold\\*');
+  });
+});
+
 describe('getPostByMessageId', () => {
   it('returns post data for a valid message ID', async () => {
     const { getPostByMessageId } = await import('../db');

@@ -2,12 +2,13 @@ import { Bot } from 'grammy';
 import { InlineKeyboard } from 'grammy';
 import { getConfig } from './config';
 import { createLogger } from './logger';
+import { CATEGORY_RU } from './shared';
 
 const log = createLogger('moderation');
 import {
   upsertMember, setMemberGoal, addWarning, muteMember,
   recordCompletion, getCompletionCount, hasUserCompleted, getPostByMessageId, getLatestPostByVideoId,
-  updateVideoRating,
+  updateVideoRating, toggleFavorite, isUserFavorite,
   saveCaptcha, getCaptcha, deleteCaptcha, getExpiredCaptchas,
   getLatestPostForDate,
 } from './db';
@@ -46,10 +47,10 @@ const GOAL_OPTIONS = [
 ];
 
 const GOAL_RESPONSES: Record<string, string> = {
-  rhythm: `Отличный выбор. Ритм строится через маленькие ежедневные действия — именно за этим мы здесь.\n\nКаждое утро в 08:00 выходят три тренировки: стретчинг, силовая и мобильность. Начни с любой.`,
-  mobility: `Мобильность — основа всего. Тело благодарит, когда его двигают мягко и регулярно.\n\nКаждое утро в 08:00 выходят три тренировки. Мобильность особенно для тебя.`,
-  strength: `Сила без инвентаря — это реально. Только коврик, только тело, только практика.\n\nКаждое утро в 08:00 выходят три тренировки. Силовая — вторая по счёту.`,
-  observer: `Хорошее начало. Смотри, пробуй, пиши как дела — здесь никто не торопит.\n\nКаждое утро в 08:00 выходят три тренировки. Когда будешь готов — просто нажми play.`,
+  rhythm: `Отличный выбор. Ритм строится через маленькие ежедневные действия — именно за этим мы здесь.\n\nКаждый день выходят три тренировки: стретчинг, силовая и мобильность. Начни с любой.`,
+  mobility: `Мобильность — основа всего. Тело благодарит, когда его двигают мягко и регулярно.\n\nКаждый день выходят три тренировки. Мобильность особенно для тебя.`,
+  strength: `Сила без инвентаря — это реально. Только коврик, только тело, только практика.\n\nКаждый день выходят три тренировки. Силовая — вторая по счёту.`,
+  observer: `Хорошее начало. Смотри, пробуй, пиши как дела — здесь никто не торопит.\n\nКаждый день выходят три тренировки. Когда будешь готов — просто нажми play.`,
 };
 
 // ─── SPAM PATTERNS ───────────────────────────────────────────────────────────
@@ -229,9 +230,6 @@ export function registerModeration(bot: Bot): void {
     // Build welcome message with link to today's training if available
     const { todayMsk } = await import('./dates');
     const latestPost = getLatestPostForDate(todayMsk());
-    const CATEGORY_RU: Record<string, string> = {
-      stretching: 'стретчинг', strength: 'силовая', mobility: 'мобильность',
-    };
 
     let welcomeText = `${response}\n\n_Нажми «Я сделаль» под видео, когда закончишь тренировку._`;
     if (latestPost) {
@@ -350,9 +348,10 @@ export function registerModeration(bot: Bot): void {
     updateVideoRating(videoId); // Recalculate rating with new completion
     const count = getCompletionCount(post.id);
 
-    // Update button text with new count
+    // Update buttons — preserve favorites button
     const keyboard = new InlineKeyboard()
-      .text(`Я сделаль · ${count}`, `done:${videoId}`);
+      .text(`Я сделаль · ${count}`, `done:${videoId}`)
+      .text('Сохранить', `fav:${videoId}`);
 
     // Try to update caption (with new count) + keyboard
     try {
@@ -371,6 +370,31 @@ export function registerModeration(bot: Bot): void {
     }
 
     await ctx.answerCallbackQuery('Тренировка записана.');
+  });
+
+  // --- "Сохранить" button — toggle favorite ---
+  bot.callbackQuery(/^fav:(\d+)$/, async (ctx) => {
+    const videoId = parseInt(ctx.match[1]);
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    // Find post for this video
+    const msg = ctx.callbackQuery.message;
+    let post = msg ? getPostByMessageId(msg.message_id) : null;
+    if (!post) {
+      post = getLatestPostByVideoId(videoId);
+    }
+
+    const added = toggleFavorite(userId, videoId, post?.id);
+    await ctx.answerCallbackQuery(added ? 'Сохранено в избранное' : 'Убрано из избранного');
+  });
+
+  // --- Rating info popup ---
+  bot.callbackQuery(/^rating_info$/, async (ctx) => {
+    await ctx.answerCallbackQuery({
+      text: 'Рейтинг: 0-10\n\n40% просмотры\n30% лайки\n20% канал\n10% выполнения\n\nЧем больше людей делают тренировку, тем выше рейтинг.',
+      show_alert: true,
+    });
   });
 
   log.info('handlers registered');

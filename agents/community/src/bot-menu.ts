@@ -23,24 +23,29 @@ import {
   deleteUgcState,
   getPendingUgcCount,
   getLastStrategistTimestamp,
+  getUserFavorites,
+  getUserFavoriteTotal,
+  getMemberProfile,
+  getMemberLevel,
+  filterVideos,
+  getNewMembersToday,
   type UgcSubmission,
   type UgcStep,
 } from './db';
+import { CATEGORY_RU, DIFFICULTY_RU, escapeMarkdown, decodeHtmlEntities } from './shared';
 
 const PAGE_SIZE = 5;
-
-const CATEGORY_RU: Record<string, string> = {
-  stretching: 'стретчинг',
-  strength: 'силовая',
-  mobility: 'мобильность',
-};
 
 // --- Persistent keyboard ---
 
 function mainKeyboard(isAdmin = false): Keyboard {
   const kb = new Keyboard()
     .text('Мои тренировки')
-    .text('Предложить тренировку');
+    .text('Предложить тренировку')
+    .row()
+    .text('Фильтры')
+    .text('Сохранённое')
+    .text('Профиль');
   if (isAdmin) {
     kb.row()
       .text('Статус').text('Поиск видео').text('Опубликовать')
@@ -128,11 +133,6 @@ export function registerBotMenu(bot: Bot): void {
     // Uptime
     const uptimeStr = formatUptime(process.uptime());
 
-    const CATEGORY_RU: Record<string, string> = {
-      stretching: 'стретчинг',
-      strength: 'силовая',
-      mobility: 'мобильность',
-    };
     const STATUS_ICON: Record<string, string> = {
       approved: '✅',
       pending: '⏳',
@@ -152,7 +152,8 @@ export function registerBotMenu(bot: Bot): void {
         const lines = items.map(item => {
           const cat = CATEGORY_RU[item.category] ?? item.category;
           const icon = STATUS_ICON[item.status] ?? item.status;
-          const title = item.title.length > 40 ? item.title.slice(0, 37) + '...' : item.title;
+          const rawTitle = decodeHtmlEntities(item.title);
+          const title = rawTitle.length > 40 ? rawTitle.slice(0, 37) + '...' : rawTitle;
           return `  ${icon} ${cat} — ${title}`;
         });
         parts.push(`*${qDate}:*\n${lines.join('\n')}`);
@@ -239,12 +240,105 @@ export function registerBotMenu(bot: Bot): void {
     await runDailyAnalytics(bot, todayMsk());
   });
 
+  // --- "Сохранённое" button ---
+  bot.hears('Сохранённое', async (ctx) => {
+    if (ctx.chat.type !== 'private') return;
+    deleteUgcState(ctx.from!.id);
+    await sendFavorites(ctx, ctx.from!.id, 0);
+  });
+
+  bot.callbackQuery(/^myfav:(\d+)$/, async (ctx) => {
+    const offset = parseInt(ctx.match[1]);
+    await ctx.answerCallbackQuery();
+    await sendFavorites(ctx, ctx.from!.id, offset, ctx.callbackQuery.message?.message_id);
+  });
+
+  // --- "Профиль" button ---
+  bot.hears('Профиль', async (ctx) => {
+    if (ctx.chat.type !== 'private') return;
+    deleteUgcState(ctx.from!.id);
+    const userId = ctx.from!.id;
+    const profile = getMemberProfile(userId);
+    const { level, completions } = getMemberLevel(userId);
+
+    const GOAL_LABELS: Record<string, string> = {
+      rhythm: 'ритм и дисциплина',
+      mobility: 'гибкость и мобильность',
+      strength: 'сила',
+      observer: 'исследователь',
+    };
+
+    const favTotal = getUserFavoriteTotal(userId);
+    const subTotal = getUserSubmissionTotal(userId);
+
+    const lines = [
+      `*Профиль*`,
+      '',
+      `Имя: ${profile?.first_name ?? 'не указано'}`,
+      `Уровень: ${level}`,
+      `Тренировок: ${completions}`,
+      `Сохранённых: ${favTotal}`,
+      `Предложено: ${subTotal}`,
+    ];
+
+    if (profile?.fitness_goal) {
+      lines.push(`Цель: ${GOAL_LABELS[profile.fitness_goal] ?? profile.fitness_goal}`);
+    }
+    if (profile?.joined_at) {
+      lines.push(`Участник с: ${profile.joined_at.slice(0, 10)}`);
+    }
+
+    await ctx.reply(lines.join('\n'), { parse_mode: 'Markdown' });
+  });
+
+  // --- "Фильтры" button ---
+  bot.hears('Фильтры', async (ctx) => {
+    if (ctx.chat.type !== 'private') return;
+    deleteUgcState(ctx.from!.id);
+
+    const kb = new InlineKeyboard()
+      .text('Стретчинг', 'filter:cat:stretching')
+      .text('Сила', 'filter:cat:strength')
+      .text('Мобильность', 'filter:cat:mobility')
+      .row()
+      .text('Новичок', 'filter:preset:beginner')
+      .text('Утро (до 15 мин)', 'filter:preset:morning')
+      .row()
+      .text('После работы', 'filter:preset:afterwork')
+      .text('Быстрая (до 10 мин)', 'filter:preset:quick');
+
+    await ctx.reply('Выбери фильтр или пресет:', { reply_markup: kb });
+  });
+
+  bot.callbackQuery(/^filter:cat:(stretching|strength|mobility)$/, async (ctx) => {
+    const category = ctx.match[1];
+    await ctx.answerCallbackQuery();
+    const videos = filterVideos({ category, limit: 5 });
+    await sendFilterResults(ctx, videos, CATEGORY_RU[category] ?? category);
+  });
+
+  bot.callbackQuery(/^filter:preset:(beginner|morning|afterwork|quick)$/, async (ctx) => {
+    const preset = ctx.match[1];
+    await ctx.answerCallbackQuery();
+
+    const presetConfig: Record<string, { label: string; opts: Parameters<typeof filterVideos>[0] }> = {
+      beginner: { label: 'Новичок', opts: { difficulty: 'beginner', limit: 5 } },
+      morning: { label: 'Утро', opts: { maxDuration: 900, limit: 5 } },
+      afterwork: { label: 'После работы', opts: { category: 'strength', minDuration: 900, limit: 5 } },
+      quick: { label: 'Быстрая', opts: { maxDuration: 600, limit: 5 } },
+    };
+
+    const { label, opts } = presetConfig[preset] ?? { label: preset, opts: { limit: 5 } };
+    const videos = filterVideos(opts);
+    await sendFilterResults(ctx, videos, label);
+  });
+
   // --- "Предложить тренировку" button ---
   bot.hears('Предложить тренировку', async (ctx) => {
     if (ctx.chat.type !== 'private') return;
     saveUgcState(ctx.from!.id, 'waiting_link');
     await ctx.reply(
-      'Отправь ссылку на YouTube-видео с тренировкой.\n\n_Отмена: /cancel_',
+      'Отправь ссылку на YouTube-видео или загрузи видеофайл напрямую.\n\n_Отмена: /cancel_',
       { parse_mode: 'Markdown' }
     );
   });
@@ -258,6 +352,33 @@ export function registerBotMenu(bot: Bot): void {
     }
     deleteUgcState(ctx.from!.id);
     await ctx.reply('Отменено.', { reply_markup: mainKeyboard(isAdmin(ctx.from!.id)) });
+  });
+
+  // --- UGC: accept video file directly ---
+  bot.on('message:video', async (ctx, next) => {
+    if (ctx.chat.type !== 'private') return next();
+    const userId = ctx.from!.id;
+    const state = getUgcState(userId);
+    if (!state || state.step !== 'waiting_link') return next();
+
+    // User sent a video file instead of a YouTube link
+    const video = ctx.message.video;
+    const fileId = video.file_id;
+    const duration = video.duration;
+
+    // Create UGC submission with file_id as video_url (bot can re-send by file_id)
+    const subId = createUgcSubmission(userId, ctx.from!.username ?? null, `tg:${fileId}`, null);
+    if (duration) {
+      updateUgcSubmission(subId, { title: `Видео (${Math.floor(duration / 60)}:${String(duration % 60).padStart(2, '0')})` });
+    }
+    saveUgcState(userId, 'waiting_category', subId);
+
+    const kb = new InlineKeyboard()
+      .text('Стретчинг', `ugc_cat:${subId}:stretching`)
+      .text('Силовая', `ugc_cat:${subId}:strength`)
+      .text('Мобильность', `ugc_cat:${subId}:mobility`);
+
+    await ctx.reply('Видео получено! Какой тип тренировки?', { reply_markup: kb });
   });
 
   // --- UGC conversation handler (private chat text) ---
@@ -276,7 +397,7 @@ export function registerBotMenu(bot: Bot): void {
     if (state.step === 'waiting_link') {
       const ytId = extractYoutubeId(text);
       if (!ytId) {
-        await ctx.reply('Не могу распознать ссылку. Отправь ссылку на YouTube-видео.');
+        await ctx.reply('Не могу распознать ссылку. Отправь ссылку на YouTube-видео или загрузи видеофайл напрямую.');
         return;
       }
       const videoUrl = `https://www.youtube.com/watch?v=${ytId}`;
@@ -381,9 +502,11 @@ export function registerBotMenu(bot: Bot): void {
     if (decision === 'approve') {
       updateUgcSubmission(subId, { status: 'approved' });
       await ctx.answerCallbackQuery('Одобрено');
+
+      const author = sub.username ? `@${sub.username}` : (sub.telegram_user_id ? `id:${sub.telegram_user_id}` : '');
       try {
         await ctx.editMessageText(
-          ctx.callbackQuery.message?.text + '\n\n_Одобрено_',
+          ctx.callbackQuery.message?.text + `\n\n_Одобрено_ · Предложил(а): ${author}`,
           { parse_mode: 'Markdown' }
         );
       } catch {}
@@ -423,12 +546,6 @@ const STATUS_RU: Record<string, string> = {
   pending: 'на модерации',
   approved: 'одобрена',
   rejected: 'отклонена',
-};
-
-const DIFFICULTY_RU: Record<string, string> = {
-  beginner: 'начинающий',
-  intermediate: 'средний',
-  advanced: 'продвинутый',
 };
 
 async function sendMyWorkouts(
@@ -528,15 +645,86 @@ function formatUptime(seconds: number): string {
   return parts.join(' ');
 }
 
-function escapeMarkdown(text: string): string {
-  return text.replace(/([*_`\[\]])/g, '\\$1');
+async function sendFavorites(
+  ctx: any,
+  userId: number,
+  offset: number,
+  editMessageId?: number,
+): Promise<void> {
+  const total = getUserFavoriteTotal(userId);
+  if (total === 0) {
+    const text = 'У тебя пока нет сохранённых тренировок.\n\nНажми «Сохранить» под видео в канале, чтобы добавить.';
+    if (editMessageId) {
+      try { await ctx.api.editMessageText(ctx.chat!.id, editMessageId, text); } catch {}
+    } else {
+      await ctx.reply(text);
+    }
+    return;
+  }
+
+  const items = getUserFavorites(userId, PAGE_SIZE, offset);
+  const config = getConfig();
+  const channelHandle = config.TELEGRAM_CHANNEL_ID.startsWith('@')
+    ? config.TELEGRAM_CHANNEL_ID.slice(1)
+    : `c/${config.TELEGRAM_CHANNEL_ID.replace(/^-100/, '')}`;
+
+  const lines = items.map((item, i) => {
+    const num = offset + i + 1;
+    const catRu = CATEGORY_RU[item.category] ?? item.category;
+    const title = decodeHtmlEntities(item.title);
+    const shortTitle = title.length > 40 ? title.slice(0, 37) + '...' : title;
+    const link = item.channel_message_id
+      ? `[${escapeMarkdown(shortTitle)}](https://t.me/${channelHandle}/${item.channel_message_id})`
+      : escapeMarkdown(shortTitle);
+    return `${num}. ${link}\n   ${catRu}`;
+  });
+
+  const text = `*Сохранённое* (${total})\n\n` + lines.join('\n\n');
+
+  const kb = new InlineKeyboard();
+  if (offset > 0) kb.text('← Назад', `myfav:${Math.max(0, offset - PAGE_SIZE)}`);
+  if (offset + PAGE_SIZE < total) kb.text('Дальше →', `myfav:${offset + PAGE_SIZE}`);
+
+  const opts: any = { parse_mode: 'Markdown', reply_markup: kb };
+  if (editMessageId) {
+    try { await ctx.api.editMessageText(ctx.chat!.id, editMessageId, text, opts); } catch {}
+  } else {
+    await ctx.reply(text, opts);
+  }
 }
 
-function decodeHtmlEntities(text: string): string {
-  return text
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
+async function sendFilterResults(ctx: any, videos: ReturnType<typeof filterVideos>, label: string): Promise<void> {
+  if (videos.length === 0) {
+    try {
+      await ctx.editMessageText(`Фильтр: ${label}\n\nНичего не найдено. Попробуй другой фильтр.`);
+    } catch {
+      await ctx.reply(`Фильтр: ${label}\n\nНичего не найдено.`);
+    }
+    return;
+  }
+
+  const config = getConfig();
+  const channelHandle = config.TELEGRAM_CHANNEL_ID.startsWith('@')
+    ? config.TELEGRAM_CHANNEL_ID.slice(1)
+    : `c/${config.TELEGRAM_CHANNEL_ID.replace(/^-100/, '')}`;
+
+  const lines = videos.map((v, i) => {
+    const title = decodeHtmlEntities(v.title);
+    const shortTitle = title.length > 40 ? title.slice(0, 37) + '...' : title;
+    const catRu = CATEGORY_RU[v.category] ?? v.category;
+    const dur = v.duration_label ?? '?';
+    const link = v.channel_message_id
+      ? `[${escapeMarkdown(shortTitle)}](https://t.me/${channelHandle}/${v.channel_message_id})`
+      : escapeMarkdown(shortTitle);
+    return `${i + 1}. ${link}\n   ${catRu} · ${dur} · ★${v.rating.toFixed(1)}`;
+  });
+
+  const text = `*${label}* (${videos.length})\n\n` + lines.join('\n\n');
+
+  try {
+    await ctx.editMessageText(text, { parse_mode: 'Markdown' });
+  } catch {
+    await ctx.reply(text, { parse_mode: 'Markdown' });
+  }
 }
+

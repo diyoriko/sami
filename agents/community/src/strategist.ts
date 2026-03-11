@@ -1,11 +1,14 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { Bot } from 'grammy';
+import { Bot, InlineKeyboard } from 'grammy';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getConfig } from './config';
 import { getDb } from './db';
 import { todayMsk } from './dates';
 import { notifyAdmin } from './notify-admin';
+import { createLogger } from './logger';
+
+const log = createLogger('strategist');
 
 // ---------------------------------------------------------------------------
 // DB: strategist_packets table
@@ -29,6 +32,12 @@ export function migrateStrategist(): void {
       created_at TEXT DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_strategist_packets_date ON strategist_packets(date);
+
+    CREATE TABLE IF NOT EXISTS bot_config (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
 
     CREATE TABLE IF NOT EXISTS strategist_actions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,7 +78,6 @@ export function getActionByMessageId(messageId: number): {
 }
 
 export function setActionStatus(actionId: number, status: 'approved' | 'rejected' | 'executed' | 'failed', result?: string): void {
-  const now = `datetime('now')`;
   if (status === 'executed' || status === 'failed') {
     getDb().prepare(
       `UPDATE strategist_actions SET status = ?, result = ?, executed_at = datetime('now') WHERE id = ?`
@@ -87,6 +95,14 @@ export function getPendingActions(): Array<{
   return getDb().prepare(
     `SELECT id, type, description, params FROM strategist_actions WHERE status = 'approved'`
   ).all() as any[];
+}
+
+export function getActionById(actionId: number): StrategistAction | null {
+  const row = getDb().prepare(
+    `SELECT type, description, params FROM strategist_actions WHERE id = ?`
+  ).get(actionId) as { type: StrategistActionType; description: string; params: string } | undefined;
+  if (!row) return null;
+  return { type: row.type, description: row.description, params: JSON.parse(row.params) };
 }
 
 // --- Strategist Actions (v2) ---
@@ -157,9 +173,9 @@ export function getLatestPacket(): StrategistPacket {
 export function savePacketFromExternal(
   packet: Partial<StrategistPacket>,
   report?: { summary?: string; full_report?: string },
-): void {
+): { packetId: number; actionIds: number[] } {
   const merged = { ...DEFAULT_PACKET, ...packet };
-  getDb().prepare(`
+  const result = getDb().prepare(`
     INSERT INTO strategist_packets
       (date, week_focus, content_themes, challenge_active, challenge_name,
        search_keywords, community_priority, report_summary, full_report)
@@ -175,7 +191,19 @@ export function savePacketFromExternal(
     report?.summary ?? null,
     report?.full_report ?? null,
   );
-  console.log(`[strategist] packet saved from external source (${merged.week_focus}, ${merged.community_priority})`);
+  const packetId = Number(result.lastInsertRowid);
+
+  // Save actions if present
+  const actionIds: number[] = [];
+  if (packet.actions?.length) {
+    for (const action of packet.actions) {
+      actionIds.push(saveAction(packetId, action));
+    }
+    log.info(`saved ${packet.actions.length} actions from external packet`);
+  }
+
+  log.info(`packet saved from external source`, { weekFocus: merged.week_focus, priority: merged.community_priority });
+  return { packetId, actionIds };
 }
 
 // ---------------------------------------------------------------------------
@@ -287,8 +315,17 @@ function buildPrompt(): string {
 
 Обязательно в конце добавь блок:
 // COMMUNITY_PACKET_START
-{JSON с полями: week_focus, content_themes, challenge_active, challenge_name, search_keywords (stretching/strength/mobility), community_priority}
+{JSON с полями: week_focus, content_themes, challenge_active, challenge_name, search_keywords (stretching/strength/mobility), community_priority, actions}
 // COMMUNITY_PACKET_END
+
+Поле actions — массив конкретных действий, которые бот может выполнить с одобрения админа.
+Каждое действие: { type, description, params }
+Типы:
+- "create_poll" — создать опрос в группе. params: { question: string, options: string[], anonymous?: boolean }
+- "update_welcome" — обновить приветственный текст. params: { text: string }
+- "limit_posts" — изменить лимит постов/день. params: { max_per_day: number }
+- "send_digest" — отправить дайджест в канал. params: { text: string }
+Если нет предложений — actions: []
 
 Формат: валидный Markdown. Заголовок: "# Sami Strategist Report — YYYY-MM-DD".
 Пиши на русском. Только текстовый отчёт, без команд и файловых операций.
@@ -307,7 +344,11 @@ function extractPacket(reportText: string): StrategistPacket {
 
   try {
     const parsed = JSON.parse(match[1].trim()) as Partial<StrategistPacket>;
-    return { ...DEFAULT_PACKET, ...parsed };
+    // Validate actions array
+    const actions = Array.isArray(parsed.actions)
+      ? parsed.actions.filter(a => a && typeof a.type === 'string' && typeof a.description === 'string')
+      : [];
+    return { ...DEFAULT_PACKET, ...parsed, actions };
   } catch (err) {
     console.warn('[strategist] failed to parse COMMUNITY_PACKET:', err);
     return DEFAULT_PACKET;
@@ -406,8 +447,157 @@ export async function runStrategist(bot: Bot): Promise<void> {
       parse_mode: 'Markdown',
     }).catch(() => {});
 
+    // Save and send actions to admin
+    if (packet.actions?.length) {
+      const packetId = getDb().prepare(
+        `SELECT id FROM strategist_packets ORDER BY id DESC LIMIT 1`
+      ).get() as { id: number } | undefined;
+      if (packetId) {
+        for (const action of packet.actions) {
+          const actionId = saveAction(packetId.id, action);
+          await sendActionToAdmin(bot, actionId, action);
+        }
+      }
+    }
+
   } catch (err: any) {
     console.error('[strategist] generation failed:', err);
     await notifyAdmin(bot, 'Strategist', `Генерация отчёта упала:\n\`${String(err).slice(0, 200)}\``);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Action presentation & execution
+// ---------------------------------------------------------------------------
+
+const ACTION_TYPE_LABELS: Record<StrategistActionType, string> = {
+  create_poll: 'Создать опрос',
+  update_welcome: 'Обновить приветствие',
+  limit_posts: 'Ограничить посты',
+  send_digest: 'Отправить дайджест',
+};
+
+export async function sendActionToAdmin(bot: Bot, actionId: number, action: StrategistAction): Promise<void> {
+  const config = getConfig();
+  const label = ACTION_TYPE_LABELS[action.type] ?? action.type;
+
+  const text = [
+    `*Стратег предлагает: ${label}*`,
+    '',
+    action.description,
+    '',
+    `Параметры: \`${JSON.stringify(action.params)}\``,
+  ].join('\n');
+
+  const keyboard = new InlineKeyboard()
+    .text('✅ Выполнить', `strat_action:approve:${actionId}`)
+    .text('❌ Отклонить', `strat_action:reject:${actionId}`);
+
+  try {
+    const msg = await bot.api.sendMessage(config.TELEGRAM_ADMIN_USER_ID, text, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard,
+    });
+    setActionMessageId(actionId, msg.message_id);
+  } catch (err) {
+    log.error('failed to send action to admin', { actionId, error: String(err) });
+  }
+}
+
+async function executeAction(bot: Bot, actionId: number, type: StrategistActionType, params: Record<string, unknown>): Promise<string> {
+  const config = getConfig();
+
+  switch (type) {
+    case 'create_poll': {
+      const question = String(params.question ?? 'Опрос от стратега');
+      const options = Array.isArray(params.options) ? params.options.map(String) : ['Да', 'Нет'];
+      await bot.api.sendPoll(config.TELEGRAM_GROUP_ID, question, options, {
+        is_anonymous: Boolean(params.anonymous ?? true),
+      });
+      return `Опрос создан: "${question}" (${options.length} вариантов)`;
+    }
+
+    case 'update_welcome': {
+      // Store new welcome text in DB config (to be picked up by moderation.ts)
+      const text = String(params.text ?? '');
+      if (!text) return 'Нет текста для обновления';
+      getDb().prepare(`
+        INSERT OR REPLACE INTO bot_config (key, value) VALUES ('welcome_text', ?)
+      `).run(text);
+      return `Welcome-текст обновлён (${text.length} символов)`;
+    }
+
+    case 'limit_posts': {
+      const maxPerDay = Number(params.max_per_day ?? 3);
+      getDb().prepare(`
+        INSERT OR REPLACE INTO bot_config (key, value) VALUES ('max_posts_per_day', ?)
+      `).run(String(maxPerDay));
+      return `Лимит постов: ${maxPerDay}/день`;
+    }
+
+    case 'send_digest': {
+      const text = String(params.text ?? 'Недельный дайджест Sami');
+      await bot.api.sendMessage(config.TELEGRAM_CHANNEL_ID, text, { parse_mode: 'Markdown' });
+      return `Дайджест отправлен в канал`;
+    }
+
+    default:
+      return `Неизвестный тип действия: ${type}`;
+  }
+}
+
+export function registerStrategistCallbacks(bot: Bot): void {
+  bot.callbackQuery(/^strat_action:(approve|reject):(\d+)$/, async (ctx) => {
+    const decision = ctx.match[1] as 'approve' | 'reject';
+    const actionId = parseInt(ctx.match[2]);
+
+    const action = getDb().prepare(
+      `SELECT id, type, description, params, status FROM strategist_actions WHERE id = ?`
+    ).get(actionId) as { id: number; type: StrategistActionType; description: string; params: string; status: string } | undefined;
+
+    if (!action || action.status !== 'pending') {
+      await ctx.answerCallbackQuery('Действие уже обработано');
+      return;
+    }
+
+    if (decision === 'reject') {
+      setActionStatus(actionId, 'rejected');
+      try {
+        await ctx.editMessageReplyMarkup({
+          reply_markup: new InlineKeyboard().text('❌ Отклонено', 'noop'),
+        });
+      } catch {}
+      await ctx.answerCallbackQuery('Отклонено');
+      return;
+    }
+
+    // Approve and execute
+    setActionStatus(actionId, 'approved');
+    await ctx.answerCallbackQuery('Выполняю...');
+
+    try {
+      const params = JSON.parse(action.params) as Record<string, unknown>;
+      const result = await executeAction(bot, actionId, action.type, params);
+      setActionStatus(actionId, 'executed', result);
+
+      try {
+        await ctx.editMessageReplyMarkup({
+          reply_markup: new InlineKeyboard().text(`✅ ${result}`, 'noop'),
+        });
+      } catch {}
+
+      log.info('action executed', { actionId, type: action.type, result });
+    } catch (err) {
+      const errMsg = String(err).slice(0, 200);
+      setActionStatus(actionId, 'failed', errMsg);
+
+      try {
+        await ctx.editMessageReplyMarkup({
+          reply_markup: new InlineKeyboard().text(`⚠️ Ошибка: ${errMsg.slice(0, 50)}`, 'noop'),
+        });
+      } catch {}
+
+      log.error('action execution failed', { actionId, error: errMsg });
+    }
+  });
 }

@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getConfig } from './config';
 import { createLogger } from './logger';
+import { CATEGORY_RU } from './shared';
 
 const log = createLogger('analytics');
 import {
@@ -98,11 +99,6 @@ export async function runDailyAnalytics(bot: Bot, date: string): Promise<void> {
   log.info(`wrote daily report: ${reportPath}`);
 
   // 6. DM admin
-  const CATEGORY_RU: Record<string, string> = {
-    stretching: 'стретчинг',
-    strength: 'силовая',
-    mobility: 'мобильность',
-  };
 
   const retentionPct = retention.yesterday_active > 0
     ? Math.round((retention.returned_today / retention.yesterday_active) * 100)

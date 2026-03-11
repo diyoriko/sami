@@ -176,7 +176,7 @@ export async function runApprovalFlow(
 
   await bot.api.sendMessage(
     config.TELEGRAM_ADMIN_USER_ID,
-    `${summary} Выбери или нажми Другое.\n\nПосты: 08:00 стретч, 08:05 сила, 08:10 мобильность`
+    `${summary} Выбери или нажми Другое.\n\nКогда выберешь — нажми «Опубликовать».`
   );
 }
 

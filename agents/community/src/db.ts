@@ -198,6 +198,19 @@ function migrate(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_rejections_youtube_id ON video_rejections(youtube_id);
   `);
 
+  // User favorites (saved videos)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_favorites (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      telegram_user_id INTEGER NOT NULL,
+      video_id INTEGER NOT NULL REFERENCES videos(id),
+      post_id INTEGER REFERENCES posts(id),
+      created_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(telegram_user_id, video_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_favorites_user ON user_favorites(telegram_user_id);
+  `);
+
   // Deploy history
   db.exec(`
     CREATE TABLE IF NOT EXISTS deploy_history (
@@ -573,7 +586,7 @@ export function writeChannelStats(date: string, subscriberCount: number, groupMe
 }
 
 export function getChannelStats(date: string): { subscriber_count: number; group_member_count: number; posts_today: number } | null {
-  return getDb().prepare(`SELECT subscriber_count, group_member_count, posts_today FROM channel_stats WHERE date = ?`).get(date) as any;
+  return getDb().prepare(`SELECT subscriber_count, group_member_count, posts_today FROM channel_stats WHERE date = ?`).get(date) as { subscriber_count: number; group_member_count: number; posts_today: number } | undefined ?? null;
 }
 
 export function getWeeklyStats(startDate: string, endDate: string): Array<{
@@ -588,7 +601,10 @@ export function getWeeklyStats(startDate: string, endDate: string): Array<{
     LEFT JOIN channel_stats c ON c.date = d.date
     WHERE d.date >= ? AND d.date <= ?
     ORDER BY d.date
-  `).all(startDate, endDate) as any[];
+  `).all(startDate, endDate) as Array<{
+    date: string; checkin_did: number; checkin_partial: number; checkin_didnt: number;
+    new_members: number; subscriber_count: number; group_member_count: number;
+  }>;
 }
 
 export function getPostCountForDate(date: string): number {
@@ -953,4 +969,152 @@ export function getRejectionCount(sinceDays: number = 7): number {
     `SELECT COUNT(*) as cnt FROM video_rejections WHERE rejected_at > datetime('now', '-' || ? || ' days')`
   ).get(sinceDays) as { cnt: number };
   return row.cnt;
+}
+
+// --- User favorites ---
+
+export function toggleFavorite(userId: number, videoId: number, postId?: number): boolean {
+  const db = getDb();
+  const existing = db.prepare(
+    `SELECT id FROM user_favorites WHERE telegram_user_id = ? AND video_id = ?`
+  ).get(userId, videoId) as { id: number } | undefined;
+
+  if (existing) {
+    db.prepare(`DELETE FROM user_favorites WHERE id = ?`).run(existing.id);
+    return false; // removed
+  }
+
+  db.prepare(`
+    INSERT INTO user_favorites (telegram_user_id, video_id, post_id) VALUES (?, ?, ?)
+  `).run(userId, videoId, postId ?? null);
+  return true; // added
+}
+
+export function isUserFavorite(userId: number, videoId: number): boolean {
+  const row = getDb().prepare(
+    `SELECT COUNT(*) as cnt FROM user_favorites WHERE telegram_user_id = ? AND video_id = ?`
+  ).get(userId, videoId) as { cnt: number };
+  return row.cnt > 0;
+}
+
+export interface FavoriteVideo {
+  video_id: number;
+  title: string;
+  category: string;
+  channel_message_id: number | null;
+  created_at: string;
+}
+
+export function getUserFavorites(userId: number, limit: number, offset: number): FavoriteVideo[] {
+  return getDb().prepare(`
+    SELECT f.video_id, v.title, v.category,
+           (SELECT p.channel_message_id FROM posts p WHERE p.video_id = v.id ORDER BY p.posted_at DESC LIMIT 1) as channel_message_id,
+           f.created_at
+    FROM user_favorites f
+    JOIN videos v ON v.id = f.video_id
+    WHERE f.telegram_user_id = ?
+    ORDER BY f.created_at DESC
+    LIMIT ? OFFSET ?
+  `).all(userId, limit, offset) as FavoriteVideo[];
+}
+
+export function getUserFavoriteTotal(userId: number): number {
+  const row = getDb().prepare(
+    `SELECT COUNT(*) as cnt FROM user_favorites WHERE telegram_user_id = ?`
+  ).get(userId) as { cnt: number };
+  return row.cnt;
+}
+
+// --- Member levels ---
+
+export type MemberLevel = 'новичок' | 'практик' | 'наставник';
+
+export function getMemberLevel(userId: number): { level: MemberLevel; completions: number } {
+  const row = getDb().prepare(
+    `SELECT COALESCE(completions_total, 0) as completions FROM members WHERE telegram_user_id = ?`
+  ).get(userId) as { completions: number } | undefined;
+
+  const completions = row?.completions ?? 0;
+  let level: MemberLevel = 'новичок';
+  if (completions >= 30) level = 'наставник';
+  else if (completions >= 10) level = 'практик';
+
+  return { level, completions };
+}
+
+export interface MemberProfile {
+  telegram_user_id: number;
+  username: string | null;
+  first_name: string | null;
+  fitness_goal: string | null;
+  joined_at: string;
+  completions_total: number;
+}
+
+export function getMemberProfile(userId: number): MemberProfile | null {
+  return getDb().prepare(`
+    SELECT telegram_user_id, username, first_name, fitness_goal, joined_at,
+           COALESCE(completions_total, 0) as completions_total
+    FROM members WHERE telegram_user_id = ?
+  `).get(userId) as MemberProfile | null;
+}
+
+// --- New members tracking in DB ---
+
+export function getNewMembersToday(date: string): number {
+  const row = getDb().prepare(
+    `SELECT COUNT(*) as cnt FROM members WHERE date(joined_at) = ?`
+  ).get(date) as { cnt: number };
+  return row.cnt;
+}
+
+// --- Video filter/search ---
+
+export interface FilteredVideo {
+  id: number;
+  title: string;
+  category: string;
+  difficulty: string;
+  duration_seconds: number | null;
+  duration_label: string | null;
+  rating: number;
+  channel_message_id: number | null;
+}
+
+export function filterVideos(opts: {
+  category?: string;
+  difficulty?: string;
+  maxDuration?: number;
+  minDuration?: number;
+  limit?: number;
+}): FilteredVideo[] {
+  const conditions = ['1=1'];
+  const params: (string | number)[] = [];
+
+  if (opts.category) {
+    conditions.push('v.category = ?');
+    params.push(opts.category);
+  }
+  if (opts.difficulty) {
+    conditions.push('v.difficulty = ?');
+    params.push(opts.difficulty);
+  }
+  if (opts.minDuration) {
+    conditions.push('v.duration_seconds >= ?');
+    params.push(opts.minDuration);
+  }
+  if (opts.maxDuration) {
+    conditions.push('v.duration_seconds <= ?');
+    params.push(opts.maxDuration);
+  }
+  params.push(opts.limit ?? 5);
+
+  return getDb().prepare(`
+    SELECT v.id, v.title, v.category, v.difficulty, v.duration_seconds, v.duration_label, v.rating,
+           (SELECT p.channel_message_id FROM posts p WHERE p.video_id = v.id ORDER BY p.posted_at DESC LIMIT 1) as channel_message_id
+    FROM videos v
+    WHERE ${conditions.join(' AND ')}
+    ORDER BY v.rating DESC, v.created_at DESC
+    LIMIT ?
+  `).all(...params) as FilteredVideo[];
 }

@@ -376,7 +376,7 @@ export async function searchVideos(
       youtube_id: videoId,
       title,
       channel_name: channelName,
-      channel_url: `https://www.youtube.com/@${channelName.replace(/\s+/g, '')}`,
+      channel_url: `https://www.youtube.com/results?search_query=${encodeURIComponent(channelName)}`,
       duration_seconds: seconds,
       duration_label: label,
       difficulty: guessDifficulty(title, description),

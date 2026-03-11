@@ -12,7 +12,7 @@ import { registerModeration } from './moderation';
 import { registerApprovalCallbacks } from './approval';
 import { startScheduler } from './scheduler';
 import { upgradeYtDlp, logYtDlpStatus, initCookies, setAdminNotifier, runDiagnostic } from './downloader';
-import { migrateStrategist, savePacketFromExternal } from './strategist';
+import { migrateStrategist, savePacketFromExternal, registerStrategistCallbacks, sendActionToAdmin, getActionById } from './strategist';
 import { recordDeploy, getLatestDeploy } from './db';
 
 async function main(): Promise<void> {
@@ -62,6 +62,7 @@ async function main(): Promise<void> {
   registerBotMenu(bot);
   registerModeration(bot);
   registerApprovalCallbacks(bot);
+  registerStrategistCallbacks(bot);
 
   // --- Admin commands (all use Moscow timezone) ---
 
@@ -182,12 +183,21 @@ async function main(): Promise<void> {
 
       let body = '';
       req.on('data', (chunk) => { body += chunk; });
-      req.on('end', () => {
+      req.on('end', async () => {
         try {
           const payload = JSON.parse(body);
-          savePacketFromExternal(payload.packet, payload.report);
+          const { packetId, actionIds } = savePacketFromExternal(payload.packet, payload.report);
+
+          // Send proposed actions to admin for approval
+          for (const actionId of actionIds) {
+            const action = getActionById(actionId);
+            if (action) {
+              await sendActionToAdmin(bot, actionId, action);
+            }
+          }
+
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ status: 'ok' }));
+          res.end(JSON.stringify({ status: 'ok', actions: actionIds.length }));
         } catch (err) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'invalid JSON' }));
@@ -241,36 +251,35 @@ async function main(): Promise<void> {
       ).catch(() => {});
 
       // Notify admin on startup with deploy info
-      const commitMsg = process.env.RAILWAY_GIT_COMMIT_MESSAGE?.trim();
+      const rawCommitMsg = process.env.RAILWAY_GIT_COMMIT_MESSAGE?.trim();
       const commitSha = process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7);
 
-      const lines = ['*Sami Bot запущен*'];
-      if (commitMsg) {
-        // Clean up commit message: remove Co-Authored-By, technical noise
-        const cleanMsg = commitMsg
+      const deployLines = ['Бот обновлён и запущен.'];
+      if (pkgVersion) deployLines.push(`Версия: ${pkgVersion}`);
+      if (commitSha) deployLines.push(`Коммит: ${commitSha}`);
+      if (rawCommitMsg) {
+        // Extract first meaningful line, clean technical noise
+        const firstLine = rawCommitMsg
           .split('\n')
           .filter(l => !l.startsWith('Co-Authored-By:') && l.trim() !== '')
-          .join(' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-        if (cleanMsg) {
-          lines.push('', `\`${commitSha}\` ${cleanMsg}`);
-        }
+          .map(l => l.trim())[0];
+        if (firstLine) deployLines.push(`Что нового: ${firstLine}`);
       }
 
       bot.api.sendMessage(
         config.TELEGRAM_ADMIN_USER_ID,
-        lines.join('\n'),
-        { parse_mode: 'Markdown' }
+        deployLines.join('\n'),
       ).catch(() => {});
 
-      // Run download diagnostic and report to admin
+      // Run download diagnostic — only notify if something is wrong
       runDiagnostic().then((report) => {
-        bot.api.sendMessage(
-          config.TELEGRAM_ADMIN_USER_ID,
-          `*Диагностика видео:*\n\`\`\`\n${report}\n\`\`\``,
-          { parse_mode: 'Markdown' }
-        ).catch(() => {});
+        const hasIssue = report.toLowerCase().includes('fail') || report.toLowerCase().includes('error') || report.toLowerCase().includes('not found');
+        if (hasIssue) {
+          bot.api.sendMessage(
+            config.TELEGRAM_ADMIN_USER_ID,
+            `Проблема с загрузкой видео:\n${report}`,
+          ).catch(() => {});
+        }
       });
     },
   });
