@@ -271,9 +271,9 @@
 
 ### P1: Миграция агентов на GitHub Actions
 
-- [ ] Стратег: `strategist.sh` → `.github/workflows/strategist.yml` (12:30 МСК)
-- [ ] Имплементатор: `.github/workflows/implementor.yml` (14:00 МСК)
-- [ ] Общая инфраструктура: секреты (Claude CLI, Telegram token), контекст проекта
+- [x] Стратег: `.github/workflows/strategist.yml` (12:30 МСК = 09:30 UTC)
+- [x] Имплементатор: `.github/workflows/implementor.yml` (14:00 МСК = 11:00 UTC)
+- [ ] Настройка секретов: ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_ADMIN_USER_ID, STRATEGIST_API_KEY, GH_PAT
 
 ### P3: Монетизация (после 50+ участников)
 

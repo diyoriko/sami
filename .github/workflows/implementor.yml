@@ -1,0 +1,152 @@
+name: Implementor Agent
+
+on:
+  schedule:
+    # 14:00 MSK = 11:00 UTC
+    - cron: '0 11 * * *'
+  workflow_dispatch:
+    inputs:
+      task_id:
+        description: 'Specific task ID to implement (optional)'
+        type: string
+        required: false
+
+env:
+  COMMUNITY_AGENT_URL: https://courageous-happiness-production.up.railway.app
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT }}  # PAT with push access for creating branches
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: cd agents/community && npm ci
+
+      - name: Install Claude CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Fetch next task
+        id: task
+        env:
+          IMPL_API_KEY: ${{ secrets.STRATEGIST_API_KEY }}
+        run: |
+          if [ -n "${{ inputs.task_id }}" ]; then
+            TASK=$(curl -sf "$COMMUNITY_AGENT_URL/impl/tasks?status=approved" | jq -r ".[] | select(.id == ${{ inputs.task_id }})")
+          else
+            TASK=$(curl -sf "$COMMUNITY_AGENT_URL/impl/next" | jq -r '.task')
+          fi
+
+          if [ "$TASK" = "null" ] || [ -z "$TASK" ]; then
+            echo "No approved tasks found"
+            echo "has_task=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          TASK_ID=$(echo "$TASK" | jq -r '.id')
+          TASK_TITLE=$(echo "$TASK" | jq -r '.title')
+          TASK_SPEC=$(echo "$TASK" | jq -r '.spec')
+
+          echo "has_task=true" >> $GITHUB_OUTPUT
+          echo "task_id=$TASK_ID" >> $GITHUB_OUTPUT
+          echo "task_title=$TASK_TITLE" >> $GITHUB_OUTPUT
+          echo "$TASK_SPEC" > /tmp/task-spec.txt
+
+      - name: Mark task in progress
+        if: steps.task.outputs.has_task == 'true'
+        env:
+          IMPL_API_KEY: ${{ secrets.STRATEGIST_API_KEY }}
+        run: |
+          curl -sf -X POST "$COMMUNITY_AGENT_URL/impl/result" \
+            -H "Content-Type: application/json" \
+            -H "x-admin-token: $IMPL_API_KEY" \
+            -d "{\"id\": ${{ steps.task.outputs.task_id }}, \"status\": \"in_progress\"}"
+
+      - name: Create branch
+        if: steps.task.outputs.has_task == 'true'
+        run: |
+          BRANCH="impl/task-${{ steps.task.outputs.task_id }}"
+          git checkout -b "$BRANCH"
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+        id: branch
+
+      - name: Run Claude Code
+        if: steps.task.outputs.has_task == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          SPEC=$(cat /tmp/task-spec.txt)
+          claude --print --model claude-sonnet-4-6 "
+          Ты — имплементатор для проекта SAMI (Telegram fitness community bot).
+          Проект: $(pwd)
+          Задача: ${{ steps.task.outputs.task_title }}
+          Спецификация:
+          $SPEC
+
+          Правила:
+          - Прочитай CLAUDE.md и COMMUNITY_TASKS.md для контекста
+          - TypeScript, grammY, SQLite (better-sqlite3)
+          - Запусти tsc --noEmit и vitest run после реализации
+          - Минимальные изменения, не трогай то что не относится к задаче
+          " > /tmp/implementation.log 2>&1 || true
+
+          cat /tmp/implementation.log
+
+      - name: Run checks
+        if: steps.task.outputs.has_task == 'true'
+        run: |
+          cd agents/community
+          npx tsc --noEmit
+          npx vitest run
+
+      - name: Commit and push
+        if: steps.task.outputs.has_task == 'true'
+        run: |
+          git add -A
+          CHANGES=$(git diff --cached --stat)
+          if [ -z "$CHANGES" ]; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git config user.name "SAMI Implementor"
+          git config user.email "noreply@sami.bot"
+          git commit -m "impl: ${{ steps.task.outputs.task_title }}
+
+          Task #${{ steps.task.outputs.task_id }}
+          Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
+          git push origin "${{ steps.branch.outputs.branch }}"
+          SHA=$(git rev-parse HEAD)
+          echo "commit_sha=$SHA" >> $GITHUB_OUTPUT
+        id: commit
+
+      - name: Report result
+        if: always() && steps.task.outputs.has_task == 'true'
+        env:
+          IMPL_API_KEY: ${{ secrets.STRATEGIST_API_KEY }}
+        run: |
+          if [ "${{ steps.commit.outcome }}" = "success" ]; then
+            STATUS="review"
+            RESULT="Branch: ${{ steps.branch.outputs.branch }}, Commit: ${{ steps.commit.outputs.commit_sha }}"
+          else
+            STATUS="failed"
+            RESULT="Implementation or checks failed. See workflow run #${{ github.run_number }}"
+          fi
+
+          curl -sf -X POST "$COMMUNITY_AGENT_URL/impl/result" \
+            -H "Content-Type: application/json" \
+            -H "x-admin-token: $IMPL_API_KEY" \
+            -d "{
+              \"id\": ${{ steps.task.outputs.task_id }},
+              \"status\": \"$STATUS\",
+              \"result\": \"$RESULT\",
+              \"branch\": \"${{ steps.branch.outputs.branch }}\",
+              \"commit_sha\": \"${{ steps.commit.outputs.commit_sha || '' }}\"
+            }"

@@ -1,0 +1,52 @@
+name: Strategist Agent
+
+on:
+  schedule:
+    # 12:30 MSK = 09:30 UTC
+    - cron: '30 9 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (no Telegram notification)'
+        type: boolean
+        default: false
+
+env:
+  COMMUNITY_AGENT_URL: https://courageous-happiness-production.up.railway.app
+  STRATEGIST_GENERATOR: claude
+  STRATEGIST_CLAUDE_MODEL: claude-sonnet-4-6
+  STRATEGIST_TIMEOUT_SEC: 1200
+
+jobs:
+  run-strategist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Claude CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Run strategist
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_ADMIN_USER_ID: ${{ secrets.TELEGRAM_ADMIN_USER_ID }}
+          STRATEGIST_DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+          SAMI_PROJECT_ROOT: ${{ github.workspace }}
+          SAMI_CONTEXT_ROOT: ${{ github.workspace }}
+          SAMI_AGENTS_DIR: ${{ github.workspace }}/agents
+        run: bash agents/strategist.sh
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strategist-report-${{ github.run_number }}
+          path: reports/strategist/
+          retention-days: 30
