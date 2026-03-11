@@ -386,6 +386,37 @@ export function registerBotMenu(bot: Bot): void {
     await ctx.reply('Видео получено! Какой тип тренировки?', { reply_markup: kb });
   });
 
+  // --- UGC: accept video sent as document (e.g. .mov, .mp4 files Telegram treats as documents) ---
+  const VIDEO_MIME_PREFIXES = ['video/'];
+  bot.on('message:document', async (ctx, next) => {
+    if (ctx.chat.type !== 'private') return next();
+    const userId = ctx.from!.id;
+    const state = getUgcState(userId);
+    const doc = ctx.message.document;
+    const mime = doc.mime_type ?? '';
+    if (!state || state.step !== 'waiting_link') return next();
+    if (!VIDEO_MIME_PREFIXES.some(p => mime.startsWith(p))) {
+      await ctx.reply('Отправь видеофайл или ссылку на YouTube.');
+      return;
+    }
+
+    log.info('video-as-document in private chat', { userId, mime, fileName: doc.file_name });
+
+    const fileId = doc.file_id;
+    const subId = createUgcSubmission(userId, ctx.from!.username ?? null, `tg:${fileId}`, null);
+    if (doc.file_name) {
+      updateUgcSubmission(subId, { title: doc.file_name.replace(/\.[^.]+$/, '') });
+    }
+    saveUgcState(userId, 'waiting_category', subId);
+
+    const kb = new InlineKeyboard()
+      .text('Стретчинг', `ugc_cat:${subId}:stretching`)
+      .text('Силовая', `ugc_cat:${subId}:strength`)
+      .text('Мобильность', `ugc_cat:${subId}:mobility`);
+
+    await ctx.reply('Видео получено! Какой тип тренировки?', { reply_markup: kb });
+  });
+
   // --- UGC conversation handler (private chat text) ---
   bot.on('message:text', async (ctx, next) => {
     if (ctx.chat.type !== 'private') return next();

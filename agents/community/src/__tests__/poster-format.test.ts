@@ -19,11 +19,11 @@ describe('post format vision compliance', () => {
 
   it('uses monospace backtick tags on separate lines', () => {
     expect(posterSource).toContain('tagLines');
-    expect(posterSource).toMatch(/🏷/);
+    expect(posterSource).toMatch(/🧘/);
     expect(posterSource).toMatch(/⏱/);
-    expect(posterSource).toMatch(/💪/);
-    expect(posterSource).toMatch(/📊/);
-    expect(posterSource).toMatch(/🏋️/);
+    expect(posterSource).toMatch(/🦴/);
+    expect(posterSource).toMatch(/💎/);
+    expect(posterSource).toMatch(/🎾/);
   });
 
   it('has rating display with star', () => {

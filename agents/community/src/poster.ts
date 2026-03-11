@@ -39,12 +39,19 @@ async function formatCaption(video: VideoRow): Promise<string> {
   const rating = updateVideoRating(video.id);
   const ratingStr = formatRating(rating);
 
+  const CATEGORY_EMOJI: Record<string, string> = {
+    stretching: '🧘',
+    strength: '💪',
+    mobility: '🐍',
+  };
+  const catEmoji = CATEGORY_EMOJI[video.category] ?? '🏷';
+
   const tagLines = [
-    `\`🏷 ${categoryRu}\``,
+    `\`${catEmoji} ${categoryRu}\``,
     `\`⏱️ ${video.duration_label ?? '?'}\``,
-    `\`💪 ${muscles}\``,
-    `\`📊 ${difficultyRu}\``,
-    `\`🏋️ ${equipmentTag}\``,
+    `\`🦴 ${muscles}\``,
+    `\`💎 ${difficultyRu}\``,
+    `\`🎾 ${equipmentTag}\``,
   ];
 
   const lines = [
