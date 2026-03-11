@@ -14,6 +14,7 @@ import {
   getLatestPostForDate,
   getMemberLevel, getMemberJoinedAt,
   logModAction, getStopPhrases,
+  wasBuddyInviteSent, markBuddyInviteSent,
 } from './db';
 
 // ─── CAPTCHA ──────────────────────────────────────────────────────────────────
@@ -491,6 +492,25 @@ export function registerModeration(bot: Bot): void {
     }
 
     recordCompletion(post.id, videoId, userId);
+
+    // Buddy invite: after 3rd completion, suggest inviting a friend (once)
+    const { completions } = getMemberLevel(userId);
+    if (completions === 3 && !wasBuddyInviteSent(userId)) {
+      markBuddyInviteSent(userId);
+      try {
+        await bot.api.sendMessage(
+          userId,
+          `Три тренировки позади — ты уже в ритме.\n\n` +
+          `Если есть кто-то, кому тоже не хватает структуры в движении — ` +
+          `можешь поделиться ссылкой на сообщество:\n` +
+          `https://t.me/sami_workouts\n\n` +
+          `Вместе проще держать темп.`,
+        );
+      } catch {
+        // User may have blocked DMs — that's ok
+      }
+    }
+
     const count = getCompletionCount(post.id);
 
     // Update buttons — preserve favorites button

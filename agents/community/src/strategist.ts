@@ -107,7 +107,7 @@ export function getActionById(actionId: number): StrategistAction | null {
 
 // --- Strategist Actions (v2) ---
 
-export type StrategistActionType = 'create_poll' | 'update_welcome' | 'limit_posts' | 'send_digest' | 'update_stop_list';
+export type StrategistActionType = 'create_poll' | 'update_welcome' | 'limit_posts' | 'send_digest' | 'update_stop_list' | 'create_impl_task';
 
 export interface StrategistAction {
   type: StrategistActionType;
@@ -333,6 +333,7 @@ function buildPrompt(): string {
 - "limit_posts" — изменить лимит постов/день. params: { max_per_day: number }
 - "send_digest" — отправить дайджест в канал. params: { text: string }
 - "update_stop_list" — обновить стоп-лист спам-фраз. params: { add?: string[], remove?: string[] }
+- "create_impl_task" — создать задачу для имплементор-агента (автокод). params: { title: string, spec: string, priority?: "P0"|"P1"|"P2"|"P3" }. spec: что изменить, какие файлы, ожидаемый результат, ограничения.
 Если нет предложений — actions: []
 
 Формат: валидный Markdown. Заголовок: "# Sami Strategist Report — YYYY-MM-DD".
@@ -484,6 +485,7 @@ const ACTION_TYPE_LABELS: Record<StrategistActionType, string> = {
   limit_posts: 'Ограничить посты',
   send_digest: 'Отправить дайджест',
   update_stop_list: 'Обновить стоп-лист',
+  create_impl_task: 'Создать задачу для имплементора',
 };
 
 export async function sendActionToAdmin(bot: Bot, actionId: number, action: StrategistAction): Promise<void> {
@@ -562,6 +564,16 @@ async function executeAction(bot: Bot, actionId: number, type: StrategistActionT
         if (removeStopPhrase(phrase)) removed++;
       }
       return `Стоп-лист: +${added} / -${removed}`;
+    }
+
+    case 'create_impl_task': {
+      const { createImplTask } = await import('./db');
+      const title = String(params.title ?? 'Задача от стратега');
+      const spec = String(params.spec ?? '');
+      if (!spec) return 'Нет спецификации для задачи';
+      const priority = String(params.priority ?? 'P2');
+      const taskId = createImplTask(title, spec, 'strategist', priority);
+      return `Задача #${taskId} создана: "${title}" (${priority})`;
     }
 
     default:

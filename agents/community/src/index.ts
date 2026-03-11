@@ -13,7 +13,8 @@ import { registerApprovalCallbacks } from './approval';
 import { startScheduler } from './scheduler';
 import { upgradeYtDlp, logYtDlpStatus, initCookies, setAdminNotifier, runDiagnostic } from './downloader';
 import { migrateStrategist, savePacketFromExternal, registerStrategistCallbacks, sendActionToAdmin, getActionById } from './strategist';
-import { recordDeploy, getLatestDeploy } from './db';
+import { recordDeploy, getLatestDeploy, listImplTasks, getNextImplTask, getImplTask, updateImplTaskStatus, createImplTask } from './db';
+import type { ImplTaskStatus, ImplTaskSource } from './db';
 
 async function main(): Promise<void> {
   const config = getConfig();
@@ -206,6 +207,121 @@ async function main(): Promise<void> {
       return;
     }
 
+    // --- Implementor endpoints ---
+
+    const parsedUrl = new URL(req.url ?? '/', `http://localhost:${port}`);
+
+    if (parsedUrl.pathname === '/impl/tasks' && req.method === 'GET') {
+      const statusFilter = parsedUrl.searchParams.get('status') as ImplTaskStatus | null;
+      const tasks = listImplTasks(statusFilter ?? undefined);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ tasks }));
+      return;
+    }
+
+    if (parsedUrl.pathname === '/impl/next' && req.method === 'GET') {
+      const task = getNextImplTask();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ task }));
+      return;
+    }
+
+    if (parsedUrl.pathname === '/impl/result' && req.method === 'POST') {
+      const authHeader = req.headers['x-admin-token'];
+      const expectedToken = config.STRATEGIST_API_KEY ?? config.TELEGRAM_BOT_TOKEN;
+      if (authHeader !== expectedToken) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'unauthorized' }));
+        return;
+      }
+
+      let body = '';
+      req.on('data', (chunk: string) => { body += chunk; });
+      req.on('end', async () => {
+        try {
+          const payload = JSON.parse(body) as {
+            id: number;
+            status: ImplTaskStatus;
+            result?: string;
+            branch?: string;
+            commit_sha?: string;
+          };
+          if (!payload.id || !payload.status) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'id and status are required' }));
+            return;
+          }
+          const existing = getImplTask(payload.id);
+          if (!existing) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'task not found' }));
+            return;
+          }
+          updateImplTaskStatus(payload.id, payload.status, payload.result, payload.branch, payload.commit_sha);
+
+          // DM notification for key status changes
+          if (['in_progress', 'done', 'failed'].includes(payload.status)) {
+            const statusLabels: Record<string, string> = {
+              in_progress: 'В работе',
+              done: 'Выполнена',
+              failed: 'Ошибка',
+            };
+            const label = statusLabels[payload.status] ?? payload.status;
+            const lines = [
+              `*Задача #${payload.id}: ${label}*`,
+              `${existing.title}`,
+            ];
+            if (payload.result) lines.push(`\nРезультат: ${payload.result.slice(0, 500)}`);
+            if (payload.branch) lines.push(`Ветка: ${payload.branch}`);
+            bot.api.sendMessage(config.TELEGRAM_ADMIN_USER_ID, lines.join('\n'), {
+              parse_mode: 'Markdown',
+            }).catch(() => {});
+          }
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: 'ok' }));
+        } catch {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'invalid JSON' }));
+        }
+      });
+      return;
+    }
+
+    if (parsedUrl.pathname === '/impl/create' && req.method === 'POST') {
+      const authHeader = req.headers['x-admin-token'];
+      const expectedToken = config.STRATEGIST_API_KEY ?? config.TELEGRAM_BOT_TOKEN;
+      if (authHeader !== expectedToken) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'unauthorized' }));
+        return;
+      }
+
+      let body = '';
+      req.on('data', (chunk: string) => { body += chunk; });
+      req.on('end', () => {
+        try {
+          const payload = JSON.parse(body) as {
+            title: string;
+            spec: string;
+            priority?: string;
+          };
+          if (!payload.title || !payload.spec) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'title and spec are required' }));
+            return;
+          }
+          const taskId = createImplTask(payload.title, payload.spec, 'manual', payload.priority ?? 'P2');
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: 'ok', id: taskId }));
+        } catch {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'invalid JSON' }));
+        }
+      });
+      return;
+    }
+
     const filePath = reportFiles[req.url ?? ''];
     if (filePath) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -220,7 +336,7 @@ async function main(): Promise<void> {
     }
   });
   httpServer.listen(port, () => {
-    createLogger('http').info(`report server on :${port} — /report/community /report/analytics /packet /health`);
+    createLogger('http').info(`report server on :${port} — /report/community /report/analytics /packet /health /impl/*`);
   });
 
   // Graceful shutdown (Railway sends SIGTERM on redeploy)

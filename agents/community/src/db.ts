@@ -118,7 +118,8 @@ function migrate(db: Database.Database): void {
       is_muted INTEGER DEFAULT 0,
       muted_until TEXT,
       last_activity_at TEXT,
-      completions_total INTEGER DEFAULT 0
+      completions_total INTEGER DEFAULT 0,
+      buddy_invite_sent INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS ugc_submissions (
@@ -182,6 +183,7 @@ function migrate(db: Database.Database): void {
   // Post-create migrations for existing DBs (columns added in CREATE TABLE for new DBs)
   try { db.exec('ALTER TABLE members ADD COLUMN last_activity_at TEXT'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE members ADD COLUMN completions_total INTEGER DEFAULT 0'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE members ADD COLUMN buddy_invite_sent INTEGER DEFAULT 0'); } catch { /* already exists */ }
 
   // Soft delete columns
   try { db.exec('ALTER TABLE ugc_submissions ADD COLUMN deleted_at TEXT'); } catch { /* already exists */ }
@@ -244,6 +246,24 @@ function migrate(db: Database.Database): void {
       added_by TEXT DEFAULT 'manual',  -- 'manual' | 'strategist'
       created_at TEXT DEFAULT (datetime('now'))
     );
+  `);
+
+  // Implementor agent tasks
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS impl_tasks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      spec TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'manual',
+      status TEXT NOT NULL DEFAULT 'pending',
+      priority TEXT DEFAULT 'P2',
+      branch TEXT,
+      commit_sha TEXT,
+      result TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_impl_tasks_status ON impl_tasks(status);
   `);
 }
 
@@ -1054,6 +1074,21 @@ export function getMemberLevel(userId: number): { level: MemberLevel; completion
   return { level, completions };
 }
 
+// --- Buddy invite ---
+
+export function wasBuddyInviteSent(userId: number): boolean {
+  const row = getDb().prepare(
+    `SELECT buddy_invite_sent FROM members WHERE telegram_user_id = ?`
+  ).get(userId) as { buddy_invite_sent: number } | undefined;
+  return (row?.buddy_invite_sent ?? 0) === 1;
+}
+
+export function markBuddyInviteSent(userId: number): void {
+  getDb().prepare(
+    `UPDATE members SET buddy_invite_sent = 1 WHERE telegram_user_id = ?`
+  ).run(userId);
+}
+
 export interface MemberProfile {
   telegram_user_id: number;
   username: string | null;
@@ -1188,4 +1223,69 @@ export function getMemberJoinedAt(userId: number): string | null {
     `SELECT joined_at FROM members WHERE telegram_user_id = ?`
   ).get(userId) as { joined_at: string } | undefined;
   return row?.joined_at ?? null;
+}
+
+// --- Implementor tasks ---
+
+export type ImplTaskStatus = 'pending' | 'approved' | 'in_progress' | 'review' | 'done' | 'failed';
+export type ImplTaskSource = 'strategist' | 'manual';
+
+export interface ImplTask {
+  id: number;
+  title: string;
+  spec: string;
+  source: ImplTaskSource;
+  status: ImplTaskStatus;
+  priority: string;
+  branch: string | null;
+  commit_sha: string | null;
+  result: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export function createImplTask(title: string, spec: string, source: ImplTaskSource = 'manual', priority: string = 'P2'): number {
+  const result = getDb().prepare(`
+    INSERT INTO impl_tasks (title, spec, source, priority)
+    VALUES (?, ?, ?, ?)
+  `).run(title, spec, source, priority);
+  return Number(result.lastInsertRowid);
+}
+
+export function getImplTask(id: number): ImplTask | null {
+  return (getDb().prepare(
+    `SELECT * FROM impl_tasks WHERE id = ?`
+  ).get(id) as ImplTask | undefined) ?? null;
+}
+
+/** Get the oldest approved task — next to be picked up by the implementor. */
+export function getNextImplTask(): ImplTask | null {
+  return (getDb().prepare(
+    `SELECT * FROM impl_tasks WHERE status = 'approved' ORDER BY created_at ASC LIMIT 1`
+  ).get() as ImplTask | undefined) ?? null;
+}
+
+export function updateImplTaskStatus(
+  id: number,
+  status: ImplTaskStatus,
+  result?: string,
+  branch?: string,
+  commitSha?: string,
+): void {
+  getDb().prepare(`
+    UPDATE impl_tasks
+    SET status = ?, result = ?, branch = COALESCE(?, branch), commit_sha = COALESCE(?, commit_sha), updated_at = datetime('now')
+    WHERE id = ?
+  `).run(status, result ?? null, branch ?? null, commitSha ?? null, id);
+}
+
+export function listImplTasks(status?: ImplTaskStatus): ImplTask[] {
+  if (status) {
+    return getDb().prepare(
+      `SELECT * FROM impl_tasks WHERE status = ? ORDER BY created_at DESC`
+    ).all(status) as ImplTask[];
+  }
+  return getDb().prepare(
+    `SELECT * FROM impl_tasks ORDER BY created_at DESC`
+  ).all() as ImplTask[];
 }

@@ -233,7 +233,7 @@
 ### P1: Growth — стратег планирует
 
 - [ ] Определить первый канал привлечения (личный круг / кросс-пост / outreach к тренерам)
-- [ ] Buddy invite после 3-го выполнения
+- [x] Buddy invite после 3-го выполнения — DM с ссылкой на сообщество, один раз
 - [ ] Cross-promotion с микро-тренерами
 
 ### P2: Рубрики
@@ -262,11 +262,11 @@
 - `branch`, `commit_sha`, `result`
 
 **Реализация:**
-- [ ] Таблица `impl_tasks` в db.ts + миграция
-- [ ] Action type `create_impl_task` в strategist.ts
-- [ ] HTTP endpoints: `/impl/next`, `/impl/result`, `/impl/tasks`, `/impl/create`
+- [x] Таблица `impl_tasks` в db.ts + миграция
+- [x] Action type `create_impl_task` в strategist.ts
+- [x] HTTP endpoints: `/impl/next`, `/impl/result`, `/impl/tasks`, `/impl/create`
 - [ ] GitHub Actions workflow `implementor.yml` — cron (14:00 МСК), webhook, manual dispatch
-- [ ] DM-уведомления: задача взята / реализована / failed
+- [x] DM-уведомления: задача взята / реализована / failed
 - [ ] backlog.html: секция "Задачи" — fetch с Railway `/impl/tasks`
 
 ### P1: Миграция агентов на GitHub Actions
