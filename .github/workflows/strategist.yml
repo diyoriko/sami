@@ -19,22 +19,14 @@ env:
 
 jobs:
   run-strategist:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install Claude CLI
-        run: npm install -g @anthropic-ai/claude-code
-
       - name: Run strategist
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_ADMIN_USER_ID: ${{ secrets.TELEGRAM_ADMIN_USER_ID }}
           STRATEGIST_DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}

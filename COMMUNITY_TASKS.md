@@ -209,7 +209,7 @@
 - [x] **Убрать `as any`** — db.ts (2 места), strategist.ts (7 мест) — заменены на правильные типы
 - [x] **Timeout на Google Translate** — translate.ts: AbortController с 10s timeout
 - [x] **Мёртвый Google-код** — удалено: google-calendar-sync.mjs, google-calendar-cleanup.mjs, google-calendar-auth.mjs, google-oauth-client.json
-- [ ] **CLAUDE_AUTH_TOKEN** — мёртвая переменная в Railway env, удалить (вручную)
+- [x] **CLAUDE_AUTH_TOKEN** — удалена из Railway env
 - [x] **Капча в канале** — Telegram API не поддерживает. Won't fix
 
 ### P1: Безопасность
@@ -273,7 +273,8 @@
 
 - [x] Стратег: `.github/workflows/strategist.yml` (12:30 МСК = 09:30 UTC)
 - [x] Имплементатор: `.github/workflows/implementor.yml` (14:00 МСК = 11:00 UTC)
-- [ ] Настройка секретов: ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_ADMIN_USER_ID, STRATEGIST_API_KEY, GH_PAT
+- [x] Self-hosted runner на Mac (launchd, `mac-diyoriko`) — Claude CLI через Max подписку, $0
+- [x] GitHub Secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_ADMIN_USER_ID, STRATEGIST_API_KEY, GH_PAT
 
 ### P3: Монетизация (после 50+ участников)
 

@@ -16,23 +16,11 @@ env:
 
 jobs:
   implement:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GH_PAT }}  # PAT with push access for creating branches
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install dependencies
-        run: cd agents/community && npm ci
-
-      - name: Install Claude CLI
-        run: npm install -g @anthropic-ai/claude-code
 
       - name: Fetch next task
         id: task
@@ -40,9 +28,14 @@ jobs:
           IMPL_API_KEY: ${{ secrets.STRATEGIST_API_KEY }}
         run: |
           if [ -n "${{ inputs.task_id }}" ]; then
-            TASK=$(curl -sf "$COMMUNITY_AGENT_URL/impl/tasks?status=approved" | jq -r ".[] | select(.id == ${{ inputs.task_id }})")
+            TASK=$(curl -sf "$COMMUNITY_AGENT_URL/impl/tasks?status=approved" | python3 -c "
+          import json,sys
+          tasks = json.load(sys.stdin)
+          t = next((t for t in tasks if t['id'] == ${{ inputs.task_id }}), None)
+          print(json.dumps(t) if t else 'null')
+          ")
           else
-            TASK=$(curl -sf "$COMMUNITY_AGENT_URL/impl/next" | jq -r '.task')
+            TASK=$(curl -sf "$COMMUNITY_AGENT_URL/impl/next" | python3 -c "import json,sys; print(json.dumps(json.load(sys.stdin).get('task')))")
           fi
 
           if [ "$TASK" = "null" ] || [ -z "$TASK" ]; then
@@ -51,14 +44,13 @@ jobs:
             exit 0
           fi
 
-          TASK_ID=$(echo "$TASK" | jq -r '.id')
-          TASK_TITLE=$(echo "$TASK" | jq -r '.title')
-          TASK_SPEC=$(echo "$TASK" | jq -r '.spec')
+          TASK_ID=$(echo "$TASK" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+          TASK_TITLE=$(echo "$TASK" | python3 -c "import json,sys; print(json.load(sys.stdin)['title'])")
+          echo "$TASK" | python3 -c "import json,sys; print(json.load(sys.stdin)['spec'])" > /tmp/task-spec.txt
 
           echo "has_task=true" >> $GITHUB_OUTPUT
           echo "task_id=$TASK_ID" >> $GITHUB_OUTPUT
           echo "task_title=$TASK_TITLE" >> $GITHUB_OUTPUT
-          echo "$TASK_SPEC" > /tmp/task-spec.txt
 
       - name: Mark task in progress
         if: steps.task.outputs.has_task == 'true'
@@ -72,16 +64,14 @@ jobs:
 
       - name: Create branch
         if: steps.task.outputs.has_task == 'true'
+        id: branch
         run: |
           BRANCH="impl/task-${{ steps.task.outputs.task_id }}"
           git checkout -b "$BRANCH"
           echo "branch=$BRANCH" >> $GITHUB_OUTPUT
-        id: branch
 
       - name: Run Claude Code
         if: steps.task.outputs.has_task == 'true'
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           SPEC=$(cat /tmp/task-spec.txt)
           claude --print --model claude-sonnet-4-6 "
@@ -92,7 +82,7 @@ jobs:
           $SPEC
 
           Правила:
-          - Прочитай CLAUDE.md и COMMUNITY_TASKS.md для контекста
+          - Прочитай CLAUDE.md для контекста
           - TypeScript, grammY, SQLite (better-sqlite3)
           - Запусти tsc --noEmit и vitest run после реализации
           - Минимальные изменения, не трогай то что не относится к задаче
@@ -109,6 +99,7 @@ jobs:
 
       - name: Commit and push
         if: steps.task.outputs.has_task == 'true'
+        id: commit
         run: |
           git add -A
           CHANGES=$(git diff --cached --stat)
@@ -125,7 +116,6 @@ jobs:
           git push origin "${{ steps.branch.outputs.branch }}"
           SHA=$(git rev-parse HEAD)
           echo "commit_sha=$SHA" >> $GITHUB_OUTPUT
-        id: commit
 
       - name: Report result
         if: always() && steps.task.outputs.has_task == 'true'
