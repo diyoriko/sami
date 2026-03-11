@@ -21,6 +21,8 @@ const log = createLogger('bot-menu');
 import {
   getUserSubmissions,
   getUserSubmissionTotal,
+  getUserCompletions,
+  getUserCompletionTotal,
   createUgcSubmission,
   updateUgcSubmission,
   getUgcSubmission,
@@ -365,6 +367,7 @@ export function registerBotMenu(bot: Bot): void {
     if (ctx.chat.type !== 'private') return next();
     const userId = ctx.from!.id;
     const state = getUgcState(userId);
+    log.info('video message in private chat', { userId, step: state?.step ?? 'none', hasVideo: !!ctx.message.video });
     if (!state || state.step !== 'waiting_link') return next();
 
     // User sent a video file instead of a YouTube link
@@ -662,22 +665,17 @@ export function registerBotMenu(bot: Bot): void {
 
 // --- Helpers ---
 
-const STATUS_RU: Record<string, string> = {
-  pending: 'на модерации',
-  approved: 'одобрена',
-  rejected: 'отклонена',
-};
-
 async function sendMyWorkouts(
   ctx: any,
   userId: number,
   offset: number,
   editMessageId?: number
 ): Promise<void> {
-  const total = getUserSubmissionTotal(userId);
+  const config = getConfig();
+  const total = getUserCompletionTotal(userId);
 
   if (total === 0) {
-    const text = 'У тебя пока нет загруженных тренировок.\n\nНажми «Предложить тренировку», чтобы добавить свою.';
+    const text = 'Ты пока не отметил(а) ни одной тренировки.\n\nНажми «Я сделаль» под постом, чтобы она появилась здесь.';
     if (editMessageId) {
       try { await ctx.api.editMessageText(ctx.chat!.id, editMessageId, text); } catch {}
     } else {
@@ -686,15 +684,22 @@ async function sendMyWorkouts(
     return;
   }
 
-  const items = getUserSubmissions(userId, PAGE_SIZE, offset);
+  const items = getUserCompletions(userId, PAGE_SIZE, offset);
+
+  // Build channel post link: public @handle or private c/{id}
+  const channelHandle = config.TELEGRAM_CHANNEL_ID.startsWith('@')
+    ? config.TELEGRAM_CHANNEL_ID.slice(1)
+    : `c/${config.TELEGRAM_CHANNEL_ID.replace(/^-100/, '')}`;
 
   const lines = items.map((item, i) => {
     const num = offset + i + 1;
     const catRu = item.category ? (CATEGORY_RU[item.category] ?? item.category) : '—';
-    const statusRu = STATUS_RU[item.status] ?? item.status;
-    const title = item.title ? decodeHtmlEntities(item.title) : 'Без названия';
-    const dateShort = item.created_at.slice(0, 10);
-    return `${num}. *${escapeMarkdown(title)}*\n   ${catRu} · ${statusRu} · ${dateShort}`;
+    const title = item.video_title ? decodeHtmlEntities(item.video_title) : 'Без названия';
+    const dateShort = item.date ?? item.completed_at.slice(0, 10);
+    const link = item.channel_message_id
+      ? `[↗](https://t.me/${channelHandle}/${item.channel_message_id})`
+      : '';
+    return `${num}. *${escapeMarkdown(title)}* ${link}\n   ${catRu} · ${dateShort}`;
   });
 
   const header = `*Мои тренировки* (${total})\n`;

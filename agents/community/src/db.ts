@@ -826,14 +826,35 @@ export function getPostByGroupCommentId(commentId: number): { id: number; video_
 
 // --- Rating ---
 
-export function computeRating(video: VideoRow): number {
-  const viewScore = video.view_count > 0 ? Math.log10(video.view_count) / 7 : 0; // normalize: 10M views = 1.0
-  const likeScore = video.like_ratio ?? 0; // 0..1
-  const channelScore = video.channel_subscribers > 0
-    ? Math.min(Math.log10(video.channel_subscribers) / 7, 1)
-    : 0.3;
+/**
+ * Normalize like_ratio (typically 0.02-0.08) to 0..1 score.
+ * 2% = mediocre (0.3), 4% = good (0.6), 6%+ = excellent (0.9+)
+ */
+function normalizeLikeRatio(ratio: number): number {
+  if (ratio <= 0) return 0;
+  // Map 0-0.08 range to 0-1 with diminishing returns
+  return Math.min(Math.sqrt(ratio / 0.06), 1);
+}
 
-  const raw = 0.50 * viewScore + 0.30 * likeScore + 0.20 * channelScore;
+/**
+ * Normalize view count to 0..1 score.
+ * 10K = decent (0.5), 100K = good (0.75), 1M+ = excellent (1.0)
+ */
+function normalizeViews(viewCount: number): number {
+  if (viewCount <= 0) return 0;
+  // log10(10K)=4, log10(1M)=6 → map 4..6 to 0.5..1.0
+  const log = Math.log10(viewCount);
+  return Math.min(Math.max((log - 2) / 4, 0), 1); // 100 views = 0, 1M = 1.0
+}
+
+export function computeRating(video: VideoRow): number {
+  const viewScore = normalizeViews(video.view_count);
+  const likeScore = normalizeLikeRatio(video.like_ratio ?? 0);
+  const channelScore = video.channel_subscribers > 0
+    ? Math.min(Math.log10(video.channel_subscribers) / 6, 1) // 1M subs = 1.0
+    : 0.4;
+
+  const raw = 0.40 * viewScore + 0.35 * likeScore + 0.25 * channelScore;
   return Math.round(Math.min(raw * 10, 10) * 10) / 10; // 0.0 .. 10.0
 }
 

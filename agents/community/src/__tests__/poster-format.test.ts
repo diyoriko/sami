@@ -23,7 +23,7 @@ describe('post format vision compliance', () => {
     expect(posterSource).toMatch(/⏱/);
     expect(posterSource).toMatch(/💪/);
     expect(posterSource).toMatch(/📊/);
-    expect(posterSource).toMatch(/🎒/);
+    expect(posterSource).toMatch(/🏋️/);
   });
 
   it('has rating display with star', () => {

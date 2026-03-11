@@ -41,10 +41,10 @@ async function formatCaption(video: VideoRow): Promise<string> {
 
   const tagLines = [
     `\`🏷 ${categoryRu}\``,
-    `\`⏱ ${video.duration_label ?? '?'}\``,
+    `\`⏱️ ${video.duration_label ?? '?'}\``,
     `\`💪 ${muscles}\``,
     `\`📊 ${difficultyRu}\``,
-    `\`🎒 ${equipmentTag}\``,
+    `\`🏋️ ${equipmentTag}\``,
   ];
 
   const lines = [
@@ -52,7 +52,7 @@ async function formatCaption(video: VideoRow): Promise<string> {
     '',
     ...tagLines,
     ...(ratingStr ? [`★ ${ratingStr} из 10`] : []),
-    `Сделали: 0`,
+    `✅ Сделали: 0`,
     '',
     `Автор: [${channelName}](${video.video_url})`,
   ];
