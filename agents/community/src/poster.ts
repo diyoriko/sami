@@ -3,7 +3,7 @@ import { InputFile } from 'grammy';
 import { getConfig } from './config';
 import {
   getApprovedVideo, recordPost, wasPostedToday, VideoRow,
-  updateVideoRating, markApprovalPosted, withTransaction,
+  updateVideoRating, markApprovalPosted, withTransaction, getCompletionCount,
 } from './db';
 import { downloadVideo, isYtDlpAvailable } from './downloader';
 import { detectEquipment } from './youtube';
@@ -63,6 +63,7 @@ async function formatCaption(video: VideoRow): Promise<string> {
     '',
     ...tagLines,
     ...(ratingStr ? [`★ ${ratingStr}`] : []),
+    `Сделали: 0`,
     '',
     `Автор: [${channelName}](${video.video_url})`,
   ];
@@ -97,55 +98,62 @@ export async function postVideoToChannel(
   const keyboard = new InlineKeyboard()
     .text('Я сделаль', `done:${video.id}`);
 
-  // Try to download and post as video file
+  // Try to download and post as video file (with 1 retry)
+  const MAX_VIDEO_ATTEMPTS = 2;
   if (isYtDlpAvailable()) {
-    let videoSent = false;
-    try {
-      postLog.info(`downloading ${category} video: ${video.video_url}`);
-      const download = await downloadVideo(video.video_url, video.youtube_id);
-
+    for (let attempt = 1; attempt <= MAX_VIDEO_ATTEMPTS; attempt++) {
+      let videoSent = false;
       try {
-        const msg = await bot.api.sendVideo(
-          config.TELEGRAM_CHANNEL_ID,
-          new InputFile(download.filePath),
-          {
-            caption,
-            parse_mode: 'Markdown',
-            supports_streaming: true,
-            duration: download.meta.duration ?? video.duration_seconds ?? undefined,
-            width: download.meta.width ?? undefined,
-            height: download.meta.height ?? undefined,
-            reply_markup: keyboard,
-          }
-        );
-        videoSent = true;
-        download.cleanup();
+        postLog.info(`downloading ${category} video (attempt ${attempt}/${MAX_VIDEO_ATTEMPTS}): ${video.video_url}`);
+        const download = await downloadVideo(video.video_url, video.youtube_id);
 
-        // Record in DB — separate try so DB failure doesn't trigger text fallback
         try {
-          withTransaction(() => {
-            recordPost(date, category, video.id, msg.message_id, 'video');
-            markApprovalPosted(date, category);
-          });
-        } catch (dbErr) {
-          postLog.error(`DB WRITE FAILED for ${category} (video already sent)`, { msgId: msg.message_id, error: String(dbErr) });
-        }
+          const msg = await bot.api.sendVideo(
+            config.TELEGRAM_CHANNEL_ID,
+            new InputFile(download.filePath),
+            {
+              caption,
+              parse_mode: 'Markdown',
+              supports_streaming: true,
+              duration: download.meta.duration ?? video.duration_seconds ?? undefined,
+              width: download.meta.width ?? undefined,
+              height: download.meta.height ?? undefined,
+              reply_markup: keyboard,
+            }
+          );
+          videoSent = true;
+          download.cleanup();
 
-        postLog.info(`posted ${category} as VIDEO file`, { msgId: msg.message_id });
-        return 'posted';
-      } catch (uploadErr) {
-        download.cleanup();
-        if (videoSent) {
-          postLog.error(`POST-UPLOAD ERROR for ${category} (video already sent)`, { error: String(uploadErr) });
+          // Record in DB — separate try so DB failure doesn't trigger text fallback
+          try {
+            withTransaction(() => {
+              recordPost(date, category, video.id, msg.message_id, 'video');
+              markApprovalPosted(date, category);
+            });
+          } catch (dbErr) {
+            postLog.error(`DB WRITE FAILED for ${category} (video already sent)`, { msgId: msg.message_id, error: String(dbErr) });
+          }
+
+          postLog.info(`posted ${category} as VIDEO file`, { msgId: msg.message_id });
           return 'posted';
+        } catch (uploadErr) {
+          download.cleanup();
+          if (videoSent) {
+            postLog.error(`POST-UPLOAD ERROR for ${category} (video already sent)`, { error: String(uploadErr) });
+            return 'posted';
+          }
+          postLog.error(`VIDEO UPLOAD FAILED for ${category} (attempt ${attempt})`, { youtubeId: video.youtube_id, error: String(uploadErr) });
         }
-        postLog.error(`VIDEO UPLOAD FAILED for ${category}`, { youtubeId: video.youtube_id, error: String(uploadErr) });
-        // Fall through to link fallback
+      } catch (downloadErr) {
+        postLog.error(`DOWNLOAD FAILED for ${category} (attempt ${attempt})`, { youtubeId: video.youtube_id, error: String(downloadErr) });
       }
-    } catch (downloadErr) {
-      postLog.error(`DOWNLOAD FAILED for ${category}`, { youtubeId: video.youtube_id, error: String(downloadErr) });
-      // Fall through to link fallback
+
+      // Wait before retry
+      if (attempt < MAX_VIDEO_ATTEMPTS) {
+        await new Promise(r => setTimeout(r, 3000));
+      }
     }
+    // All attempts exhausted — fall through to link fallback
   } else {
     postLog.warn(`yt-dlp not available, falling back to link for ${category}`);
   }

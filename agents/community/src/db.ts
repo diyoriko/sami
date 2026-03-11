@@ -187,6 +187,17 @@ function migrate(db: Database.Database): void {
   try { db.exec('ALTER TABLE ugc_submissions ADD COLUMN deleted_at TEXT'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE approval_sessions ADD COLUMN deleted_at TEXT'); } catch { /* already exists */ }
 
+  // Video rejections (blocklist): tracks admin "Другое" clicks
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS video_rejections (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      youtube_id TEXT NOT NULL,
+      category TEXT NOT NULL,
+      rejected_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_rejections_youtube_id ON video_rejections(youtube_id);
+  `);
+
   // Deploy history
   db.exec(`
     CREATE TABLE IF NOT EXISTS deploy_history (
@@ -731,6 +742,13 @@ export function getPostByMessageId(channelMessageId: number): { id: number; vide
   ).get(channelMessageId) as any ?? null;
 }
 
+/** Fallback: find most recent post by video_id (for when message_id lookup fails, e.g. forwarded messages) */
+export function getLatestPostByVideoId(videoId: number): { id: number; video_id: number; category: string; date: string } | null {
+  return getDb().prepare(
+    `SELECT id, video_id, category, date FROM posts WHERE video_id = ? ORDER BY posted_at DESC LIMIT 1`
+  ).get(videoId) as any ?? null;
+}
+
 // --- Rating ---
 
 export function computeRating(video: VideoRow): number {
@@ -913,4 +931,26 @@ export function getLatestDeploy(): DeployRecord | null {
   return getDb().prepare(
     `SELECT * FROM deploy_history ORDER BY id DESC LIMIT 1`
   ).get() as DeployRecord | null;
+}
+
+// --- Video rejections (blocklist) ---
+
+export function recordRejection(youtubeId: string, category: string): void {
+  getDb().prepare(`
+    INSERT INTO video_rejections (youtube_id, category) VALUES (?, ?)
+  `).run(youtubeId, category);
+}
+
+export function isVideoRejected(youtubeId: string): boolean {
+  const row = getDb().prepare(
+    `SELECT COUNT(*) as cnt FROM video_rejections WHERE youtube_id = ?`
+  ).get(youtubeId) as { cnt: number };
+  return row.cnt > 0;
+}
+
+export function getRejectionCount(sinceDays: number = 7): number {
+  const row = getDb().prepare(
+    `SELECT COUNT(*) as cnt FROM video_rejections WHERE rejected_at > datetime('now', '-' || ? || ' days')`
+  ).get(sinceDays) as { cnt: number };
+  return row.cnt;
 }

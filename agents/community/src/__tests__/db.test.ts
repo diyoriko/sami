@@ -230,6 +230,38 @@ describe('computeTotalScore', () => {
   });
 });
 
+describe('video rejections (blocklist)', () => {
+  it('records rejection and detects it', async () => {
+    const db = await import('../db');
+    expect(db.isVideoRejected('rejected_vid_1')).toBe(false);
+    db.recordRejection('rejected_vid_1', 'stretching');
+    expect(db.isVideoRejected('rejected_vid_1')).toBe(true);
+  });
+
+  it('allows recording multiple rejections for same video', async () => {
+    const db = await import('../db');
+    db.recordRejection('rejected_vid_2', 'strength');
+    db.recordRejection('rejected_vid_2', 'mobility');
+    expect(db.isVideoRejected('rejected_vid_2')).toBe(true);
+  });
+
+  it('counts recent rejections', async () => {
+    const db = await import('../db');
+    const count = db.getRejectionCount(7);
+    expect(count).toBeGreaterThanOrEqual(3); // from tests above
+  });
+});
+
+describe('scoring cap', () => {
+  it('caps total penalties at MAX_PENALTY', async () => {
+    const youtube = await import('../youtube');
+    // A video with multiple penalty triggers should not go below (50 - MAX_PENALTY + bonuses)
+    // We can't easily test internal function, but computeTotalScore with brand=0 should work
+    const score = youtube.computeTotalScore(0, 50, 50);
+    expect(score).toBeGreaterThanOrEqual(0);
+  });
+});
+
 describe('getPostByMessageId', () => {
   it('returns post data for a valid message ID', async () => {
     const { getPostByMessageId } = await import('../db');

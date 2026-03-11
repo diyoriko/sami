@@ -11,7 +11,7 @@
  */
 
 import { getConfig } from './config';
-import { wasPostedRecently, VideoRow } from './db';
+import { wasPostedRecently, isVideoRejected, VideoRow } from './db';
 import { createLogger } from './logger';
 
 const log = createLogger('youtube');
@@ -128,21 +128,26 @@ const SAMI_CONTENT_PATTERNS = [
 
 // ─── SCORING ─────────────────────────────────────────────────────────────────
 
+const MAX_PENALTY = 60; // Cap: total penalties can't exceed this (prevents stackable annihilation)
+
 function scoreBrandAlignment(title: string, description: string): number {
   const text = (title + ' ' + description).toLowerCase();
-  let score = 50;
+  let penalty = 0;
 
-  // Heavy penalties (anti-SAMI values)
-  for (const p of WEIGHT_LOSS_PATTERNS) if (p.test(text)) score -= 25;
-  for (const p of FIX_BODY_PATTERNS) if (p.test(text)) score -= 20;
-  for (const p of COMPETITION_PATTERNS) if (p.test(text)) score -= 15;
-  for (const p of HYPE_PATTERNS) if (p.test(text)) score -= 15;
-  for (const p of EQUIPMENT_PATTERNS) if (p.test(text)) score -= 20;
-  for (const p of WRONG_AUDIENCE_PATTERNS) if (p.test(text)) score -= 50;
+  // Heavy penalties (anti-SAMI values) — each match adds to penalty pool
+  for (const p of WEIGHT_LOSS_PATTERNS) if (p.test(text)) penalty += 25;
+  for (const p of FIX_BODY_PATTERNS) if (p.test(text)) penalty += 20;
+  for (const p of COMPETITION_PATTERNS) if (p.test(text)) penalty += 15;
+  for (const p of HYPE_PATTERNS) if (p.test(text)) penalty += 15;
+  for (const p of EQUIPMENT_PATTERNS) if (p.test(text)) penalty += 20;
+  for (const p of WRONG_AUDIENCE_PATTERNS) if (p.test(text)) penalty += 50;
 
   // ALL CAPS title = hype / anti-calm
   const upperRatio = (title.match(/[A-ZА-ЯЁ]/g) || []).length / title.length;
-  if (upperRatio > 0.6) score -= 20;
+  if (upperRatio > 0.6) penalty += 20;
+
+  // Apply capped penalty
+  let score = 50 - Math.min(penalty, MAX_PENALTY);
 
   // Bonuses (pro-SAMI values)
   for (const p of BODYWEIGHT_PATTERNS) if (p.test(text)) score += 12;
@@ -344,6 +349,7 @@ export async function searchVideos(
   for (const item of items) {
     const videoId = item.id.videoId;
     if (wasPostedRecently(videoId, config.VIDEO_RECENCY_DAYS)) continue;
+    if (isVideoRejected(videoId)) continue;
 
     const detail = detailMap.get(videoId);
     if (!detail) continue;
@@ -394,7 +400,17 @@ export async function searchVideos(
   // Prefer mat-only videos. Fall back to best overall if none found.
   const matOnly = sorted.filter(v => v.equipment.length === 0);
   const pool = matOnly.length > 0 ? matOnly : sorted;
-  return pool.slice(0, count);
+
+  // Dedup by channel: max 1 video per YouTube channel
+  const seen = new Set<string>();
+  const deduped = pool.filter(v => {
+    const key = v.channel_name.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  return deduped.slice(0, count);
 }
 
 export async function searchAllCategories(

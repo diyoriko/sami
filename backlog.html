@@ -881,30 +881,86 @@ const staticData = {
   ],
   "sprints": [
     {
-      "name": "Sprint 4 — UGC, профили, фильтрация",
+      "name": "Sprint 4 — Качество видео, стратег v2, UX",
       "status": "planned",
       "groups": [
         {
-          "title": "Социальные профили участников",
+          "title": "Качество поиска и рейтинга видео — DONE",
           "priority": "p1",
           "tasks": [
             {
-              "text": "Статус/рейтинг",
+              "text": "Блеклист каналов/видео",
+              "done": true
+            },
+            {
+              "text": "Трекинг отклонений",
+              "done": true
+            },
+            {
+              "text": "Длительность в scoring",
+              "done": true
+            },
+            {
+              "text": "Scoring cap",
+              "done": true
+            },
+            {
+              "text": "Пересчёт рейтинга",
+              "done": true
+            },
+            {
+              "text": "Дедупликация по каналу",
+              "done": true
+            },
+            {
+              "text": "Retry при ошибке загрузки",
+              "done": true
+            }
+          ]
+        },
+        {
+          "title": "Стратег v2 — действия с одобрением",
+          "priority": "p1",
+          "tasks": [
+            {
+              "text": "COMMUNITY_PACKET v2",
               "done": false
             },
             {
-              "text": "Публичный профиль",
+              "text": "DM с кнопками",
               "done": false
             },
             {
-              "text": "Просмотр профилей",
+              "text": "Исполнение",
+              "done": false
+            },
+            {
+              "text": "Feedback loop",
+              "done": false
+            }
+          ]
+        },
+        {
+          "title": "UX постов в канале",
+          "priority": "p1",
+          "tasks": [
+            {
+              "text": "Кнопка \"Закрепить\"",
+              "done": false
+            },
+            {
+              "text": "Рейтинг: пояснение",
+              "done": false
+            },
+            {
+              "text": "\"Я сделаль\" после просмотра",
               "done": false
             }
           ]
         },
         {
           "title": "UGC — доработки",
-          "priority": "p1",
+          "priority": "p2",
           "tasks": [
             {
               "text": "Основной флоу: загрузка видеофайла (не только YouTube-ссылка)",
@@ -921,37 +977,27 @@ const staticData = {
           ]
         },
         {
-          "title": "Фильтрация видео через бота",
-          "priority": "p1",
-          "tasks": [
-            {
-              "text": "Кнопка \"Фильтры\" в persistent menu",
-              "done": false
-            },
-            {
-              "text": "Параметры: вид тренировки, длительность, уровень",
-              "done": false
-            },
-            {
-              "text": "Быстрые пресеты: \"Новичок\", \"Утро\", \"После работы\", \"Быстрая\"",
-              "done": false
-            },
-            {
-              "text": "Бот отправляет подходящие видео со ссылками на посты",
-              "done": false
-            },
-            {
-              "text": "Индексация: все видео в БД с полными метаданными",
-              "done": false
-            }
-          ]
-        },
-        {
-          "title": "Рейтинг — доработка",
+          "title": "Баги (11.03)",
           "priority": "p2",
           "tasks": [
             {
-              "text": "Пересчёт рейтинга при росте completions",
+              "text": "\"Пост не найден\" при \"Я сделаль\"",
+              "done": true
+            },
+            {
+              "text": "Счётчик \"Сделали: N\" в теле поста",
+              "done": true
+            },
+            {
+              "text": "Комментарии в канале",
+              "done": false
+            },
+            {
+              "text": "Капча при вступлении",
+              "done": false
+            },
+            {
+              "text": "HTML entities в статусе",
               "done": false
             }
           ]
@@ -979,9 +1025,45 @@ const staticData = {
             {
               "text": "Типизация аналитики",
               "done": false
+            }
+          ]
+        },
+        {
+          "title": "Фильтрация видео через бота",
+          "priority": "p2",
+          "tasks": [
+            {
+              "text": "Кнопка \"Фильтры\" в persistent menu",
+              "done": false
             },
             {
-              "text": "Scoring cap",
+              "text": "Параметры: вид тренировки, длительность, уровень",
+              "done": false
+            },
+            {
+              "text": "Быстрые пресеты: \"Новичок\", \"Утро\", \"После работы\", \"Быстрая\"",
+              "done": false
+            },
+            {
+              "text": "Бот отправляет подходящие видео со ссылками на посты",
+              "done": false
+            }
+          ]
+        },
+        {
+          "title": "Социальные профили участников",
+          "priority": "p2",
+          "tasks": [
+            {
+              "text": "Статус/рейтинг",
+              "done": false
+            },
+            {
+              "text": "Публичный профиль",
+              "done": false
+            },
+            {
+              "text": "Просмотр профилей",
               "done": false
             }
           ]
@@ -1003,27 +1085,9 @@ const staticData = {
       ]
     },
     {
-      "name": "Sprint 5 — вовлечение, рост, агентность",
+      "name": "Sprint 5 — вовлечение, рост, лендинг",
       "status": "planned",
       "groups": [
-        {
-          "title": "Стратег — агентность (действия, а не только текст)",
-          "priority": "p1",
-          "tasks": [
-            {
-              "text": "COMMUNITY_PACKET v2: конкретные действия (опрос, welcome-текст, A/B варианты)",
-              "done": false
-            },
-            {
-              "text": "Бот выполняет действия из пакета: создать опрос, изменить welcome-текст",
-              "done": false
-            },
-            {
-              "text": "Feedback: бот отправляет стратегу результат (опрос создан, N голосов)",
-              "done": false
-            }
-          ]
-        },
         {
           "title": "Figma → лендинг Sami",
           "priority": "p1",

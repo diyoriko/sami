@@ -8,6 +8,8 @@ import {
   getApprovalSessionById,
   setApprovalStatus,
   softDeletePendingSessions,
+  recordRejection,
+  getDb,
 } from './db';
 import { searchAllCategories, searchVideos, detectEquipment, Category, ScoredVideo } from './youtube';
 import { rewriteTitle, formatChannelName } from './translate';
@@ -239,6 +241,19 @@ export function registerApprovalCallbacks(bot: Bot): void {
 
     const refreshLog = log.withCorrelation();
     refreshLog.info('refresh requested', { category: session.category, sessionId });
+
+    // Record rejection: blocklist the old video so it won't appear again
+    try {
+      const oldVideo = getDb().prepare(
+        `SELECT v.youtube_id FROM approval_sessions a JOIN videos v ON v.id = a.video_id WHERE a.id = ?`
+      ).get(sessionId) as { youtube_id: string } | undefined;
+      if (oldVideo) {
+        recordRejection(oldVideo.youtube_id, session.category);
+        refreshLog.info('recorded rejection', { youtubeId: oldVideo.youtube_id, category: session.category });
+      }
+    } catch (err) {
+      refreshLog.warn('failed to record rejection', { error: String(err) });
+    }
 
     let videos: ScoredVideo[];
     try {

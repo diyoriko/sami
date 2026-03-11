@@ -29,7 +29,74 @@ export function migrateStrategist(): void {
       created_at TEXT DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_strategist_packets_date ON strategist_packets(date);
+
+    CREATE TABLE IF NOT EXISTS strategist_actions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      packet_id INTEGER REFERENCES strategist_packets(id),
+      type TEXT NOT NULL,
+      description TEXT NOT NULL,
+      params TEXT DEFAULT '{}',
+      status TEXT DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected','executed','failed')),
+      admin_message_id INTEGER,
+      result TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      decided_at TEXT,
+      executed_at TEXT
+    );
   `);
+}
+
+// --- Action DB helpers ---
+
+export function saveAction(packetId: number | null, action: StrategistAction): number {
+  const result = getDb().prepare(`
+    INSERT INTO strategist_actions (packet_id, type, description, params)
+    VALUES (?, ?, ?, ?)
+  `).run(packetId, action.type, action.description, JSON.stringify(action.params));
+  return Number(result.lastInsertRowid);
+}
+
+export function setActionMessageId(actionId: number, messageId: number): void {
+  getDb().prepare(`UPDATE strategist_actions SET admin_message_id = ? WHERE id = ?`).run(messageId, actionId);
+}
+
+export function getActionByMessageId(messageId: number): {
+  id: number; type: StrategistActionType; description: string; params: string; status: string;
+} | null {
+  return getDb().prepare(
+    `SELECT id, type, description, params, status FROM strategist_actions WHERE admin_message_id = ?`
+  ).get(messageId) as any ?? null;
+}
+
+export function setActionStatus(actionId: number, status: 'approved' | 'rejected' | 'executed' | 'failed', result?: string): void {
+  const now = `datetime('now')`;
+  if (status === 'executed' || status === 'failed') {
+    getDb().prepare(
+      `UPDATE strategist_actions SET status = ?, result = ?, executed_at = datetime('now') WHERE id = ?`
+    ).run(status, result ?? null, actionId);
+  } else {
+    getDb().prepare(
+      `UPDATE strategist_actions SET status = ?, decided_at = datetime('now') WHERE id = ?`
+    ).run(status, actionId);
+  }
+}
+
+export function getPendingActions(): Array<{
+  id: number; type: StrategistActionType; description: string; params: string;
+}> {
+  return getDb().prepare(
+    `SELECT id, type, description, params FROM strategist_actions WHERE status = 'approved'`
+  ).all() as any[];
+}
+
+// --- Strategist Actions (v2) ---
+
+export type StrategistActionType = 'create_poll' | 'update_welcome' | 'limit_posts' | 'send_digest';
+
+export interface StrategistAction {
+  type: StrategistActionType;
+  description: string; // Human-readable explanation from strategist
+  params: Record<string, unknown>; // Type-specific params
 }
 
 export interface StrategistPacket {
@@ -43,6 +110,7 @@ export interface StrategistPacket {
     mobility?: string;
   };
   community_priority: string;
+  actions?: StrategistAction[];
 }
 
 const DEFAULT_PACKET: StrategistPacket = {

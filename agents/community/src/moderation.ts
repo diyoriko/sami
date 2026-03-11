@@ -6,7 +6,8 @@ import { createLogger } from './logger';
 const log = createLogger('moderation');
 import {
   upsertMember, setMemberGoal, addWarning, muteMember,
-  recordCompletion, getCompletionCount, hasUserCompleted, getPostByMessageId,
+  recordCompletion, getCompletionCount, hasUserCompleted, getPostByMessageId, getLatestPostByVideoId,
+  updateVideoRating,
   saveCaptcha, getCaptcha, deleteCaptcha, getExpiredCaptchas,
   getLatestPostForDate,
 } from './db';
@@ -327,14 +328,13 @@ export function registerModeration(bot: Bot): void {
     const userId = ctx.from?.id;
     if (!userId) return;
 
-    // Find the post by the message that was clicked
+    // Find the post by message_id first, fallback to video_id
+    // (message_id may differ if viewed from linked group vs channel)
     const msg = ctx.callbackQuery.message;
-    if (!msg) {
-      await ctx.answerCallbackQuery('Не удалось определить пост');
-      return;
+    let post = msg ? getPostByMessageId(msg.message_id) : null;
+    if (!post) {
+      post = getLatestPostByVideoId(videoId);
     }
-
-    const post = getPostByMessageId(msg.message_id);
     if (!post) {
       await ctx.answerCallbackQuery('Пост не найден');
       return;
@@ -347,18 +347,30 @@ export function registerModeration(bot: Bot): void {
     }
 
     recordCompletion(post.id, videoId, userId);
+    updateVideoRating(videoId); // Recalculate rating with new completion
     const count = getCompletionCount(post.id);
 
     // Update button text with new count
+    const keyboard = new InlineKeyboard()
+      .text(`Я сделаль · ${count}`, `done:${videoId}`);
+
+    // Try to update caption (with new count) + keyboard
     try {
-      const keyboard = new InlineKeyboard()
-        .text(`Я сделаль · ${count}`, `done:${videoId}`);
-      await ctx.editMessageReplyMarkup({ reply_markup: keyboard });
+      const caption = ctx.callbackQuery.message?.caption;
+      if (caption) {
+        const updatedCaption = caption.replace(/Сделали: \d+/, `Сделали: ${count}`);
+        await ctx.editMessageCaption({ caption: updatedCaption, parse_mode: 'Markdown', reply_markup: keyboard });
+      } else {
+        await ctx.editMessageReplyMarkup({ reply_markup: keyboard });
+      }
     } catch {
-      // might fail if message is too old, that's ok
+      // Fallback: at least try to update the keyboard
+      try {
+        await ctx.editMessageReplyMarkup({ reply_markup: keyboard });
+      } catch { /* message too old, that's ok */ }
     }
 
-    await ctx.answerCallbackQuery('Тренировка записана. Досмотри до конца — это важно.');
+    await ctx.answerCallbackQuery('Тренировка записана.');
   });
 
   log.info('handlers registered');
