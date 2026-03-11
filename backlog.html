@@ -875,14 +875,23 @@ const staticData = {
       "status": "deployed",
       "items": [
         "Fix: H.264 кодек для Telegram — yt-dlp предпочитает avc1, ffprobe проверяет, ffmpeg перекодирует если VP9/AV1",
-        "Автопоиск видео отключён — админ ищет и публикует вручную через кнопки бота"
+        "Автопоиск видео отключён — админ ищет и публикует вручную через кнопки бота",
+        "Стратег v2: actions[] в COMMUNITY_PACKET, кнопки одобрения, исполнение (poll/welcome/limits/digest)",
+        "UX: кнопки \"Сохранить\" + \"★ рейтинг\" под постами, popup с формулой",
+        "Фильтры: категория, уровень, длительность + 4 пресета в меню бота",
+        "Профили: уровни (новичок/практик/наставник), кнопка \"Профиль\" в боте",
+        "Избранное: кнопка \"Сохранённое\" в боте, пагинация, ссылки на посты",
+        "UGC: загрузка видеофайла напрямую + YouTube-ссылка, автор в подтверждении",
+        "Tech debt: shared.ts, HTML entities, типизация, channel URL",
+        "Deploy notification: очеловечен формат, диагностика только при ошибках",
+        "57 тестов"
       ]
     }
   ],
   "sprints": [
     {
       "name": "Sprint 4 — Качество видео, стратег v2, UX",
-      "status": "planned",
+      "status": "completed",
       "groups": [
         {
           "title": "Качество поиска и рейтинга видео — DONE",
@@ -919,60 +928,64 @@ const staticData = {
           ]
         },
         {
-          "title": "Стратег v2 — действия с одобрением",
+          "title": "Стратег v2 — действия с одобрением — DONE",
           "priority": "p1",
           "tasks": [
             {
               "text": "COMMUNITY_PACKET v2",
-              "done": false
+              "done": true
             },
             {
               "text": "DM с кнопками",
-              "done": false
+              "done": true
             },
             {
               "text": "Исполнение",
-              "done": false
+              "done": true
             },
             {
               "text": "Feedback loop",
-              "done": false
+              "done": true
+            },
+            {
+              "text": "Deploy notification",
+              "done": true
             }
           ]
         },
         {
-          "title": "UX постов в канале",
+          "title": "UX постов в канале — DONE",
           "priority": "p1",
           "tasks": [
             {
-              "text": "Кнопка \"Закрепить\"",
-              "done": false
+              "text": "Кнопка \"Сохранить\"",
+              "done": true
             },
             {
               "text": "Рейтинг: пояснение",
-              "done": false
+              "done": true
             },
             {
               "text": "\"Я сделаль\" после просмотра",
-              "done": false
+              "done": true
             }
           ]
         },
         {
-          "title": "UGC — доработки",
+          "title": "UGC — доработки — DONE",
           "priority": "p2",
           "tasks": [
             {
-              "text": "Основной флоу: загрузка видеофайла (не только YouTube-ссылка)",
-              "done": false
+              "text": "Основной флоу: загрузка видеофайла напрямую (message:video handler) + YouTube-ссылка",
+              "done": true
             },
             {
-              "text": "Дополнительные поля: длительность, группы мышц, инвентарь",
-              "done": false
+              "text": "Длительность из метаданных видео автоматически",
+              "done": true
             },
             {
-              "text": "При публикации UGC: автор указывается в посте",
-              "done": false
+              "text": "При одобрении UGC: автор указывается в подтверждении (\"Предложил(а): @username\")",
+              "done": true
             }
           ]
         },
@@ -989,82 +1002,94 @@ const staticData = {
               "done": true
             },
             {
-              "text": "Комментарии в канале",
-              "done": false
-            },
-            {
-              "text": "Капча при вступлении",
-              "done": false
+              "text": "Текст \"08:00 стретч, 08:05 сила...\"",
+              "done": true
             },
             {
               "text": "HTML entities в статусе",
+              "done": true
+            },
+            {
+              "text": "UGC не публикуется после одобрения",
+              "done": false
+            },
+            {
+              "text": "Комментарии в канале",
+              "done": true
+            },
+            {
+              "text": "Капча при вступлении в канал",
+              "done": false
+            },
+            {
+              "text": "Persistent menu не обновляется",
               "done": false
             }
           ]
         },
         {
-          "title": "Технический долг (из аудита v0.3.0)",
+          "title": "Технический долг — DONE",
           "priority": "p2",
           "tasks": [
             {
               "text": "Shared constants",
-              "done": false
+              "done": true
             },
             {
               "text": "newMembersToday в DB",
-              "done": false
+              "done": true
+            },
+            {
+              "text": "Channel URL из API",
+              "done": true
+            },
+            {
+              "text": "Типизация аналитики",
+              "done": true
             },
             {
               "text": "MarkdownV2",
               "done": false
-            },
-            {
-              "text": "Channel URL из API",
-              "done": false
-            },
-            {
-              "text": "Типизация аналитики",
-              "done": false
             }
           ]
         },
         {
-          "title": "Фильтрация видео через бота",
+          "title": "Фильтрация видео через бота — DONE",
           "priority": "p2",
           "tasks": [
             {
               "text": "Кнопка \"Фильтры\" в persistent menu",
-              "done": false
+              "done": true
             },
             {
-              "text": "Параметры: вид тренировки, длительность, уровень",
-              "done": false
+              "text": "Фильтры: по категории (стретчинг/сила/мобильность), уровню, длительности",
+              "done": true
             },
             {
-              "text": "Быстрые пресеты: \"Новичок\", \"Утро\", \"После работы\", \"Быстрая\"",
-              "done": false
+              "text": "Пресеты: \"Новичок\", \"Утро (до 15 мин)\", \"После работы\", \"Быстрая (до 10 мин)\"",
+              "done": true
             },
             {
-              "text": "Бот отправляет подходящие видео со ссылками на посты",
-              "done": false
+              "text": "Бот отправляет топ-5 видео со ссылками на посты в канале",
+              "done": true
             }
           ]
         },
         {
-          "title": "Социальные профили участников",
+          "title": "Социальные профили участников — DONE",
           "priority": "p2",
           "tasks": [
             {
-              "text": "Статус/рейтинг",
-              "done": false
+              "text": "Уровни",
+              "done": true
             },
             {
-              "text": "Публичный профиль",
-              "done": false
+              "text": "Профиль",
+              "done": true
             },
             {
-              "text": "Просмотр профилей",
-              "done": false
+              "text": "Сохранённое",
+              "done": true
             }
           ]
         },
@@ -1088,6 +1113,40 @@ const staticData = {
       "name": "Sprint 5 — вовлечение, рост, лендинг",
       "status": "planned",
       "groups": [
+        {
+          "title": "Продвинутая модерация группы",
+          "priority": "p1",
+          "tasks": [
+            {
+              "text": "Content-based фильтрация",
+              "done": false
+            },
+            {
+              "text": "Cooldown для новичков",
+              "done": false
+            },
+            {
+              "text": "Антифлуд",
+              "done": false
+            },
+            {
+              "text": "Репутационная система",
+              "done": false
+            },
+            {
+              "text": "Логирование удалений",
+              "done": false
+            },
+            {
+              "text": "Стоп-лист фраз",
+              "done": false
+            },
+            {
+              "text": "Ночной режим",
+              "done": false
+            }
+          ]
+        },
         {
           "title": "Figma → лендинг Sami",
           "priority": "p1",
