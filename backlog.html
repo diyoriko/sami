@@ -1285,21 +1285,22 @@ const staticData = {
       "status": "active",
       "groups": [
         {
-          "title": "Критические баги — бот не может постить",
+          "title": "Критические баги — DONE",
           "priority": "p0",
           "tasks": [
-            { "text": "Публикация YouTube-видео не работает — очередь пуста или approval flow сломан", "done": false },
-            { "text": "UGC \"Тест 3\" не опубликовалась — auto-publish не сработал", "done": false },
-            { "text": "\"Я сделаль\" автокоммент не появляется в группе", "done": false },
-            { "text": "Health dashboard \"Недоступен\" — FK migration crash", "done": true }
+            { "text": "Публикация: CATEGORIES из shared.ts вместо хардкода 3", "done": true },
+            { "text": "UGC: published_at трекинг реальной публикации", "done": true },
+            { "text": "\"Я сделаль\": fallback для незарегистрированных постов", "done": true },
+            { "text": "Health dashboard: FK migration crash hotfix", "done": true }
           ]
         },
         {
           "title": "UX баги и улучшения",
           "priority": "p1",
           "tasks": [
-            { "text": "UX сообщения при публикации — не показывать \"не выбрано\"", "done": false },
-            { "text": "\"Мои тренировки\": только опубликованные в канале", "done": false },
+            { "text": "UX сообщения при публикации — только выбранные категории", "done": true },
+            { "text": "\"Мои тренировки\": только опубликованные в канале", "done": true },
+            { "text": "Формат автора: имя + 📎 YouTube (ссылка)", "done": false },
             { "text": "Ревью UX автокоммента в группе", "done": false },
             { "text": "Описание канала и bio бота (SEO)", "done": false }
           ]
