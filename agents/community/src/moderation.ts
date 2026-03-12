@@ -2,7 +2,7 @@ import { Bot } from 'grammy';
 import { InlineKeyboard } from 'grammy';
 import { getConfig } from './config';
 import { createLogger } from './logger';
-import { type Category, CATEGORY_RU } from './shared';
+import { type Category, CATEGORY_RU, escV2 } from './shared';
 import { moscowHour } from './dates';
 
 const log = createLogger('moderation');
@@ -225,8 +225,8 @@ export function registerModeration(bot: Bot): void {
     let captchaMsg;
     try {
       captchaMsg = await ctx.reply(
-        `👋 ${firstName}, добро пожаловать!\n\nЧтобы начать общаться, реши простой пример:\n\n*${question} = ?*`,
-        { parse_mode: 'Markdown', reply_markup: keyboard }
+        `👋 ${escV2(firstName)}, добро пожаловать\\!\n\nЧтобы начать общаться, реши простой пример:\n\n*${escV2(question)} \\= ?*`,
+        { parse_mode: 'MarkdownV2', reply_markup: keyboard }
       );
     } catch (err) {
       log.error('failed to send captcha', { error: String(err) });
@@ -298,8 +298,8 @@ export function registerModeration(bot: Bot): void {
 
     try {
       await ctx.editMessageText(
-        `✅ Отлично, ты человек!\n\nДобро пожаловать в Sami Community — место для тех, кто возвращает движение в свой день. Только коврик, без лишнего шума.\n\n*Что тебя сюда привело?*`,
-        { parse_mode: 'Markdown', reply_markup: goalKeyboard }
+        `✅ Отлично, ты человек\\!\n\nДобро пожаловать в Sami Community — место для тех, кто возвращает движение в свой день\\. Только коврик, без лишнего шума\\.\n\n*Что тебя сюда привело?*`,
+        { parse_mode: 'MarkdownV2', reply_markup: goalKeyboard }
       );
     } catch {}
   });
@@ -319,19 +319,18 @@ export function registerModeration(bot: Bot): void {
     const { todayMsk } = await import('./dates');
     const latestPost = getLatestPostForDate(todayMsk());
 
-    let welcomeText = `${response}\n\n_Нажми «Я сделаль» под видео, когда закончишь тренировку._`;
+    let welcomeText = `${escV2(response)}\n\n_Нажми «Я сделаль» под видео, когда закончишь тренировку\\._`;
     if (latestPost) {
       const catLabel = CATEGORY_RU[latestPost.category as Category] ?? latestPost.category;
-      // Public channel: @sami_workouts -> t.me/sami_workouts/N; private: t.me/c/{id}/N
       const channelHandle = config.TELEGRAM_CHANNEL_ID.startsWith('@')
         ? config.TELEGRAM_CHANNEL_ID.slice(1)
         : `c/${config.TELEGRAM_CHANNEL_ID.replace(/^-100/, '')}`;
       const postLink = `https://t.me/${channelHandle}/${latestPost.channel_message_id}`;
-      welcomeText += `\n\n*Сегодняшняя тренировка (${catLabel}):*\n[Перейти к видео](${postLink})`;
+      welcomeText += `\n\n*Сегодняшняя тренировка \\(${escV2(catLabel)}\\):*\n[Перейти к видео](${postLink})`;
     }
 
     try {
-      await ctx.editMessageText(welcomeText, { parse_mode: 'Markdown' });
+      await ctx.editMessageText(welcomeText, { parse_mode: 'MarkdownV2' });
     } catch {}
 
     // Post-onboarding DM: explain how Sami works (sent privately)
@@ -339,18 +338,18 @@ export function registerModeration(bot: Bot): void {
       await bot.api.sendMessage(
         userId,
         `*Как устроен Sami*\n\n` +
-        `Каждый день в канале @sami_workouts появляются видео-тренировки: стретчинг, силовая, мобильность и другие.\n\n` +
+        `Каждый день в канале @sami\\_workouts появляются видео\\-тренировки: стретчинг, силовая, мобильность и другие\\.\n\n` +
         `*Что делать:*\n` +
-        `1. Открой видео, сделай тренировку\n` +
-        `2. Нажми *Я сделаль* под постом — это отмечает выполнение\n` +
-        `3. Счётчик показывает сколько людей уже сделали\n\n` +
+        `1\\. Открой видео, сделай тренировку\n` +
+        `2\\. Нажми *Я сделаль* под постом — это отмечает выполнение\n` +
+        `3\\. Счётчик показывает сколько людей уже сделали\n\n` +
         `*Что ещё умеет бот:*\n` +
         `• _Профиль_ — твоя статистика и уровень\n` +
         `• _Мои тренировки_ — загруженные тобой видео\n` +
         `• _Предложить тренировку_ — поделись своей находкой\n` +
         `• _Фильтры_ — найди видео по категории и длительности\n\n` +
-        `Вопросы? Пиши в группу — поможем.`,
-        { parse_mode: 'Markdown' }
+        `Вопросы? Пиши в группу — поможем\\.`,
+        { parse_mode: 'MarkdownV2' }
       );
     } catch {
       // User may have blocked DMs — that's ok
@@ -484,8 +483,8 @@ export function registerModeration(bot: Bot): void {
     const reported = reply.from?.username ?? String(reply.from?.id);
     await bot.api.sendMessage(
       config.TELEGRAM_ADMIN_USER_ID,
-      `🚨 *Репорт*\nОт: @${reporter}\nНа: @${reported}\n\n_${(reply.text ?? '[медиа]').slice(0, 300)}_`,
-      { parse_mode: 'Markdown' }
+      `🚨 *Репорт*\nОт: @${escV2(reporter)}\nНа: @${escV2(reported)}\n\n_${escV2((reply.text ?? '[медиа]').slice(0, 300))}_`,
+      { parse_mode: 'MarkdownV2' }
     );
     await ctx.reply('✅ Репорт отправлен.').catch(() => {});
     try { await ctx.deleteMessage(); } catch {}
@@ -535,7 +534,9 @@ export function registerModeration(bot: Bot): void {
       // Post not tracked in DB (e.g. manual publish) — still show button with channel msg ID
       log.warn('auto-forward: no post in DB, using channel msg ID as fallback', { channelMsgId });
       keyboard = new InlineKeyboard()
-        .text('Я сделаль', `done_msg:${channelMsgId}`);
+        .text('Я сделаль', `done_msg:${channelMsgId}`)
+        .row()
+        .text('⭐ —/10', `rating_msg:${channelMsgId}`);
     }
 
     try {
@@ -719,6 +720,26 @@ export function registerModeration(bot: Bot): void {
       text: `⭐ Рейтинг: ${ratingStr} из 10\n\nФормула:\n• 35% — просмотры на YouTube\n• 30% — соотношение лайков\n• 20% — авторитет канала\n• 15% — выполнения в Sami\n\nЧем больше людей делает тренировку, тем выше рейтинг.`,
       show_alert: true,
     });
+  });
+
+  // --- Rating popup fallback (for posts not in DB, uses channel msg ID) ---
+  bot.callbackQuery(/^rating_msg:(\d+)$/, async (ctx) => {
+    const channelMsgId = parseInt(ctx.match[1]);
+    // Try to find the post now (it may have been recorded since the autocomment was posted)
+    const post = getPostByMessageId(channelMsgId);
+    if (post) {
+      const rating = updateVideoRating(post.video_id);
+      const ratingStr = rating > 0 ? rating.toFixed(1) : '—';
+      await ctx.answerCallbackQuery({
+        text: `⭐ Рейтинг: ${ratingStr} из 10\n\nФормула:\n• 35% — просмотры на YouTube\n• 30% — соотношение лайков\n• 20% — авторитет канала\n• 15% — выполнения в Sami\n\nЧем больше людей делает тренировку, тем выше рейтинг.`,
+        show_alert: true,
+      });
+    } else {
+      await ctx.answerCallbackQuery({
+        text: '⭐ Рейтинг пока не рассчитан — видео ещё не в базе.',
+        show_alert: true,
+      });
+    }
   });
 
   log.info('handlers registered');

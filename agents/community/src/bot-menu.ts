@@ -47,7 +47,7 @@ import {
   EQUIPMENT_BUTTONS, EQUIPMENT_VALUES, EQUIPMENT_VALUE_RU, EQUIPMENT_NO_GEAR,
   DURATION_BUTTONS, formatDurationLabel,
   MUSCLE_PATTERNS, MUSCLE_DEFAULTS,
-  escapeMarkdown, decodeHtmlEntities,
+  escV2, decodeHtmlEntities,
 } from './shared';
 
 const PAGE_SIZE = 5;
@@ -200,13 +200,13 @@ export function registerBotMenu(bot: Bot): void {
           const icon = STATUS_ICON[item.status] ?? item.status;
           const rawTitle = decodeHtmlEntities(item.title);
           const title = rawTitle.length > 40 ? rawTitle.slice(0, 37) + '...' : rawTitle;
-          return `  ${icon} ${cat} — ${title}`;
+          return `  ${icon} ${escV2(cat)} — ${escV2(title)}`;
         });
-        parts.push(`*${qDate}:*\n${lines.join('\n')}`);
+        parts.push(`*${escV2(qDate)}:*\n${lines.join('\n')}`);
       }
       queueText = `\n\n*Очередь:*\n${parts.join('\n\n')}`;
     } else {
-      queueText = '\n\nОчередь пуста.';
+      queueText = '\n\nОчередь пуста\\.';
     }
 
     // Inline actions if there are approved videos
@@ -220,16 +220,16 @@ export function registerBotMenu(bot: Bot): void {
       [
         `*Sami — статус*`,
         ``,
-        `Дата: ${date}`,
-        `Подписчиков: ${subscriberCount} | Группа: ${groupMemberCount}`,
-        `Постов: ${posts}`,
-        `Выполнений: ${completions} (${users} чел.)`,
-        `UGC на модерации: ${pendingUgc}`,
-        strategistLine,
-        `Аптайм: ${uptimeStr}`,
+        `Дата: ${escV2(date)}`,
+        `Подписчиков: ${escV2(subscriberCount)} \\| Группа: ${escV2(groupMemberCount)}`,
+        `Постов: ${escV2(String(posts))}`,
+        `Выполнений: ${escV2(String(completions))} \\(${escV2(String(users))} чел\\.\\)`,
+        `UGC на модерации: ${escV2(String(pendingUgc))}`,
+        escV2(strategistLine),
+        `Аптайм: ${escV2(uptimeStr)}`,
         queueText,
       ].join('\n'),
-      { parse_mode: 'Markdown', ...(statusKb ? { reply_markup: statusKb } : {}) }
+      { parse_mode: 'MarkdownV2', ...(statusKb ? { reply_markup: statusKb } : {}) }
     );
   });
 
@@ -365,20 +365,20 @@ export function registerBotMenu(bot: Bot): void {
     const lines = [
       `*Профиль*`,
       '',
-      `Имя: ${profile?.first_name ?? 'не указано'}`,
-      `Уровень: ${level}`,
-      `Тренировок: ${completions}`,
-      `Предложено: ${subTotal}`,
+      `Имя: ${escV2(profile?.first_name ?? 'не указано')}`,
+      `Уровень: ${escV2(level)}`,
+      `Тренировок: ${escV2(String(completions))}`,
+      `Предложено: ${escV2(String(subTotal))}`,
     ];
 
     if (profile?.fitness_goal) {
-      lines.push(`Цель: ${GOAL_LABELS[profile.fitness_goal] ?? profile.fitness_goal}`);
+      lines.push(`Цель: ${escV2(GOAL_LABELS[profile.fitness_goal] ?? profile.fitness_goal)}`);
     }
     if (profile?.joined_at) {
-      lines.push(`Участник с: ${profile.joined_at.slice(0, 10)}`);
+      lines.push(`Участник с: ${escV2(profile.joined_at.slice(0, 10))}`);
     }
 
-    await ctx.reply(lines.join('\n'), { parse_mode: 'Markdown' });
+    await ctx.reply(lines.join('\n'), { parse_mode: 'MarkdownV2' });
   });
 
   // --- "Фильтры" button ---
@@ -720,7 +720,7 @@ export function registerBotMenu(bot: Bot): void {
         const catEmoji = CATEGORY_EMOJI[cat] ?? '🏷';
         const categoryRu = CATEGORY_RU[cat] ?? sub.category ?? '—';
         const difficultyRu = DIFFICULTY_RU[sub.difficulty as Difficulty] ?? sub.difficulty ?? '—';
-        const title = escapeMarkdown(sub.title ?? 'Тренировка');
+        const title = escV2(sub.title ?? 'Тренировка');
         const equipmentTag = sub.equipment ?? EQUIPMENT_NO_GEAR;
 
         const tagLines = [
@@ -735,9 +735,9 @@ export function registerBotMenu(bot: Bot): void {
           `*${title}*`,
           '',
           ...tagLines,
-          `✅ Сделали: 0`,
+          `\`✅ Сделали: 0\``,
           '',
-          `Автор: ${authorDisplay}`,
+          `Автор: ${escV2(authorDisplay)}`,
         ].join('\n');
 
         const isTgFileId = sub.video_url.startsWith('tg:');
@@ -766,58 +766,78 @@ export function registerBotMenu(bot: Bot): void {
           channel_subscribers: 0,
         });
 
-        // No inline keyboard — Telegram hides "Comments" button when reply_markup is present.
-        // Bot posts "Я сделаль" button as a comment in the discussion group (see moderation.ts).
-
         let channelMsg: { message_id: number };
 
         if (isTgFileId) {
-          // Re-send Telegram file_id directly
-          const fileId = sub.video_url.slice(3); // strip "tg:" prefix
+          const fileId = sub.video_url.slice(3);
           channelMsg = await bot.api.sendVideo(
             config.TELEGRAM_CHANNEL_ID,
             fileId,
-            {
-              caption,
-              parse_mode: 'Markdown',
-              supports_streaming: true,
-            }
+            { caption, parse_mode: 'MarkdownV2', supports_streaming: true }
           );
         } else if (isYouTubeUrl && isYtDlpAvailable()) {
-          // Download via yt-dlp and upload
-          const download = await downloadVideo(sub.video_url, syntheticYoutubeId);
-          try {
-            channelMsg = await bot.api.sendVideo(
-              config.TELEGRAM_CHANNEL_ID,
-              new InputFile(download.filePath),
-              {
-                caption,
-                parse_mode: 'Markdown',
-                supports_streaming: true,
-                duration: download.meta.duration ?? undefined,
-                width: download.meta.width ?? undefined,
-                height: download.meta.height ?? undefined,
+          // Download with retry (2 attempts) + text fallback
+          const MAX_UGC_ATTEMPTS = 2;
+          let videoSent = false;
+
+          for (let attempt = 1; attempt <= MAX_UGC_ATTEMPTS; attempt++) {
+            try {
+              log.info(`UGC download attempt ${attempt}/${MAX_UGC_ATTEMPTS}`, { subId, url: sub.video_url });
+              const download = await downloadVideo(sub.video_url, syntheticYoutubeId);
+              try {
+                channelMsg = await bot.api.sendVideo(
+                  config.TELEGRAM_CHANNEL_ID,
+                  new InputFile(download.filePath),
+                  {
+                    caption,
+                    parse_mode: 'MarkdownV2',
+                    supports_streaming: true,
+                    duration: download.meta.duration ?? undefined,
+                    width: download.meta.width ?? undefined,
+                    height: download.meta.height ?? undefined,
+                  }
+                );
+                videoSent = true;
+              } finally {
+                download.cleanup();
               }
+              if (videoSent) break;
+            } catch (dlErr) {
+              log.error(`UGC download failed (attempt ${attempt})`, { subId, error: String(dlErr) });
+              if (attempt < MAX_UGC_ATTEMPTS) {
+                await new Promise(r => setTimeout(r, 3000));
+              }
+            }
+          }
+
+          // Fallback: post as text + YouTube link if video download/upload failed
+          if (!videoSent) {
+            log.warn('UGC: all download attempts failed, falling back to text+link', { subId });
+            const safeUrl = sub.video_url.replace(/[)\\]/g, '\\$&');
+            const linkCaption = caption + `\n📎 [Смотреть на YouTube](${safeUrl})`;
+            channelMsg = await bot.api.sendMessage(
+              config.TELEGRAM_CHANNEL_ID,
+              linkCaption,
+              { parse_mode: 'MarkdownV2', link_preview_options: { is_disabled: true } }
             );
-          } finally {
-            download.cleanup();
           }
         } else {
           // Fallback: post as text with link
+          const safeUrl = sub.video_url.replace(/[)\\]/g, '\\$&');
+          const linkCaption = isYouTubeUrl
+            ? caption + `\n📎 [Смотреть на YouTube](${safeUrl})`
+            : caption;
           channelMsg = await bot.api.sendMessage(
             config.TELEGRAM_CHANNEL_ID,
-            caption,
-            {
-              parse_mode: 'Markdown',
-              link_preview_options: { is_disabled: true },
-            }
+            linkCaption,
+            { parse_mode: 'MarkdownV2', link_preview_options: { is_disabled: true } }
           );
         }
 
         // Record post in DB
         try {
           const date = todayMsk();
-          const postType = isTgFileId || (isYouTubeUrl && isYtDlpAvailable()) ? 'video' as const : 'link' as const;
+          const postType = (isTgFileId || (isYouTubeUrl && isYtDlpAvailable())) ? 'video' as const : 'link' as const;
           withTransaction(() => {
             recordPost(date, sub.category ?? 'stretching', videoId, channelMsg.message_id, postType);
           });
@@ -831,7 +851,6 @@ export function registerBotMenu(bot: Bot): void {
       } catch (err) {
         publishError = String(err);
         log.error('UGC publish to channel failed', { subId, videoUrl: sub.video_url, error: publishError });
-        // Detailed admin notification for debugging
         try {
           const isTg = sub.video_url.startsWith('tg:');
           const details = [
@@ -848,8 +867,8 @@ export function registerBotMenu(bot: Bot): void {
       const statusText = published ? 'Одобрено и опубликовано' : `Одобрено (публикация не удалась: ${publishError})`;
       try {
         await ctx.editMessageText(
-          ctx.callbackQuery.message?.text + `\n\n_${escapeMarkdown(statusText)}_ · Предложил(а): ${author}`,
-          { parse_mode: 'Markdown' }
+          ctx.callbackQuery.message?.text + `\n\n_${escV2(statusText)}_ · Предложил\\(а\\): ${escV2(author)}`,
+          { parse_mode: 'MarkdownV2' }
         );
       } catch {}
 
@@ -865,8 +884,8 @@ export function registerBotMenu(bot: Bot): void {
       await ctx.answerCallbackQuery('Отклонено');
       try {
         await ctx.editMessageText(
-          ctx.callbackQuery.message?.text + '\n\n_Отклонено_',
-          { parse_mode: 'Markdown' }
+          escV2(ctx.callbackQuery.message?.text ?? '') + '\n\n_Отклонено_',
+          { parse_mode: 'MarkdownV2' }
         );
       } catch {}
 
@@ -910,10 +929,10 @@ async function sendMyWorkouts(
     const catRu = item.category ? (CATEGORY_RU[item.category as Category] ?? item.category) : '—';
     const title = item.title ? decodeHtmlEntities(item.title) : 'Без названия';
     const dateShort = (item.published_at ?? item.created_at).slice(0, 10);
-    return `${num}. *${escapeMarkdown(title)}*\n   ${catRu} · ${dateShort}`;
+    return `${escV2(String(num))}\\. *${escV2(title)}*\n   ${escV2(catRu)} · ${escV2(dateShort)}`;
   });
 
-  const header = `*Мои тренировки* (${total})\n`;
+  const header = `*Мои тренировки* \\(${escV2(String(total))}\\)\n`;
   const text = header + '\n' + lines.join('\n\n');
 
   const kb = new InlineKeyboard();
@@ -925,7 +944,7 @@ async function sendMyWorkouts(
   }
 
   const opts: any = {
-    parse_mode: 'Markdown',
+    parse_mode: 'MarkdownV2',
     reply_markup: kb,
   };
 
@@ -944,19 +963,19 @@ async function sendUgcToAdmin(bot: Bot, sub: UgcSubmission): Promise<void> {
   const diff = sub.difficulty ? (DIFFICULTY_RU[sub.difficulty as Difficulty] ?? sub.difficulty) : '?';
   const author = sub.username ? `@${sub.username}` : `id:${sub.telegram_user_id}`;
 
-  const safeTitle = escapeMarkdown(sub.title ?? 'Без названия');
-  const videoLink = sub.video_url.startsWith('tg:') ? '(видеофайл)' : sub.video_url;
+  const safeTitle = escV2(sub.title ?? 'Без названия');
+  const videoLink = sub.video_url.startsWith('tg:') ? '\\(видеофайл\\)' : escV2(sub.video_url);
 
   const text = [
     `*UGC: предложенная тренировка*`,
     '',
-    `Автор: ${author}`,
+    `Автор: ${escV2(author)}`,
     `Название: ${safeTitle}`,
-    `Тип: ${catRu}`,
-    `Уровень: ${diff}`,
-    ...(sub.duration_label ? [`Длительность: ${sub.duration_label}`] : []),
-    ...(sub.muscles ? [`Мышцы: ${sub.muscles}`] : []),
-    ...(sub.equipment ? [`Инвентарь: ${sub.equipment}`] : []),
+    `Тип: ${escV2(catRu)}`,
+    `Уровень: ${escV2(diff)}`,
+    ...(sub.duration_label ? [`Длительность: ${escV2(sub.duration_label)}`] : []),
+    ...(sub.muscles ? [`Мышцы: ${escV2(sub.muscles)}`] : []),
+    ...(sub.equipment ? [`Инвентарь: ${escV2(sub.equipment)}`] : []),
     `Видео: ${videoLink}`,
   ].join('\n');
 
@@ -967,7 +986,7 @@ async function sendUgcToAdmin(bot: Bot, sub: UgcSubmission): Promise<void> {
   try {
     log.info('sending UGC to admin', { subId: sub.id, adminId: config.TELEGRAM_ADMIN_USER_ID });
     const msg = await bot.api.sendMessage(config.TELEGRAM_ADMIN_USER_ID, text, {
-      parse_mode: 'Markdown',
+      parse_mode: 'MarkdownV2',
       reply_markup: kb,
     });
     updateUgcSubmission(sub.id, { admin_message_id: msg.message_id });
@@ -1009,17 +1028,17 @@ async function sendFilterResults(ctx: any, videos: ReturnType<typeof filterVideo
     const catRu = CATEGORY_RU[v.category as Category] ?? v.category;
     const dur = v.duration_label ?? '?';
     const link = v.channel_message_id
-      ? `[${escapeMarkdown(shortTitle)}](https://t.me/${channelHandle}/${v.channel_message_id})`
-      : escapeMarkdown(shortTitle);
-    return `${i + 1}. ${link}\n   ${catRu} · ${dur} · ⭐${v.rating.toFixed(1)}`;
+      ? `[${escV2(shortTitle)}](https://t.me/${channelHandle}/${v.channel_message_id})`
+      : escV2(shortTitle);
+    return `${escV2(String(i + 1))}\\. ${link}\n   ${escV2(catRu)} · ${escV2(dur)} · ⭐${escV2(v.rating.toFixed(1))}`;
   });
 
-  const text = `*${label}* (${videos.length})\n\n` + lines.join('\n\n');
+  const text = `*${escV2(label)}* \\(${escV2(String(videos.length))}\\)\n\n` + lines.join('\n\n');
 
   try {
-    await ctx.editMessageText(text, { parse_mode: 'Markdown' });
+    await ctx.editMessageText(text, { parse_mode: 'MarkdownV2' });
   } catch {
-    await ctx.reply(text, { parse_mode: 'Markdown' });
+    await ctx.reply(text, { parse_mode: 'MarkdownV2' });
   }
 }
 

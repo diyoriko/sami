@@ -14,7 +14,7 @@ import {
 import { searchAllCategories, searchVideos, detectEquipment, Category, ScoredVideo } from './youtube';
 import { rewriteTitle, formatChannelName } from './translate';
 import { createLogger, generateCorrelationId } from './logger';
-import { CATEGORIES, CATEGORY_RU, DIFFICULTY_RU, CATEGORY_EMOJI } from './shared';
+import { CATEGORIES, CATEGORY_RU, DIFFICULTY_RU, CATEGORY_EMOJI, escV2 } from './shared';
 
 const log = createLogger('approval');
 
@@ -22,10 +22,6 @@ function formatViews(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${Math.round(n / 1_000)}K`;
   return String(n);
-}
-
-function escMd(text: string): string {
-  return text.replace(/([*_`\[\]()~>#+\-=|{}.!])/g, '\\$1');
 }
 
 async function formatApprovalMessage(video: ScoredVideo, category: Category): Promise<string> {
@@ -41,25 +37,28 @@ async function formatApprovalMessage(video: ScoredVideo, category: Category): Pr
   }
 
   const equipmentLine = video.equipment.length > 0
-    ? `Нужна экипировка: ${escMd(video.equipment.join(', '))}`
+    ? `Нужна экипировка: ${escV2(video.equipment.join(', '))}`
     : `Только коврик`;
 
-  const title = escMd(await rewriteTitle(video.title));
-  const channel = escMd(await formatChannelName(video.channel_name));
+  // rewriteTitle/formatChannelName already return MarkdownV2-escaped text
+  const title = await rewriteTitle(video.title);
+  const channel = await formatChannelName(video.channel_name);
+  const safeUrl = video.video_url.replace(/[)\\]/g, '\\$&');
+  const diffLabel = escV2((DIFFICULTY_RU[video.difficulty] ?? video.difficulty).replace(/^./, c => c.toUpperCase()));
 
   return [
-    `${emoji} *${categoryRu}*`,
+    `${emoji} *${escV2(categoryRu)}*`,
     '',
     `*${title}*`,
     `${channel}`,
-    `${video.video_url}`,
+    `${safeUrl}`,
     '',
-    `${video.duration_label}  •  ${(DIFFICULTY_RU[video.difficulty] ?? video.difficulty).replace(/^./, c => c.toUpperCase())}`,
-    `${escMd(muscles)}`,
+    `${escV2(video.duration_label ?? '—')}  •  ${diffLabel}`,
+    `${escV2(muscles)}`,
     equipmentLine,
-    `${formatViews(video.view_count)} просмотров`,
+    `${escV2(formatViews(video.view_count))} просмотров`,
     '',
-    `Рейтинг: ${video.total_score}/100 _(бренд: ${video.brand_score})_`,
+    `Рейтинг: ${escV2(String(video.total_score))}/100 _\\(бренд: ${escV2(String(video.brand_score))}\\)_`,
   ].join('\n');
 }
 
@@ -68,7 +67,7 @@ async function sendApprovalCard(
   api: { sendPhoto: Function; sendMessage: Function },
   chatId: number, thumbnailUrl: string | null, text: string, keyboard: InlineKeyboard
 ) {
-  for (const parseMode of ['Markdown', undefined] as const) {
+  for (const parseMode of ['MarkdownV2', undefined] as const) {
     try {
       if (thumbnailUrl) {
         return await api.sendPhoto(chatId, thumbnailUrl, {
@@ -80,8 +79,8 @@ async function sendApprovalCard(
         });
       }
     } catch (err: any) {
-      if (parseMode === 'Markdown' && err?.description?.includes("can't parse entities")) {
-        log.warn('Markdown parse failed, retrying plain text');
+      if (parseMode === 'MarkdownV2' && err?.description?.includes("can't parse entities")) {
+        log.warn('MarkdownV2 parse failed, retrying plain text');
         continue;
       }
       throw err;
@@ -174,7 +173,7 @@ async function editKeyboard(
     // Photo messages may require editMessageCaption to update the keyboard
     try {
       const caption = ctx.callbackQuery.message?.caption ?? '';
-      await ctx.editMessageCaption({ caption, parse_mode: 'Markdown', reply_markup: keyboard });
+      await ctx.editMessageCaption({ caption, parse_mode: 'MarkdownV2', reply_markup: keyboard });
     } catch { /* ignore */ }
   }
 }
@@ -263,7 +262,7 @@ export function registerApprovalCallbacks(bot: Bot): void {
     }
 
     if (videos.length === 0) {
-      await ctx.api.sendMessage(config.TELEGRAM_ADMIN_USER_ID, `⚠️ Не нашёл другого видео для *${session.category}*`, { parse_mode: 'Markdown' });
+      await ctx.api.sendMessage(config.TELEGRAM_ADMIN_USER_ID, `⚠️ Не нашёл другого видео для *${session.category}*`, { parse_mode: 'MarkdownV2' });
       return;
     }
 
@@ -286,11 +285,11 @@ export function registerApprovalCallbacks(bot: Bot): void {
             type: 'photo',
             media: v.thumbnail_url,
             caption: text,
-            parse_mode: 'Markdown',
+            parse_mode: 'MarkdownV2',
           }, { reply_markup: keyboard });
         } else {
           await ctx.api.editMessageText(config.TELEGRAM_ADMIN_USER_ID, messageId, text, {
-            parse_mode: 'Markdown',
+            parse_mode: 'MarkdownV2',
             reply_markup: keyboard,
           });
         }

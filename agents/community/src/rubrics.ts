@@ -14,7 +14,7 @@ import {
   recordRitualParticipation, getRitualProgress,
   getRitualParticipantCount, getWeeklyTopMembers,
 } from './db';
-import { type Category, CATEGORY_RU, CATEGORY_EMOJI } from './shared';
+import { type Category, CATEGORY_RU, CATEGORY_EMOJI, escV2 } from './shared';
 
 const log = createLogger('rubrics');
 
@@ -42,22 +42,22 @@ export async function postRitualChallenge(
 
   const ritualId = createRitual(weekStart, title, description, category);
 
-  const catLabel = category ? `${CATEGORY_EMOJI[category]} ${CATEGORY_RU[category]}` : '';
+  const catLabel = category ? `${CATEGORY_EMOJI[category]} ${escV2(CATEGORY_RU[category])}` : '';
   const keyboard = new InlineKeyboard()
     .text('Участвую', `ritual_join:${ritualId}`);
 
   const text =
-    `*#ритуал\\_недели*\n\n` +
-    `*${title}*\n\n` +
-    `${description}\n\n` +
+    `*\\#ритуал\\_недели*\n\n` +
+    `*${escV2(title)}*\n\n` +
+    `${escV2(description)}\n\n` +
     (catLabel ? `Категория: ${catLabel}\n` : '') +
-    `7 дней подряд — одна практика. Нажми кнопку, чтобы присоединиться.\n\n` +
+    `7 дней подряд — одна практика\\. Нажми кнопку, чтобы присоединиться\\.\n\n` +
     `Участников: 0`;
 
   const msg = await bot.api.sendMessage(
     config.TELEGRAM_GROUP_ID,
     text,
-    { parse_mode: 'Markdown', reply_markup: keyboard }
+    { parse_mode: 'MarkdownV2', reply_markup: keyboard }
   );
 
   setRitualMessageId(ritualId, msg.message_id);
@@ -86,34 +86,33 @@ export async function postWeeklyProgress(bot: Bot): Promise<void> {
 
   let leaderboard = '';
   if (topMembers.length > 0) {
-    const medals = ['🥇', '🥈', '🥉', '4.', '5.'];
+    const medals = ['🥇', '🥈', '🥉', '4\\.', '5\\.'];
     leaderboard = topMembers.map((m, i) => {
-      const name = m.first_name || (m.username ? `@${m.username}` : `user ${m.telegram_user_id}`);
-      return `${medals[i]} ${name} — ${m.count} тренировок`;
+      const name = m.first_name || (m.username ? `@${escV2(m.username)}` : `user ${escV2(String(m.telegram_user_id))}`);
+      return `${medals[i]} ${escV2(name)} — ${escV2(String(m.count))} тренировок`;
     }).join('\n');
   } else {
-    leaderboard = 'На этой неделе пока нет выполненных тренировок.';
+    leaderboard = 'На этой неделе пока нет выполненных тренировок\\.';
   }
 
-  // Current ritual progress
   const ritual = getCurrentRitual();
   let ritualSection = '';
   if (ritual && ritual.week_start === weekStart) {
     const participants = getRitualParticipantCount(ritual.id);
-    ritualSection = `\n*Ритуал недели:* ${ritual.title}\nУчастников: ${participants}\n`;
+    ritualSection = `\n*Ритуал недели:* ${escV2(ritual.title)}\nУчастников: ${escV2(String(participants))}\n`;
   }
 
   const text =
-    `*#прогресс\\_пятницы*\n\n` +
-    `Итоги недели (${weekStart}):\n\n` +
+    `*\\#прогресс\\_пятницы*\n\n` +
+    `Итоги недели \\(${escV2(weekStart)}\\):\n\n` +
     `*Самые активные:*\n${leaderboard}\n` +
     ritualSection +
-    `\nСпасибо всем, кто практикует. Каждая тренировка считается.`;
+    `\nСпасибо всем, кто практикует\\. Каждая тренировка считается\\.`;
 
   await bot.api.sendMessage(
     config.TELEGRAM_GROUP_ID,
     text,
-    { parse_mode: 'Markdown' }
+    { parse_mode: 'MarkdownV2' }
   );
 
   log.info('posted weekly progress', { weekStart, topCount: topMembers.length });

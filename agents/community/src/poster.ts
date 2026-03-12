@@ -9,7 +9,7 @@ import { downloadVideo, isYtDlpAvailable } from './downloader';
 import { detectEquipment } from './youtube';
 import { rewriteTitle, formatChannelName } from './translate';
 import { createLogger, type Logger } from './logger';
-import { type Category, CATEGORY_RU, DIFFICULTY_RU, CATEGORY_EMOJI, EQUIPMENT_NO_GEAR } from './shared';
+import { type Category, CATEGORY_RU, DIFFICULTY_RU, CATEGORY_EMOJI, EQUIPMENT_NO_GEAR, escV2 } from './shared';
 
 const log = createLogger('poster');
 
@@ -49,14 +49,17 @@ async function formatCaption(video: VideoRow): Promise<string> {
     `\`🎾 ${equipmentTag}\``,
   ];
 
+  // URL: escape only ) and \ which break MarkdownV2 link syntax
+  const safeUrl = video.video_url.replace(/[)\\]/g, '\\$&');
+
   const lines = [
     `*${title}*`,
     '',
     ...tagLines,
-    ...(ratingStr ? [`⭐ ${ratingStr} из 10`] : []),
-    `✅ Сделали: 0`,
+    ...(ratingStr ? [`\`⭐ ${ratingStr} из 10\``] : []),
+    `\`✅ Сделали: 0\``,
     '',
-    `Автор: ${channelName}, 📎 [YouTube](${video.video_url})`,
+    `Автор: ${channelName}, 📎 [YouTube](${safeUrl})`,
   ];
 
   return lines.join('\n');
@@ -105,7 +108,7 @@ export async function postVideoToChannel(
             new InputFile(download.filePath),
             {
               caption,
-              parse_mode: 'Markdown',
+              parse_mode: 'MarkdownV2',
               supports_streaming: true,
               duration: download.meta.duration ?? video.duration_seconds ?? undefined,
               width: download.meta.width ?? undefined,
@@ -157,7 +160,7 @@ export async function postVideoToChannel(
       config.TELEGRAM_CHANNEL_ID,
       await formatCaption(video),
       {
-        parse_mode: 'Markdown',
+        parse_mode: 'MarkdownV2',
         link_preview_options: { is_disabled: true },
       }
     );

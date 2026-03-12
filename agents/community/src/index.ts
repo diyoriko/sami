@@ -106,10 +106,11 @@ async function auditDescriptions(bot: Bot, config: ReturnType<typeof getConfig>)
 
   if (changes.length > 0) {
     auditLog.info('descriptions updated', { changes });
+    const { escV2 } = await import('./shared');
     await bot.api.sendMessage(
       config.TELEGRAM_ADMIN_USER_ID,
-      `*Описания обновлены:*\n${changes.map(c => `• ${c}`).join('\n')}`,
-      { parse_mode: 'Markdown' },
+      `*Описания обновлены:*\n${changes.map(c => `• ${escV2(c)}`).join('\n')}`,
+      { parse_mode: 'MarkdownV2' },
     ).catch(() => {});
   } else {
     auditLog.info('descriptions already up to date');
@@ -178,12 +179,13 @@ async function main(): Promise<void> {
     const posts = getPostCountForDate(date);
     const completions = getCompletionCountForDate(date);
     const users = getUniqueCompletionUsersForDate(date);
+    const { escV2: esc } = await import('./shared');
     await ctx.reply(
       `*Sami — статус*\n\n` +
-      `Дата: ${date}\n` +
-      `Постов: ${posts}\n` +
-      `Выполнений: ${completions} (${users} чел.)`,
-      { parse_mode: 'Markdown' }
+      `Дата: ${esc(date)}\n` +
+      `Постов: ${esc(String(posts))}\n` +
+      `Выполнений: ${esc(String(completions))} \\(${esc(String(users))} чел\\.\\)`,
+      { parse_mode: 'MarkdownV2' }
     );
   });
 
@@ -407,14 +409,15 @@ async function main(): Promise<void> {
               failed: 'Ошибка',
             };
             const label = statusLabels[payload.status] ?? payload.status;
+            const { escV2: esc2 } = await import('./shared');
             const lines = [
-              `*Задача #${payload.id}: ${label}*`,
-              `${existing.title}`,
+              `*Задача \\#${esc2(String(payload.id))}: ${esc2(label)}*`,
+              `${esc2(existing.title)}`,
             ];
-            if (payload.result) lines.push(`\nРезультат: ${payload.result.slice(0, 500)}`);
-            if (payload.branch) lines.push(`Ветка: ${payload.branch}`);
+            if (payload.result) lines.push(`\nРезультат: ${esc2(payload.result.slice(0, 500))}`);
+            if (payload.branch) lines.push(`Ветка: ${esc2(payload.branch)}`);
             bot.api.sendMessage(config.TELEGRAM_ADMIN_USER_ID, lines.join('\n'), {
-              parse_mode: 'Markdown',
+              parse_mode: 'MarkdownV2',
             }).catch(() => {});
           }
 
@@ -515,11 +518,12 @@ async function main(): Promise<void> {
       const rawCommitMsg = process.env.RAILWAY_GIT_COMMIT_MESSAGE?.trim();
       const commitSha = process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7);
 
-      const deployLines = [`*Бот обновлён* ${pkgVersion ? `(v${pkgVersion})` : ''}`];
+      const { escV2: escDeploy } = await import('./shared');
+      const versionStr = pkgVersion ? `\\(v${escDeploy(pkgVersion)}\\)` : '';
+      const deployLines = [`*Бот обновлён* ${versionStr}`];
       if (commitSha) deployLines[0] += ` · \`${commitSha}\``;
 
       if (rawCommitMsg) {
-        // Parse all meaningful lines, strip technical noise
         const changes = rawCommitMsg
           .split('\n')
           .map(l => l.trim())
@@ -527,16 +531,13 @@ async function main(): Promise<void> {
 
         if (changes.length > 0) {
           deployLines.push('');
-          // First line = commit title (bold)
-          deployLines.push(`*${changes[0]}*`);
-          // Remaining lines = details as bullet points
+          deployLines.push(`*${escDeploy(changes[0])}*`);
           for (let i = 1; i < changes.length; i++) {
             const line = changes[i];
-            // Already a bullet? Keep it. Otherwise add one.
             if (line.startsWith('- ') || line.startsWith('• ')) {
-              deployLines.push(line);
+              deployLines.push(escDeploy(line));
             } else {
-              deployLines.push(`• ${line}`);
+              deployLines.push(`• ${escDeploy(line)}`);
             }
           }
         }
@@ -545,7 +546,7 @@ async function main(): Promise<void> {
       bot.api.sendMessage(
         config.TELEGRAM_ADMIN_USER_ID,
         deployLines.join('\n'),
-        { parse_mode: 'Markdown' },
+        { parse_mode: 'MarkdownV2' },
       ).catch(() => {});
 
       // One-time: audit channel/group/bot descriptions — add cross-links if missing
@@ -580,8 +581,8 @@ main().catch(async (err) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           chat_id: Number(adminId),
-          text: `\u26a0\ufe0f *SAMI Community Bot* — fatal crash\n\n\`${String(err)}\``,
-          parse_mode: 'Markdown',
+          text: `\u26a0\ufe0f *SAMI Community Bot* — fatal crash\n\n\`${String(err).replace(/[`\\]/g, '\\$&')}\``,
+          parse_mode: 'MarkdownV2',
         }),
       });
     }

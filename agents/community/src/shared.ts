@@ -239,9 +239,13 @@ export const DIFFICULTIES_SQL = DIFFICULTIES.map(d => `'${d}'`).join(',');
 
 // ─── UTILITY FUNCTIONS ───────────────────────────────────────────────────────
 
-export function escapeMarkdown(text: string): string {
-  return text.replace(/([*_`\[\]])/g, '\\$1');
+/** Escape text for Telegram MarkdownV2 parse_mode (all special characters) */
+export function escV2(text: string): string {
+  return String(text).replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, '\\$1');
 }
+
+/** @deprecated Use escV2 — kept for backward compatibility */
+export const escapeMarkdown = escV2;
 
 export function decodeHtmlEntities(text: string): string {
   return text

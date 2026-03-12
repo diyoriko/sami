@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getConfig } from './config';
 import { createLogger } from './logger';
-import { type Category, CATEGORY_RU } from './shared';
+import { type Category, CATEGORY_RU, escV2 } from './shared';
 
 const log = createLogger('analytics');
 import {
@@ -108,32 +108,32 @@ export async function runDailyAnalytics(bot: Bot, date: string): Promise<void> {
   const linkCount = postTypes.find(p => p.post_type === 'link')?.count ?? 0;
 
   const catLines = completionsByCat.map(c =>
-    `  ${CATEGORY_RU[c.category as Category] ?? c.category}: ${c.completions} (${c.users} чел.)`
+    `  ${escV2(CATEGORY_RU[c.category as Category] ?? c.category)}: ${escV2(String(c.completions))} \\(${escV2(String(c.users))} чел\\.\\)`
   );
 
   const topLines = topVideos.slice(0, 3).map((v, i) => {
     const title = v.title.length > 35 ? v.title.slice(0, 32) + '...' : v.title;
-    return `  ${i + 1}. ${title} — ${v.completions}`;
+    return `  ${escV2(String(i + 1))}\\. ${escV2(title)} — ${escV2(String(v.completions))}`;
   });
 
   const lines = [
-    `*Аналитика за ${date}*`,
+    `*Аналитика за ${escV2(date)}*`,
     '',
-    `Подписчики: ${subscriberCount} (${subDeltaStr})`,
-    `Группа: ${groupMemberCount}`,
+    `Подписчики: ${escV2(String(subscriberCount))} \\(${escV2(subDeltaStr)}\\)`,
+    `Группа: ${escV2(String(groupMemberCount))}`,
     '',
-    `Постов: ${postsToday}` + (linkCount > 0 ? ` (${videoCount} видео, ${linkCount} ссылок)` : ''),
-    `Выполнений: ${completionsToday} (${completionUsers} чел.)`,
+    `Постов: ${escV2(String(postsToday))}` + (linkCount > 0 ? ` \\(${escV2(String(videoCount))} видео, ${escV2(String(linkCount))} ссылок\\)` : ''),
+    `Выполнений: ${escV2(String(completionsToday))} \\(${escV2(String(completionUsers))} чел\\.\\)`,
     ...(catLines.length > 0 ? ['', '*По категориям:*', ...catLines] : []),
     ...(topLines.length > 0 ? ['', '*Топ видео:*', ...topLines] : []),
     '',
-    `Retention: ${retention.returned_today}/${retention.yesterday_active} (${retentionPct}%)`,
-    `Всего: ${cumulative.total_completions} выполнений, ${cumulative.total_active_users} активных`,
+    `Retention: ${escV2(String(retention.returned_today))}/${escV2(String(retention.yesterday_active))} \\(${escV2(String(retentionPct))}%\\)`,
+    `Всего: ${escV2(String(cumulative.total_completions))} выполнений, ${escV2(String(cumulative.total_active_users))} активных`,
   ];
 
   try {
     await bot.api.sendMessage(config.TELEGRAM_ADMIN_USER_ID, lines.join('\n'), {
-      parse_mode: 'Markdown',
+      parse_mode: 'MarkdownV2',
     });
     log.info('sent daily DM to admin');
   } catch (err) {
@@ -239,24 +239,24 @@ export async function runWeeklyAnalytics(bot: Bot, weekStr: string): Promise<voi
   fs.writeFileSync(path.join(reportDir, 'latest-weekly.json'), JSON.stringify(weeklyJson, null, 2) + '\n', 'utf8');
 
   // DM admin
-  const subGrowthStr = subGrowth >= 0 ? `+${subGrowth}` : `${subGrowth}`;
+  const subGrowthStr = subGrowth >= 0 ? `\\+${subGrowth}` : `${subGrowth}`;
   const dmLines = [
-    `*Недельный дашборд — ${weekStr}*`,
-    `${startDate} — ${endDate}`,
+    `*Недельный дашборд — ${escV2(weekStr)}*`,
+    `${escV2(startDate)} — ${escV2(endDate)}`,
     '',
-    `Подписчики: ${lastDay.subscriber_count} (${subGrowthStr})`,
-    `Группа: ${lastDay.group_member_count}`,
-    `Новых: ${totals.newMembers}`,
+    `Подписчики: ${escV2(String(lastDay.subscriber_count))} \\(${subGrowthStr}\\)`,
+    `Группа: ${escV2(String(lastDay.group_member_count))}`,
+    `Новых: ${escV2(String(totals.newMembers))}`,
     '',
-    `Постов: ${recentPosts.length}` + (weeklyLinkCount > 0 ? ` (${weeklyVideoCount} видео, ${weeklyLinkCount} ссылок)` : ''),
-    `Выполнений: ${weeklyCompletions}`,
+    `Постов: ${escV2(String(recentPosts.length))}` + (weeklyLinkCount > 0 ? ` \\(${escV2(String(weeklyVideoCount))} видео, ${escV2(String(weeklyLinkCount))} ссылок\\)` : ''),
+    `Выполнений: ${escV2(String(weeklyCompletions))}`,
     '',
-    `Всего: ${cumulative.total_completions} выполнений, ${cumulative.total_active_users} активных`,
+    `Всего: ${escV2(String(cumulative.total_completions))} выполнений, ${escV2(String(cumulative.total_active_users))} активных`,
   ];
 
   try {
     await bot.api.sendMessage(config.TELEGRAM_ADMIN_USER_ID, dmLines.join('\n'), {
-      parse_mode: 'Markdown',
+      parse_mode: 'MarkdownV2',
     });
     log.info('sent weekly DM to admin');
   } catch (err) {

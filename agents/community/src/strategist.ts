@@ -442,18 +442,19 @@ export async function runStrategist(bot: Bot): Promise<void> {
       (response.usage.output_tokens / 1_000_000) * 15
     ).toFixed(3);
 
+    const { escV2 } = await import('./shared');
     const lines = [
-      `*Strategist Report — ${date}*`,
+      `*Strategist Report — ${escV2(date)}*`,
       '',
-      summary ?? '(резюме не найдено)',
+      escV2(summary ?? '(резюме не найдено)'),
       '',
-      `Фокус: ${packet.week_focus}`,
-      `Приоритет: ${packet.community_priority}`,
-      `Токены: ${response.usage.input_tokens}+${response.usage.output_tokens} (~$${costEstimate})`,
+      `Фокус: ${escV2(packet.week_focus)}`,
+      `Приоритет: ${escV2(packet.community_priority)}`,
+      `Токены: ${escV2(String(response.usage.input_tokens))}\\+${escV2(String(response.usage.output_tokens))} \\(\\~\\$${escV2(costEstimate)}\\)`,
     ];
 
     await bot.api.sendMessage(config.TELEGRAM_ADMIN_USER_ID, lines.join('\n'), {
-      parse_mode: 'Markdown',
+      parse_mode: 'MarkdownV2',
     }).catch(() => {});
 
     // Save and send actions to admin
@@ -490,14 +491,16 @@ const ACTION_TYPE_LABELS: Record<StrategistActionType, string> = {
 
 export async function sendActionToAdmin(bot: Bot, actionId: number, action: StrategistAction): Promise<void> {
   const config = getConfig();
+  const { escV2 } = await import('./shared');
   const label = ACTION_TYPE_LABELS[action.type] ?? action.type;
 
+  const paramsStr = JSON.stringify(action.params).replace(/[`\\]/g, '\\$&');
   const text = [
-    `*Стратег предлагает: ${label}*`,
+    `*Стратег предлагает: ${escV2(label)}*`,
     '',
-    action.description,
+    escV2(action.description),
     '',
-    `Параметры: \`${JSON.stringify(action.params)}\``,
+    `Параметры: \`${paramsStr}\``,
   ].join('\n');
 
   const keyboard = new InlineKeyboard()
@@ -506,7 +509,7 @@ export async function sendActionToAdmin(bot: Bot, actionId: number, action: Stra
 
   try {
     const msg = await bot.api.sendMessage(config.TELEGRAM_ADMIN_USER_ID, text, {
-      parse_mode: 'Markdown',
+      parse_mode: 'MarkdownV2',
       reply_markup: keyboard,
     });
     setActionMessageId(actionId, msg.message_id);
@@ -547,8 +550,9 @@ async function executeAction(bot: Bot, actionId: number, type: StrategistActionT
     }
 
     case 'send_digest': {
-      const text = String(params.text ?? 'Недельный дайджест Sami');
-      await bot.api.sendMessage(config.TELEGRAM_CHANNEL_ID, text, { parse_mode: 'Markdown' });
+      const { escV2: escDigest } = await import('./shared');
+      const text = escDigest(String(params.text ?? 'Недельный дайджест Sami'));
+      await bot.api.sendMessage(config.TELEGRAM_CHANNEL_ID, text, { parse_mode: 'MarkdownV2' });
       return `Дайджест отправлен в канал`;
     }
 

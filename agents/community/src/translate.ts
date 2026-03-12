@@ -6,7 +6,7 @@
  * No hype, no clickbait, no ALL CAPS.
  */
 
-import { escapeMarkdown } from './shared';
+import { escV2 } from './shared';
 
 function isLatin(text: string): boolean {
   const latin = text.match(/[a-zA-Z]/g)?.length ?? 0;
@@ -127,7 +127,7 @@ export async function rewriteTitle(title: string): Promise<string> {
     clean = cleanTitle(clean); // re-clean after translation
   }
 
-  return escapeMarkdown(clean);
+  return escV2(clean);
 }
 
 /**
@@ -139,5 +139,5 @@ export async function formatChannelName(name: string): Promise<string> {
     result = await googleTranslate(result);
     result = cleanTitle(result);
   }
-  return escapeMarkdown(result);
+  return escV2(result);
 }
