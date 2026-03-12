@@ -557,6 +557,15 @@ async function main(): Promise<void> {
         }
       }
 
+      // Strategist schedule info
+      deployLines.push('');
+      deployLines.push(`Стратег: ежедневно 12:30 МСК \\(launchd Mac\\)`);
+      const { getLastStrategistTimestamp } = await import('./db');
+      const lastStrat = getLastStrategistTimestamp();
+      if (lastStrat) {
+        deployLines.push(`Последний отчёт: ${escDeploy(lastStrat.slice(0, 16).replace('T', ' '))}`);
+      }
+
       bot.api.sendMessage(
         config.TELEGRAM_ADMIN_USER_ID,
         deployLines.join('\n'),

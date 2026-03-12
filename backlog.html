@@ -1009,286 +1009,51 @@ const staticData = {
       "date": "11.03",
       "status": "deployed",
       "items": [
-        "Fix: H.264 кодек для Telegram — yt-dlp предпочитает avc1, ffprobe проверяет, ffmpeg перекодирует",
-        "Автопоиск видео отключён — админ ищет и публикует вручную через кнопки бота"
-      ]
-    },
-    {
-      "version": "v0.4.0",
-      "date": "11.03",
-      "status": "deployed",
-      "items": [
-        "Стратег v2: actions[] в COMMUNITY_PACKET, кнопки одобрения, исполнение",
-        "UX: кнопки \"Сохранить\" + \"★ рейтинг\" под постами",
-        "Фильтры: категория, уровень, длительность + 4 пресета",
-        "Профили: уровни (новичок/практик/наставник)",
-        "Избранное: \"Сохранённое\" в боте, пагинация",
-        "UGC: загрузка видеофайла + YouTube-ссылка",
-        "Tech debt: shared.ts, HTML entities, типизация",
-        "57 тестов"
-      ]
-    },
-    {
-      "version": "v0.5.0",
-      "date": "11.03",
-      "status": "deployed",
-      "items": [
+        "Fix: H.264 кодек для Telegram — yt-dlp предпочитает avc1, ffprobe проверяет, ffmpeg перекодирует если VP9/AV1",
+        "Автопоиск видео отключён — админ ищет и публикует вручную через кнопки бота",
+        "shared.ts SSoT: 7 категорий, 3 уровня, 12 групп мышц, 12 типов инвентаря, эмодзи, YouTube-запросы",
+        "DB миграция CHECK constraints (yoga, breathing, recovery, cardio) — транзакционный rebuild",
+        "Рейтинг: +15% completions из Telegram (35/30/20/15), normalizeCompletions",
+        "Health dashboard в backlog.html — live-fetch /health с Railway",
+        "Пост-онбординг DM новым участникам после goal quiz",
+        "Рубрики: #ритуал_недели (DB + кнопки) + #прогресс_пятницы (top-5 активных)",
+        "25 UX smoke-тестов (82 всего)",
+        "Proxy без cookies, стратег feedback loop, UGC fixes (видеофайл, пуш, \"Мои тренировки\")",
+        "sync-proposal-status.mjs — автосинхронизация предложений стратега",
+        "Стратег v2: actions[] в COMMUNITY_PACKET, кнопки одобрения, исполнение (poll/welcome/limits/digest)",
+        "UX: кнопки \"Сохранить\" + \"★ рейтинг\" под постами, popup с формулой",
+        "Фильтры: категория, уровень, длительность + 4 пресета в меню бота",
+        "Профили: уровни (новичок/практик/наставник), кнопка \"Профиль\" в боте",
+        "Избранное: кнопка \"Сохранённое\" в боте, пагинация, ссылки на посты",
+        "UGC: загрузка видеофайла напрямую + YouTube-ссылка, автор в подтверждении",
+        "Tech debt: shared.ts, HTML entities, типизация, channel URL",
+        "Deploy notification: очеловечен формат, диагностика только при ошибках",
+        "57 тестов",
+        "Модерация Phase 2: антифлуд, cooldown, репутация, ночной режим, стоп-лист, логирование",
+        "Buddy invite после 3-го выполнения",
+        "Имплементатор: impl_tasks таблица, HTTP endpoints, action type create_impl_task",
+        "GitHub Actions: стратег + имплементатор workflows, self-hosted runner ($0)",
+        "Убраны inline-кнопки из канала — \"Комментировать\" от Telegram теперь видна",
+        "Бот пишет \"Я сделаль\" кнопку как комментарий в discussion group",
+        "Убрана кнопка \"Сохранить\" из постов (стратег: упростить UX)",
+        "UGC auto-publish при одобрении, рейтинг без completions, tech debt cleanup",
+        "Архитектура: канал + группа зафиксирована до 50 подписчиков",
+        "57 тестов, tsc clean",
+        "Блеклист, scoring, дедупликация каналов, retry загрузки",
+        "Стратег v2: actions[], кнопки одобрения, исполнение, feedback loop",
+        "UX: \"Сохранить\", рейтинг popup, фильтры, профили, избранное",
+        "UGC: видеофайл + YouTube, автор в подтверждении",
+        "Баги: \"Пост не найден\", счётчик, HTML entities",
+        "Tech debt: shared.ts, типизация, channel URL",
         "Модерация Phase 2: антифлуд, cooldown, репутация, ночной режим, стоп-лист",
         "Buddy invite после 3-го выполнения",
-        "Имплементатор: impl_tasks, HTTP endpoints, action type",
-        "GitHub Actions: стратег + имплементатор, self-hosted runner ($0)",
-        "Убраны inline-кнопки из канала — кнопка \"Комментировать\" видна",
-        "Бот пишет \"Я сделаль\" кнопку как комментарий в discussion group",
-        "Убрана кнопка \"Сохранить\" из постов",
-        "UGC auto-publish при одобрении",
-        "Архитектура канал+группа зафиксирована до 50 подписчиков"
-      ]
-    },
-    {
-      "version": "v0.6.0",
-      "date": "11.03",
-      "status": "deployed",
-      "items": [
-        "shared.ts SSoT: 7 категорий, 3 уровня, 12 групп мышц, 12 типов инвентаря",
-        "DB миграция CHECK constraints + hotfix FK crash",
-        "Рейтинг: +15% completions из Telegram (35/30/20/15)",
-        "Health dashboard в backlog.html — live-fetch /health",
-        "Пост-онбординг DM новым участникам",
-        "Рубрики: #ритуал_недели + #прогресс_пятницы",
-        "25 UX smoke-тестов (82 всего)",
-        "Proxy без cookies, стратег feedback loop, UGC fixes",
-        "Стратег ↔ бэклог: sync-proposal-status.mjs"
+        "Имплементатор: impl_tasks, HTTP endpoints",
+        "\"Я сделаль\" как комментарий в discussion group",
+        "UGC auto-publish, убраны inline-кнопки из канала"
       ]
     }
   ],
   "sprints": [
-    {
-      "name": "Sprint 4 — Качество видео, стратег v2, UX",
-      "status": "completed",
-      "groups": [
-        {
-          "title": "Качество поиска и рейтинга видео — DONE",
-          "priority": "p1",
-          "tasks": [
-            {
-              "text": "Блеклист каналов/видео",
-              "done": true
-            },
-            {
-              "text": "Трекинг отклонений",
-              "done": true
-            },
-            {
-              "text": "Длительность в scoring",
-              "done": true
-            },
-            {
-              "text": "Scoring cap",
-              "done": true
-            },
-            {
-              "text": "Пересчёт рейтинга",
-              "done": true
-            },
-            {
-              "text": "Дедупликация по каналу",
-              "done": true
-            },
-            {
-              "text": "Retry при ошибке загрузки",
-              "done": true
-            }
-          ]
-        },
-        {
-          "title": "Стратег v2 — действия с одобрением — DONE",
-          "priority": "p1",
-          "tasks": [
-            {
-              "text": "COMMUNITY_PACKET v2",
-              "done": true
-            },
-            {
-              "text": "DM с кнопками",
-              "done": true
-            },
-            {
-              "text": "Исполнение",
-              "done": true
-            },
-            {
-              "text": "Feedback loop",
-              "done": true
-            },
-            {
-              "text": "Deploy notification",
-              "done": true
-            }
-          ]
-        },
-        {
-          "title": "UX постов в канале — DONE",
-          "priority": "p1",
-          "tasks": [
-            {
-              "text": "Кнопка \"Сохранить\"",
-              "done": true
-            },
-            {
-              "text": "Рейтинг: пояснение",
-              "done": true
-            },
-            {
-              "text": "\"Я сделаль\" после просмотра",
-              "done": true
-            }
-          ]
-        },
-        {
-          "title": "UGC — доработки — DONE",
-          "priority": "p2",
-          "tasks": [
-            {
-              "text": "Основной флоу: загрузка видеофайла напрямую (message:video handler) + YouTube-ссылка",
-              "done": true
-            },
-            {
-              "text": "Длительность из метаданных видео автоматически",
-              "done": true
-            },
-            {
-              "text": "При одобрении UGC: автор указывается в подтверждении (\"Предложил(а): @username\")",
-              "done": true
-            }
-          ]
-        },
-        {
-          "title": "Баги (11.03) — частично решены",
-          "priority": "p2",
-          "tasks": [
-            {
-              "text": "\"Пост не найден\" при \"Я сделаль\"",
-              "done": true
-            },
-            {
-              "text": "Счётчик \"Сделали: N\" в теле поста",
-              "done": true
-            },
-            {
-              "text": "Текст \"08:00 стретч, 08:05 сила...\"",
-              "done": true
-            },
-            {
-              "text": "HTML entities в статусе",
-              "done": true
-            },
-            {
-              "text": "Комментарии в канале",
-              "done": true
-            }
-          ]
-        },
-        {
-          "title": "Технический долг — DONE",
-          "priority": "p2",
-          "tasks": [
-            {
-              "text": "Shared constants",
-              "done": true
-            },
-            {
-              "text": "newMembersToday в DB",
-              "done": true
-            },
-            {
-              "text": "Channel URL из API",
-              "done": true
-            },
-            {
-              "text": "Типизация аналитики",
-              "done": true
-            },
-            {
-              "text": "MarkdownV2",
-              "done": false
-            }
-          ]
-        },
-        {
-          "title": "Фильтрация видео через бота — DONE",
-          "priority": "p2",
-          "tasks": [
-            {
-              "text": "Кнопка \"Фильтры\" в persistent menu",
-              "done": true
-            },
-            {
-              "text": "Фильтры: по категории (стретчинг/сила/мобильность), уровню, длительности",
-              "done": true
-            },
-            {
-              "text": "Пресеты: \"Новичок\", \"Утро (до 15 мин)\", \"После работы\", \"Быстрая (до 10 мин)\"",
-              "done": true
-            },
-            {
-              "text": "Бот отправляет топ-5 видео со ссылками на посты в канале",
-              "done": true
-            }
-          ]
-        },
-        {
-          "title": "Социальные профили участников — DONE",
-          "priority": "p2",
-          "tasks": [
-            {
-              "text": "Уровни",
-              "done": true
-            },
-            {
-              "text": "Профиль",
-              "done": true
-            },
-            {
-              "text": "Сохранённое",
-              "done": true
-            }
-          ]
-        },
-        {
-          "title": "Монетизация",
-          "priority": "p3",
-          "tasks": [
-            {
-              "text": "Опрос в группе (когда будет 50+ участников)",
-              "done": false
-            },
-            {
-              "text": "Архитектура: бесплатный/premium в боте",
-              "done": false
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "Sprint 5 — стабильная версия, затем рост",
-      "status": "completed",
-      "groups": [
-        {
-          "title": "Всё выполнено — см. v0.5.0",
-          "priority": "p1",
-          "tasks": [
-            { "text": "Модерация Phase 2", "done": true },
-            { "text": "Buddy invite", "done": true },
-            { "text": "Имплементатор agent", "done": true },
-            { "text": "GitHub Actions workflows", "done": true },
-            { "text": "Inline-кнопки убраны из канала", "done": true },
-            { "text": "Кнопка \"Сохранить\" убрана", "done": true },
-            { "text": "Архитектура зафиксирована", "done": true }
-          ]
-        }
-      ]
-    },
     {
       "name": "Sprint 6 — Качество + UX",
       "status": "active",
@@ -1297,143 +1062,362 @@ const staticData = {
           "title": "DONE (v0.6.0)",
           "priority": "p0",
           "tasks": [
-            { "text": "Публикация: CATEGORIES из shared.ts вместо хардкода 3", "done": true },
-            { "text": "UGC: published_at трекинг реальной публикации", "done": true },
-            { "text": "\"Я сделаль\": fallback для незарегистрированных постов", "done": true },
-            { "text": "Health dashboard: FK migration crash hotfix", "done": true },
-            { "text": "UX сообщения при публикации: только выбранные категории + название", "done": true },
-            { "text": "\"Я сделаль\": Loading — handler для done_msg: callback", "done": true },
-            { "text": "\"Другое\" в поиске: resilient session lookup (fallback по message_id)", "done": true },
-            { "text": "Капча: allowed_updates с chat_member в bot.start()", "done": true },
-            { "text": "/post команда: 7 категорий из CATEGORIES", "done": true },
-            { "text": "UGC YouTube: подробное уведомление админа при ошибке публикации", "done": true }
+            {
+              "text": "Публикация: CATEGORIES из shared.ts вместо хардкода 3",
+              "done": true
+            },
+            {
+              "text": "UGC: published_at трекинг, \"Мои тренировки\" только опубликованные",
+              "done": true
+            },
+            {
+              "text": "\"Я сделаль\" fallback для незарегистрированных постов",
+              "done": true
+            },
+            {
+              "text": "Health dashboard: FK migration crash hotfix",
+              "done": true
+            },
+            {
+              "text": "UX сообщения при публикации: только выбранные категории + название",
+              "done": true
+            },
+            {
+              "text": "\"Я сделаль\": Loading — добавлен handler для `done_msg:` callback, который раньше не существовал. Кнопка теперь работает и обновляет счётчик",
+              "done": true
+            },
+            {
+              "text": "\"Другое\" в поиске: resilient session lookup — fallback по message_id, если сессия soft-deleted (double-click)",
+              "done": true
+            },
+            {
+              "text": "Капча: `allowed_updates` с `chat_member` добавлен в `bot.start()` — бот теперь получает events о вступлении",
+              "done": true
+            },
+            {
+              "text": "/post команда: 7 категорий из CATEGORIES вместо хардкода 3",
+              "done": true
+            },
+            {
+              "text": "UGC YouTube: подробное уведомление админа при ошибке публикации (URL, тип, ошибка)",
+              "done": true
+            }
           ]
         },
         {
           "title": "DONE (v0.7.0)",
           "priority": "p0",
           "tasks": [
-            { "text": "MarkdownV2 — перевести все сообщения бота", "done": true },
-            { "text": "UGC YouTube: нет fallback text+link при ошибке скачивания", "done": true },
-            { "text": "UGC YouTube: Error 153 (видео tIgzsmpCJkQ)", "done": true },
-            { "text": "Дашборд на GitHub Pages + ревью данных", "done": true },
-            { "text": "Автокоммент: рейтинг не отображается (fallback без кнопки)", "done": true }
+            {
+              "text": "MarkdownV2",
+              "done": true
+            },
+            {
+              "text": "UGC YouTube: fallback при ошибке скачивания",
+              "done": true
+            },
+            {
+              "text": "UGC YouTube: Error 153",
+              "done": true
+            },
+            {
+              "text": "Дашборд на GitHub Pages",
+              "done": true
+            },
+            {
+              "text": "Автокоммент: рейтинг в fallback",
+              "done": true
+            }
           ]
         },
         {
-          "title": "EPIC: Сезоны + Ежедневный челлендж",
-          "priority": "p1",
+          "title": "Баги (v0.7.1)",
+          "priority": "p0",
           "tasks": [
-            { "text": "S1. DB: таблица seasons + season_day в posts", "done": false },
-            { "text": "S1. Автоматический переход сезонов (21 день)", "done": false },
-            { "text": "S1. Конфиг маппинга дней в shared.ts", "done": false },
-            { "text": "S2. Хештеги в постах (#стретчинг #спина #начинающий #сезон1)", "done": false },
-            { "text": "S2. Маппинг хештегов в shared.ts", "done": false },
-            { "text": "S2. poster.ts + UGC: добавить теги в caption", "done": false },
-            { "text": "S3. «Я сделаль» → комментарий в группе (вариант B)", "done": false },
-            { "text": "S3. Серия тренировок (streak) в комментарии", "done": false },
-            { "text": "S3. DB: getUserStreak() — непрерывная цепочка дней", "done": false },
-            { "text": "S3. Антиспам: cooldown + UNIQUE дедупликация", "done": false },
-            { "text": "S3. Убрать «Сделали: 0» из caption", "done": false },
-            { "text": "S4. Статус: Сезон N | День X/21 | Категория дня", "done": false },
-            { "text": "S4. Поиск: автовыбор категории дня", "done": false },
-            { "text": "S4. Предупреждение при несовпадении категории", "done": false },
-            { "text": "S4. Caption: День X/21 · Сезон N", "done": false },
-            { "text": "S5. Еженедельный опрос прогресса (нативный poll)", "done": false },
-            { "text": "S5. Крон для опроса + адаптация текста к неделе сезона", "done": false },
-            { "text": "S5. Результаты poll → DB для аналитики", "done": false },
-            { "text": "S6. Стена стабильности — кто не пропустил ни дня", "done": false },
-            { "text": "S6. DB: getWeeklyConsistentUsers()", "done": false },
-            { "text": "S6. Заменяет #прогресс_пятницы — все кто пришёл, без мест", "done": false }
+            {
+              "text": "Кнопка \"Опубликовать\" не видна после выбора видео",
+              "done": true
+            },
+            {
+              "text": "MarkdownV2 escaping протекает",
+              "done": true
+            },
+            {
+              "text": "UGC видеофайл: не публикуется",
+              "done": true
+            },
+            {
+              "text": "DB: таблица seasons",
+              "done": false
+            },
+            {
+              "text": "DB: season_day в posts",
+              "done": false
+            },
+            {
+              "text": "Автоматический переход сезонов",
+              "done": false
+            },
+            {
+              "text": "Конфиг маппинга",
+              "done": false
+            },
+            {
+              "text": "Формат хештегов",
+              "done": false
+            },
+            {
+              "text": "Маппинг в shared.ts",
+              "done": false
+            },
+            {
+              "text": "poster.ts: добавить теги",
+              "done": false
+            },
+            {
+              "text": "UGC посты: теги",
+              "done": false
+            },
+            {
+              "text": "Кнопка как триггер",
+              "done": false
+            },
+            {
+              "text": "Серия тренировок (streak)",
+              "done": false
+            },
+            {
+              "text": "DB: streak вычисление",
+              "done": false
+            },
+            {
+              "text": "Антиспам: cooldown",
+              "done": false
+            },
+            {
+              "text": "Антиспам: дедупликация в DB",
+              "done": false
+            },
+            {
+              "text": "Убрать счётчик из тела поста",
+              "done": false
+            },
+            {
+              "text": "Статус: информация о сезоне",
+              "done": false
+            },
+            {
+              "text": "Поиск видео: автовыбор категории",
+              "done": false
+            },
+            {
+              "text": "Предупреждение при несовпадении",
+              "done": false
+            },
+            {
+              "text": "Caption: день сезона",
+              "done": false
+            },
+            {
+              "text": "Опрос \"На каком дне сезона ты?\"",
+              "done": false
+            },
+            {
+              "text": "Крон для опроса",
+              "done": false
+            },
+            {
+              "text": "Результаты в аналитику",
+              "done": false
+            },
+            {
+              "text": "Еженедельный пост \"Стена стабильности\"",
+              "done": false
+            },
+            {
+              "text": "DB: запрос участников",
+              "done": false
+            },
+            {
+              "text": "Адаптация #прогресс_пятницы",
+              "done": false
+            }
           ]
         },
         {
           "title": "Баги — DONE",
           "priority": "p1",
           "tasks": [
-            { "text": "Поиск видео: убран дубль «Ищу видео...»", "done": true },
-            { "text": "Статус: очередь только approved", "done": true },
-            { "text": "Кнопки сложности: Легко/Средне/Сложно", "done": true },
-            { "text": "Рейтинг: ★ → ⭐ во всех файлах", "done": true }
+            {
+              "text": "Поиск видео: дублирует сообщение",
+              "done": true
+            },
+            {
+              "text": "Статус: очередь показывает невыбранные видео",
+              "done": true
+            },
+            {
+              "text": "Кнопки сложности обрезаются",
+              "done": true
+            },
+            {
+              "text": "Рейтинг: ★ → ⭐",
+              "done": true
+            }
           ]
         },
         {
           "title": "UX улучшения — DONE",
           "priority": "p1",
           "tasks": [
-            { "text": "\"Опубликовать\" → inline-кнопка в Статус", "done": true },
-            { "text": "Формат автора: имя, 📎 YouTube", "done": true },
-            { "text": "Рейтинг: popup реализован, но не работает (зависит от P0 автокоммент)", "done": false },
-            { "text": "Приветствие: Ботик Сами, тёплый тон", "done": true }
+            {
+              "text": "Убрать \"Опубликовать\" из persistent menu",
+              "done": true
+            },
+            {
+              "text": "Формат автора в постах",
+              "done": true
+            },
+            {
+              "text": "Очеловечить приветствие бота",
+              "done": true
+            }
           ]
         },
         {
           "title": "UX улучшения — в работе",
           "priority": "p1",
           "tasks": [
-            { "text": "UGC: длительность, инвентарь, мышцы", "done": true },
-            { "text": "Ревью UX автокоммента", "done": true },
-            { "text": "Аудит описаний канала, группы и бота", "done": true },
-            { "text": "Deploy notification: changelog + Markdown", "done": true }
+            {
+              "text": "UGC flow: недостающие параметры",
+              "done": true
+            },
+            {
+              "text": "UGC: убрать шаг длительности",
+              "done": true
+            },
+            {
+              "text": "Рейтинг кликабельный",
+              "done": false
+            },
+            {
+              "text": "Ревью UX автокоммента в группе",
+              "done": true
+            },
+            {
+              "text": "Аудит описаний канала, группы и бота",
+              "done": true
+            },
+            {
+              "text": "Deploy notification",
+              "done": true
+            },
+            {
+              "text": "Формат постов: единый моноширинный стиль",
+              "done": true
+            }
           ]
         },
         {
           "title": "UX — новые задачи",
           "priority": "p1",
           "tasks": [
-            { "text": "Не пиннить посты в группе — убрать pinChatMessage для автокомментов", "done": false },
-            { "text": "«Мои тренировки»: показывать все статусы (pending/approved)", "done": false },
-            { "text": "UGC: предупреждение о дубликате YouTube-ссылки", "done": false }
+            {
+              "text": "Не пиннить посты в группе",
+              "done": true
+            },
+            {
+              "text": "\"Мои тренировки\": показывать все статусы",
+              "done": true
+            },
+            {
+              "text": "UGC: предупреждение о дубликате YouTube-ссылки",
+              "done": true
+            }
           ]
         },
         {
           "title": "Тестирование",
           "priority": "p1",
           "tasks": [
-            { "text": "Интеграционные тесты: auto-forward, done, UGC (11 тестов)", "done": true }
+            {
+              "text": "Интеграционные тесты с реальным ботом",
+              "done": true
+            }
           ]
         },
         {
           "title": "Качество контента",
           "priority": "p1",
           "tasks": [
-            { "text": "Ревью алгоритма поиска видео", "done": false },
-            { "text": "Поиск тренировки → заменено эпиком Сезоны (хештеги)", "done": true }
+            {
+              "text": "Ревью алгоритма поиска видео",
+              "done": false
+            }
           ]
         },
         {
           "title": "Автоматизация",
           "priority": "p2",
           "tasks": [
-            { "text": "Стратег: предложения → одобрение → бэклог", "done": false }
+            {
+              "text": "Стратег: предложения → одобрение → бэклог",
+              "done": false
+            }
           ]
         },
         {
           "title": "Капча и модерация (отложено до роста аудитории)",
           "priority": "p2",
           "tasks": [
-            { "text": "Капча не срабатывает при вступлении через канал", "done": false }
+            {
+              "text": "Капча не срабатывает при вступлении через канал",
+              "done": false
+            }
           ]
         },
         {
-          "title": "Growth (ручная работа)",
+          "title": "Growth (ручная работа, не код)",
           "priority": "p2",
           "tasks": [
-            { "text": "Cross-promo с 3 микро-каналами", "done": false },
-            { "text": "Посевной пост-подборка", "done": false },
-            { "text": "Контент-расписание → заменено эпиком Сезоны", "done": true },
-            { "text": "#механика — контент от стратега", "done": false }
+            {
+              "text": "Cross-promo с 3 микро-каналами",
+              "done": false
+            },
+            {
+              "text": "Посевной пост",
+              "done": false
+            },
+            {
+              "text": "#механика",
+              "done": false
+            }
           ]
         },
         {
           "title": "Отложено (после 50+ участников)",
           "priority": "p3",
           "tasks": [
-            { "text": "Монетизация", "done": false },
-            { "text": "Weekly personal stats DM", "done": false },
-            { "text": "Attribution flow для тренеров", "done": false },
-            { "text": "Лендинг Sami", "done": false },
-            { "text": "Ручной посев — 10 приглашений", "done": false }
+            {
+              "text": "Монетизация: опрос в группе, архитектура premium",
+              "done": false
+            },
+            {
+              "text": "Weekly personal stats DM",
+              "done": false
+            },
+            {
+              "text": "Attribution flow для тренеров",
+              "done": false
+            },
+            {
+              "text": "Лендинг Sami",
+              "done": false
+            },
+            {
+              "text": "Ручной посев — 10 приглашений",
+              "done": false
+            }
           ]
         }
       ]
