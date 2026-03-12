@@ -236,15 +236,14 @@ describe('auto-forward → autocomment', () => {
     expect(buttons).toContain('rating_msg:');
   });
 
-  it('pins the autocomment after posting', async () => {
+  it('does not pin autocomment in group', async () => {
     const videoId = db.upsertVideo(makeVideo({ youtube_id: 'pin_test_1', title: 'Pin Test', category: 'strength', difficulty: 'intermediate' }));
     db.recordPost('2026-03-12', 'strength', videoId, 43);
 
     await bot.handleUpdate(autoForwardUpdate(43));
 
     const pins = findCalls('pinChatMessage');
-    expect(pins.length).toBeGreaterThan(0);
-    expect(Number(pins[0].payload.chat_id)).toBe(GROUP_ID);
+    expect(pins.length).toBe(0);
   });
 });
 

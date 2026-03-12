@@ -25,26 +25,27 @@ describe('getUserSubmissions (Мои тренировки)', () => {
     expect(getUserSubmissionTotal(999)).toBe(0);
   });
 
-  it('returns only published submissions', async () => {
+  it('returns all submissions with statuses', async () => {
     const db = await import('../db');
 
-    // draft — should NOT appear
+    // draft
     db.createUgcSubmission(80, 'user80', 'https://youtube.com/watch?v=draft1', 'draft1');
 
-    // pending (not published) — should NOT appear in "Мои тренировки"
+    // pending
     const pendingId = db.createUgcSubmission(80, 'user80', 'https://youtube.com/watch?v=pend1', 'pend1');
     db.updateUgcSubmission(pendingId, { title: 'Pending Stretch', category: 'stretching', difficulty: 'beginner', status: 'pending' });
 
-    // published — should appear
+    // published
     const publishedId = db.createUgcSubmission(80, 'user80', 'https://youtube.com/watch?v=pub1', 'pub1');
     db.updateUgcSubmission(publishedId, { title: 'My Stretch', category: 'stretching', difficulty: 'beginner', status: 'approved', published_at: '2026-03-11T20:00:00.000Z' });
 
     const items = db.getUserSubmissions(80, 5, 0);
-    expect(items).toHaveLength(1);
-    expect(items[0].title).toBe('My Stretch');
-    expect(items[0].status).toBe('approved');
+    expect(items).toHaveLength(3);
+    // newest first (by created_at)
+    expect(items.find(i => i.title === 'My Stretch')?.status).toBe('approved');
+    expect(items.find(i => i.title === 'Pending Stretch')?.status).toBe('pending');
 
-    expect(db.getUserSubmissionTotal(80)).toBe(1);
+    expect(db.getUserSubmissionTotal(80)).toBe(3);
   });
 });
 

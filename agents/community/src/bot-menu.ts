@@ -24,6 +24,7 @@ import {
   updateUgcSubmission,
   getUgcSubmission,
   deleteUgcSubmission,
+  isUgcDuplicate,
   saveUgcState,
   getUgcState,
   deleteUgcState,
@@ -536,8 +537,22 @@ export function registerBotMenu(bot: Bot): void {
         await ctx.reply('Не могу распознать ссылку. Отправь ссылку на YouTube-видео или загрузи видеофайл напрямую.');
         return;
       }
+      if (isUgcDuplicate(ytId)) {
+        await ctx.reply('Это видео уже было предложено. Попробуй другое.');
+        return;
+      }
       const videoUrl = `https://www.youtube.com/watch?v=${ytId}`;
       const subId = createUgcSubmission(userId, ctx.from!.username ?? null, videoUrl, ytId);
+
+      // Auto-fetch duration from YouTube API
+      try {
+        const { fetchVideoDuration } = await import('./youtube');
+        const dur = await fetchVideoDuration(ytId);
+        if (dur) {
+          updateUgcSubmission(subId, { duration_seconds: dur.seconds, duration_label: dur.label });
+        }
+      } catch { /* non-critical, user will be asked manually */ }
+
       saveUgcState(userId, 'waiting_category', subId);
 
       const kb = buildCategoryKeyboard(subId);
@@ -866,8 +881,9 @@ export function registerBotMenu(bot: Bot): void {
       // Update admin message
       const statusText = published ? 'Одобрено и опубликовано' : `Одобрено (публикация не удалась: ${publishError})`;
       try {
+        const origText = escV2(ctx.callbackQuery.message?.text ?? '');
         await ctx.editMessageText(
-          ctx.callbackQuery.message?.text + `\n\n_${escV2(statusText)}_ · Предложил\\(а\\): ${escV2(author)}`,
+          `${origText}\n\n_${escV2(statusText)}_ \\· Предложил\\(а\\): ${escV2(author)}`,
           { parse_mode: 'MarkdownV2' }
         );
       } catch {}
@@ -913,7 +929,7 @@ async function sendMyWorkouts(
   const total = getUserSubmissionTotal(userId);
 
   if (total === 0) {
-    const text = 'У тебя пока нет опубликованных тренировок.\n\nНажми «Предложить тренировку» чтобы добавить свою.';
+    const text = 'У тебя пока нет тренировок.\n\nНажми «Предложить тренировку» чтобы добавить свою.';
     if (editMessageId) {
       try { await ctx.api.editMessageText(ctx.chat!.id, editMessageId, text); } catch {}
     } else {
@@ -924,12 +940,20 @@ async function sendMyWorkouts(
 
   const items = getUserSubmissions(userId, PAGE_SIZE, offset);
 
+  const STATUS_LABEL: Record<string, string> = {
+    draft: '\u270F\uFE0F черновик',
+    pending: '\u23F3 на модерации',
+    approved: '\u2705 одобрено',
+    rejected: '\u274C отклонено',
+  };
+
   const lines = items.map((item, i) => {
     const num = offset + i + 1;
     const catRu = item.category ? (CATEGORY_RU[item.category as Category] ?? item.category) : '—';
     const title = item.title ? decodeHtmlEntities(item.title) : 'Без названия';
     const dateShort = (item.published_at ?? item.created_at).slice(0, 10);
-    return `${escV2(String(num))}\\. *${escV2(title)}*\n   ${escV2(catRu)} · ${escV2(dateShort)}`;
+    const status = item.published_at ? '\u2705 опубликовано' : (STATUS_LABEL[item.status] ?? item.status);
+    return `${escV2(String(num))}\\. *${escV2(title)}*\n   ${escV2(catRu)} · ${escV2(status)} · ${escV2(dateShort)}`;
   });
 
   const header = `*Мои тренировки* \\(${escV2(String(total))}\\)\n`;

@@ -501,7 +501,7 @@ export function upsertVideo(v: Omit<VideoRow, 'id'> & { search_query?: string })
       channel_subscribers = excluded.channel_subscribers
     RETURNING id
   `);
-  const row = stmt.get(v) as { id: number };
+  const row = stmt.get({ search_query: null, ...v }) as { id: number };
   return row.id;
 }
 
@@ -549,9 +549,9 @@ export function getApprovalSessionByMessageId(messageId: number): { id: number; 
 }
 
 export function getApprovalSessionById(sessionId: number): { id: number; video_id: number; category: string; date: string } | null {
-  return getDb().prepare(`
+  return (getDb().prepare(`
     SELECT id, video_id, category, date FROM approval_sessions WHERE id = ? AND deleted_at IS NULL
-  `).get(sessionId) as { id: number; video_id: number; category: string; date: string } | null;
+  `).get(sessionId) as { id: number; video_id: number; category: string; date: string } | undefined) ?? null;
 }
 
 export function resetApprovalSessions(date: string): number {
@@ -1109,6 +1109,13 @@ export interface UgcSubmission {
   published_at: string | null;
 }
 
+export function isUgcDuplicate(youtubeId: string): boolean {
+  const row = getDb().prepare(
+    `SELECT COUNT(*) as cnt FROM ugc_submissions WHERE youtube_id = ? AND deleted_at IS NULL`
+  ).get(youtubeId) as { cnt: number };
+  return row.cnt > 0;
+}
+
 export function createUgcSubmission(userId: number, username: string | null, videoUrl: string, youtubeId: string | null): number {
   const result = getDb().prepare(`
     INSERT INTO ugc_submissions (telegram_user_id, username, video_url, youtube_id)
@@ -1149,15 +1156,15 @@ export function deleteUgcSubmission(id: number): void {
 export function getUserSubmissions(userId: number, limit: number, offset: number): UgcSubmission[] {
   return getDb().prepare(`
     SELECT * FROM ugc_submissions
-    WHERE telegram_user_id = ? AND published_at IS NOT NULL AND deleted_at IS NULL
-    ORDER BY published_at DESC
+    WHERE telegram_user_id = ? AND deleted_at IS NULL
+    ORDER BY created_at DESC
     LIMIT ? OFFSET ?
   `).all(userId, limit, offset) as UgcSubmission[];
 }
 
 export function getUserSubmissionTotal(userId: number): number {
   const row = getDb().prepare(
-    `SELECT COUNT(*) as cnt FROM ugc_submissions WHERE telegram_user_id = ? AND published_at IS NOT NULL AND deleted_at IS NULL`
+    `SELECT COUNT(*) as cnt FROM ugc_submissions WHERE telegram_user_id = ? AND deleted_at IS NULL`
   ).get(userId) as { cnt: number };
   return row.cnt;
 }

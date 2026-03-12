@@ -524,21 +524,35 @@ async function main(): Promise<void> {
       if (commitSha) deployLines[0] += ` · \`${commitSha}\``;
 
       if (rawCommitMsg) {
-        const changes = rawCommitMsg
+        const allLines = rawCommitMsg
           .split('\n')
           .map(l => l.trim())
           .filter(l => l !== '' && !l.startsWith('Co-Authored-By:'));
 
-        if (changes.length > 0) {
+        // Split into changelog and test checklist (separator: "Test:" line)
+        const testIdx = allLines.findIndex(l => /^Test:?\s*$/i.test(l));
+        const changeLines = testIdx >= 0 ? allLines.slice(0, testIdx) : allLines;
+        const testLines = testIdx >= 0 ? allLines.slice(testIdx + 1) : [];
+
+        // Changelog block
+        if (changeLines.length > 0) {
           deployLines.push('');
-          deployLines.push(`*${escDeploy(changes[0])}*`);
-          for (let i = 1; i < changes.length; i++) {
-            const line = changes[i];
-            if (line.startsWith('- ') || line.startsWith('• ')) {
-              deployLines.push(escDeploy(line));
-            } else {
-              deployLines.push(`• ${escDeploy(line)}`);
-            }
+          deployLines.push(`*${escDeploy(changeLines[0])}*`);
+          for (let i = 1; i < changeLines.length; i++) {
+            const line = changeLines[i];
+            deployLines.push(line.startsWith('- ') || line.startsWith('• ')
+              ? `  ${escDeploy(line)}`
+              : `  \\- ${escDeploy(line)}`);
+          }
+        }
+
+        // Test checklist block
+        if (testLines.length > 0) {
+          deployLines.push('');
+          deployLines.push('*Затестить:*');
+          for (const line of testLines) {
+            const clean = line.replace(/^[-•]\s*/, '');
+            deployLines.push(`  \\- ${escDeploy(clean)}`);
           }
         }
       }

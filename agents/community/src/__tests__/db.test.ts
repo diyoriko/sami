@@ -272,29 +272,53 @@ describe('scoring cap', () => {
 });
 
 describe('user favorites', () => {
+  let testVideoId: number;
+
+  beforeAll(async () => {
+    const db = await import('../db');
+    testVideoId = db.upsertVideo({
+      youtube_id: 'fav-test-video',
+      title: 'Favorite Test',
+      channel_name: 'Test Channel',
+      channel_url: 'https://youtube.com/test',
+      duration_seconds: 600,
+      duration_label: '10:00',
+      difficulty: 'beginner',
+      category: 'stretching',
+      muscles: '[]',
+      thumbnail_url: '',
+      video_url: 'https://youtube.com/watch?v=fav-test-video',
+      search_query: 'test',
+      view_count: 100,
+      rating: 5,
+      like_ratio: 0.9,
+      channel_subscribers: 1000,
+    });
+  });
+
   it('toggles favorite on and off', async () => {
     const db = await import('../db');
     // Add favorite
-    const added = db.toggleFavorite(11111, 1);
+    const added = db.toggleFavorite(11111, testVideoId);
     expect(added).toBe(true);
-    expect(db.isUserFavorite(11111, 1)).toBe(true);
+    expect(db.isUserFavorite(11111, testVideoId)).toBe(true);
     expect(db.getUserFavoriteTotal(11111)).toBe(1);
 
     // Remove favorite
-    const removed = db.toggleFavorite(11111, 1);
+    const removed = db.toggleFavorite(11111, testVideoId);
     expect(removed).toBe(false);
-    expect(db.isUserFavorite(11111, 1)).toBe(false);
+    expect(db.isUserFavorite(11111, testVideoId)).toBe(false);
     expect(db.getUserFavoriteTotal(11111)).toBe(0);
   });
 
   it('returns paginated favorites', async () => {
     const db = await import('../db');
-    db.toggleFavorite(22222, 1);
+    db.toggleFavorite(22222, testVideoId);
     const favs = db.getUserFavorites(22222, 5, 0);
     expect(favs.length).toBe(1);
-    expect(favs[0].video_id).toBe(1);
+    expect(favs[0].video_id).toBe(testVideoId);
     // cleanup
-    db.toggleFavorite(22222, 1);
+    db.toggleFavorite(22222, testVideoId);
   });
 });
 

@@ -43,7 +43,7 @@ async function formatApprovalMessage(video: ScoredVideo, category: Category): Pr
   // rewriteTitle/formatChannelName already return MarkdownV2-escaped text
   const title = await rewriteTitle(video.title);
   const channel = await formatChannelName(video.channel_name);
-  const safeUrl = video.video_url.replace(/[)\\]/g, '\\$&');
+  const linkUrl = video.video_url.replace(/[)\\]/g, '\\$&');
   const diffLabel = escV2((DIFFICULTY_RU[video.difficulty] ?? video.difficulty).replace(/^./, c => c.toUpperCase()));
 
   return [
@@ -51,9 +51,9 @@ async function formatApprovalMessage(video: ScoredVideo, category: Category): Pr
     '',
     `*${title}*`,
     `${channel}`,
-    `${safeUrl}`,
+    `[YouTube](${linkUrl})`,
     '',
-    `${escV2(video.duration_label ?? '—')}  •  ${diffLabel}`,
+    `${escV2(video.duration_label ?? '—')}  \\·  ${diffLabel}`,
     `${escV2(muscles)}`,
     equipmentLine,
     `${escV2(formatViews(video.view_count))} просмотров`,
@@ -157,9 +157,14 @@ export async function runApprovalFlow(
     ? `Нашёл по одному видео на каждую категорию (${totalFound}/${total}).`
     : `Нашёл ${totalFound} из ${total} категорий.${failed > 0 ? ` ${failed} не удалось отправить — проверь логи.` : ''}`;
 
+  const summaryKb = new InlineKeyboard()
+    .text('Опубликовать', 'btn_publish')
+    .text('Сбросить выбор', 'btn_reset');
+
   await bot.api.sendMessage(
     config.TELEGRAM_ADMIN_USER_ID,
-    `${summary} Выбери или нажми Другое.\n\nКогда выберешь — нажми «Опубликовать».`
+    `${summary} Выбери или нажми Другое.`,
+    { reply_markup: summaryKb },
   );
 }
 
@@ -257,7 +262,7 @@ export function registerApprovalCallbacks(bot: Bot): void {
       videos = await searchVideos(session.category as Category, 1, undefined, refreshLog.correlationId);
     } catch (err) {
       refreshLog.error('refresh search failed', { error: String(err) });
-      await ctx.api.sendMessage(config.TELEGRAM_ADMIN_USER_ID, `❌ Ошибка поиска замены для ${session.category}: ${String(err)}`);
+      await ctx.api.sendMessage(config.TELEGRAM_ADMIN_USER_ID, `❌ Ошибка поиска замены для ${escV2(session.category)}: ${escV2(String(err))}`, { parse_mode: 'MarkdownV2' });
       return;
     }
 

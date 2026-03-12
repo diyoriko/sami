@@ -552,9 +552,6 @@ export function registerModeration(bot: Bot): void {
         setGroupCommentId(post.id, comment.message_id);
       }
       log.info('posted completion button in discussion', { postId: post?.id ?? null, commentId: comment.message_id });
-      try {
-        await bot.api.pinChatMessage(config.TELEGRAM_GROUP_ID, comment.message_id, { disable_notification: true });
-      } catch { /* may lack pin permissions */ }
     } catch (err) {
       log.error('failed to post completion button in discussion', { postId: post?.id ?? null, error: String(err) });
     }

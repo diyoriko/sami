@@ -175,6 +175,26 @@ function parseDuration(iso: string): { seconds: number; label: string } {
   return { seconds: total, label };
 }
 
+/** Fetch duration for a single YouTube video by ID. Returns null if unavailable. */
+export async function fetchVideoDuration(youtubeId: string): Promise<{ seconds: number; label: string } | null> {
+  const config = getConfig();
+  const url = new URL('https://www.googleapis.com/youtube/v3/videos');
+  url.searchParams.set('part', 'contentDetails');
+  url.searchParams.set('id', youtubeId);
+  url.searchParams.set('key', config.YOUTUBE_API_KEY);
+
+  try {
+    const res = await fetch(url.toString());
+    if (!res.ok) return null;
+    const data = await res.json() as { items?: YouTubeVideoDetail[] };
+    const item = data.items?.[0];
+    if (!item?.contentDetails?.duration) return null;
+    return parseDuration(item.contentDetails.duration);
+  } catch {
+    return null;
+  }
+}
+
 function guessDifficulty(title: string, description: string): Difficulty {
   const text = (title + ' ' + description).toLowerCase();
   if (/beginner|начинающ|для новичк|easy|лёгк|light|простой/.test(text)) return 'beginner';
