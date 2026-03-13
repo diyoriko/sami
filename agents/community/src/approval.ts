@@ -129,7 +129,7 @@ export async function runApprovalFlow(
   let allVideos: Awaited<ReturnType<typeof searchAllCategories>>;
   try {
     if (singleCategory) {
-      const videos = await searchVideos(singleCategory, undefined, cid);
+      const videos = await searchVideos(singleCategory, undefined, undefined, cid);
       allVideos = { [singleCategory]: videos } as any;
     } else {
       allVideos = await searchAllCategories(customKeywords, cid);
