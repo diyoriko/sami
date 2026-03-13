@@ -21,6 +21,8 @@ const ConfigSchema = z.object({
   // Strategist agent
   CRON_STRATEGIST: z.string().default('30 12 * * *'),           // 12:30 MSK — daily strategist run
   STRATEGIST_API_KEY: z.string().optional(),                     // separate key for /packet endpoint
+  // Season auto-publish
+  CRON_SEASON_PUBLISH: z.string().default('0 5 * * *'),   // 08:00 MSK = 05:00 UTC
   // Video search scoring weights (0-1, must sum to 1)
   SCORE_BRAND_WEIGHT: z.string().transform(Number).default('0.50'),
   SCORE_VIEW_WEIGHT: z.string().transform(Number).default('0.35'),

@@ -9,6 +9,7 @@ import {
   setApprovalStatus,
   softDeletePendingSessions,
   recordRejection,
+  setSeasonQueueVideo,
   getDb,
 } from './db';
 import { searchAllCategories, searchVideos, detectEquipment, Category, ScoredVideo } from './youtube';
@@ -17,6 +18,17 @@ import { createLogger, generateCorrelationId } from './logger';
 import { CATEGORIES, CATEGORY_RU, DIFFICULTY_RU, CATEGORY_EMOJI, escV2 } from './shared';
 
 const log = createLogger('approval');
+
+// In-memory map: approval session ID → season context
+const seasonContextMap = new Map<number, { seasonId: number; dayNumber: number }>();
+
+function storeSeasonContext(sessionId: number, seasonId: number, dayNumber: number): void {
+  seasonContextMap.set(sessionId, { seasonId, dayNumber });
+}
+
+function getSeasonContext(sessionId: number): { seasonId: number; dayNumber: number } | undefined {
+  return seasonContextMap.get(sessionId);
+}
 
 function formatViews(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -92,24 +104,36 @@ async function sendApprovalCard(
 export async function runApprovalFlow(
   bot: Bot,
   date: string,
+  singleCategory?: Category,
+  seasonContext?: { seasonId: number; dayNumber: number },
   customKeywords?: { stretching?: string; strength?: string; mobility?: string },
   correlationId?: string,
 ): Promise<void> {
   const cid = correlationId ?? generateCorrelationId();
   const flowLog = log.withCorrelation(cid);
   const config = getConfig();
-  const categories = [...CATEGORIES];
+  const categories: Category[] = singleCategory ? [singleCategory] : [...CATEGORIES];
 
-  flowLog.info('starting approval flow', { date, hasCustomKeywords: !!customKeywords });
+  const seasonLabel = seasonContext
+    ? ` (Сезон, день ${seasonContext.dayNumber})`
+    : '';
+
+  flowLog.info('starting approval flow', { date, categories: categories.length, season: !!seasonContext });
 
   await bot.api.sendMessage(
     config.TELEGRAM_ADMIN_USER_ID,
-    `🔍 Ищу видео на ${date}...`,
+    `🔍 Ищу видео${seasonLabel}...`,
   );
 
+  // Search: single category or all
   let allVideos: Awaited<ReturnType<typeof searchAllCategories>>;
   try {
-    allVideos = await searchAllCategories(customKeywords, cid);
+    if (singleCategory) {
+      const videos = await searchVideos(singleCategory, undefined, cid);
+      allVideos = { [singleCategory]: videos } as any;
+    } else {
+      allVideos = await searchAllCategories(customKeywords, cid);
+    }
   } catch (err) {
     flowLog.error('search failed', { error: String(err) });
     await bot.api.sendMessage(
@@ -124,10 +148,10 @@ export async function runApprovalFlow(
   for (const category of categories) {
     const videos = allVideos[category];
 
-    if (videos.length === 0) {
+    if (!videos || videos.length === 0) {
       await bot.api.sendMessage(
         config.TELEGRAM_ADMIN_USER_ID,
-        `⚠️ Не нашёл видео для ${category} на ${date}.`
+        `⚠️ Не нашёл видео для ${category}${seasonLabel}.`
       );
       continue;
     }
@@ -135,6 +159,12 @@ export async function runApprovalFlow(
     const v = videos[0];
     const videoId = upsertVideo(v);
     const sessionId = createApprovalSession(date, category, videoId);
+
+    // Store season context in session metadata for use on approve callback
+    if (seasonContext) {
+      storeSeasonContext(sessionId, seasonContext.seasonId, seasonContext.dayNumber);
+    }
+
     const text = await formatApprovalMessage(v, category);
     const keyboard = new InlineKeyboard()
       .text('✅ Выбрать', `approve:${sessionId}`)
@@ -149,6 +179,11 @@ export async function runApprovalFlow(
     }
 
     await new Promise(r => setTimeout(r, 300));
+  }
+
+  if (singleCategory) {
+    // Single category mode — no summary needed, approval card is the UI
+    return;
   }
 
   const total = categories.length;
@@ -199,6 +234,15 @@ export function registerApprovalCallbacks(bot: Bot): void {
     }
 
     setApprovalStatus(session.id, action === 'approve' ? 'approved' : 'rejected');
+
+    // If this approval is for a season slot, fill the queue
+    if (action === 'approve' && session.video_id) {
+      const sctx = getSeasonContext(session.id);
+      if (sctx) {
+        setSeasonQueueVideo(sctx.seasonId, sctx.dayNumber, session.video_id);
+        seasonContextMap.delete(session.id);
+      }
+    }
 
     const newKeyboard = action === 'approve'
       ? new InlineKeyboard().text('✅ Выбрано', 'noop').text('↩️ Отменить', `unapprove:${session.id}`)

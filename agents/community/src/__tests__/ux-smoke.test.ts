@@ -12,8 +12,8 @@ describe('UX smoke: bot-menu handlers', () => {
   const botMenuSource = readSrc('bot-menu.ts');
 
   it('persistent menu has all required buttons', () => {
-    expect(botMenuSource).toContain('Предложить тренировку');
-    expect(botMenuSource).toContain('Мои тренировки');
+    expect(botMenuSource).toContain('💡 Предложить тренировку');
+    expect(botMenuSource).toContain('🏋️ Мои тренировки');
     expect(botMenuSource).toContain('Профиль');
     expect(botMenuSource).toContain('Фильтры');
   });

@@ -33,3 +33,35 @@ export function currentWeekMsk(): string {
 export function moscowHour(): number {
   return moscowNow().getHours();
 }
+
+/** Day of week in Moscow: 0=Sun, 1=Mon … 6=Sat (JS convention) */
+export function dayOfWeekMsk(): number {
+  return moscowNow().getDay();
+}
+
+/** YYYY-MM-DD of the next Monday in MSK (or today if today is Monday) */
+export function nextMondayMsk(): string {
+  const d = moscowNow();
+  const day = d.getDay(); // 0=Sun … 6=Sat
+  const daysUntilMon = day === 0 ? 1 : day === 1 ? 0 : 8 - day;
+  d.setDate(d.getDate() + daysUntilMon);
+  return formatDate(d);
+}
+
+/** Difference in days: b - a (positive if b is later) */
+export function dateDiffDays(a: string, b: string): number {
+  const da = new Date(a + 'T00:00:00');
+  const db = new Date(b + 'T00:00:00');
+  return Math.round((db.getTime() - da.getTime()) / 86_400_000);
+}
+
+/** Add N days to a YYYY-MM-DD string, returns YYYY-MM-DD */
+export function addDaysMsk(date: string, days: number): string {
+  const d = new Date(date + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  return formatDate(d);
+}
+
+function formatDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}

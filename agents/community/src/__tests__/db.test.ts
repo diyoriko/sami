@@ -354,6 +354,76 @@ describe('shared constants', () => {
     expect(decodeHtmlEntities('&amp;&quot;')).toBe('&"');
     expect(escapeMarkdown('*bold*')).toBe('\\*bold\\*');
   });
+
+  it('SEASON_DAY_MAP covers all 7 days of the week', async () => {
+    const { SEASON_DAY_MAP, CATEGORIES } = await import('../shared');
+    const days = [0, 1, 2, 3, 4, 5, 6];
+    for (const d of days) {
+      expect(SEASON_DAY_MAP[d]).toBeDefined();
+      expect(CATEGORIES).toContain(SEASON_DAY_MAP[d]);
+    }
+    // All 7 categories used (no duplicates)
+    const cats = new Set(days.map(d => SEASON_DAY_MAP[d]));
+    expect(cats.size).toBe(7);
+  });
+
+  it('seasonHeader formats correctly', async () => {
+    const { seasonHeader } = await import('../shared');
+    const h = seasonHeader(1, 3, 'mobility');
+    expect(h).toContain('Сезон 1');
+    expect(h).toContain('День 3');
+    expect(h).toContain('🤸');
+    expect(h).toContain('Мобильность');
+  });
+
+  it('buildSeasonHashtags includes category + season + day', async () => {
+    const { buildSeasonHashtags } = await import('../shared');
+    const tags = buildSeasonHashtags({
+      category: 'stretching',
+      difficulty: 'beginner',
+      seasonNumber: 2,
+      seasonDay: 5,
+    });
+    expect(tags).toContain('#стретчинг');
+    expect(tags).toContain('#начинающий');
+    expect(tags).toContain('#сезон2');
+    expect(tags).toContain('#день5');
+  });
+
+  it('buildSeasonHashtags adds muscle hashtags for specific muscles', async () => {
+    const { buildSeasonHashtags } = await import('../shared');
+    const tags = buildSeasonHashtags({
+      category: 'strength',
+      seasonNumber: 1,
+      seasonDay: 2,
+      muscles: 'спина, ноги',
+    });
+    expect(tags).toContain('#спина');
+    expect(tags).toContain('#ноги');
+  });
+
+  it('buildSeasonHashtags skips generic muscle labels', async () => {
+    const { buildSeasonHashtags } = await import('../shared');
+    const tags = buildSeasonHashtags({
+      category: 'yoga',
+      seasonNumber: 1,
+      seasonDay: 4,
+      muscles: 'всё тело',
+    });
+    expect(tags).not.toContain('#всё_тело');
+  });
+
+  it('buildUgcHashtags omits season and day tags', async () => {
+    const { buildUgcHashtags } = await import('../shared');
+    const tags = buildUgcHashtags({
+      category: 'cardio',
+      difficulty: 'advanced',
+    });
+    expect(tags).toContain('#кардио');
+    expect(tags).toContain('#продвинутый');
+    expect(tags).not.toMatch(/#сезон/);
+    expect(tags).not.toMatch(/#день/);
+  });
 });
 
 describe('getPostByMessageId', () => {
@@ -368,5 +438,226 @@ describe('getPostByMessageId', () => {
   it('returns null for unknown message ID', async () => {
     const { getPostByMessageId } = await import('../db');
     expect(getPostByMessageId(9999)).toBeNull();
+  });
+});
+
+// ─── SEASON TESTS ───────────────────────────────────────────────────────────
+
+describe('seasons: createSeason + getters', () => {
+  it('creates a season and retrieves it', async () => {
+    const db = await import('../db');
+    const id = db.createSeason(100, '2026-04-06', '2026-04-26');
+    expect(id).toBeGreaterThan(0);
+
+    const latest = db.getLatestSeason();
+    expect(latest).not.toBeNull();
+    expect(latest!.number).toBe(100);
+    expect(latest!.status).toBe('upcoming');
+  });
+
+  it('activateSeason changes status to active', async () => {
+    const db = await import('../db');
+    const id = db.createSeason(101, '2026-05-04', '2026-05-24');
+    db.activateSeason(id);
+    const season = db.getActiveSeason();
+    expect(season).not.toBeNull();
+    expect(season!.id).toBe(id);
+    expect(season!.status).toBe('active');
+    // cleanup: complete it so it doesn't interfere with other tests
+    db.completeSeason(id);
+  });
+
+  it('completeSeason changes status to completed', async () => {
+    const db = await import('../db');
+    const id = db.createSeason(102, '2026-06-01', '2026-06-21');
+    db.activateSeason(id);
+    db.completeSeason(id);
+    const active = db.getActiveSeason();
+    // Should not be active anymore (unless another test left one active)
+    if (active) expect(active.id).not.toBe(id);
+  });
+});
+
+describe('seasons: ensureActiveSeason', () => {
+  it('creates season 1 when no seasons exist', async () => {
+    const db = await import('../db');
+    // Clean up all test seasons to test from-scratch creation
+    db.getDb().prepare(`DELETE FROM season_queue`).run();
+    db.getDb().prepare(`DELETE FROM seasons`).run();
+
+    const season = db.ensureActiveSeason('2026-04-06', '2026-04-06');
+    expect(season).not.toBeNull();
+    expect(season.number).toBe(1);
+    // nextMonday = today = 2026-04-06, so it should activate immediately
+    expect(season.status).toBe('active');
+    expect(season.start_date).toBe('2026-04-06');
+  });
+
+  it('is idempotent — returns same season on second call', async () => {
+    const db = await import('../db');
+    const s1 = db.ensureActiveSeason('2026-04-06', '2026-04-13');
+    const s2 = db.ensureActiveSeason('2026-04-06', '2026-04-13');
+    expect(s1.id).toBe(s2.id);
+    expect(s1.number).toBe(s2.number);
+  });
+
+  it('creates upcoming season when nextMonday is in the future', async () => {
+    const db = await import('../db');
+    db.getDb().prepare(`DELETE FROM season_queue`).run();
+    db.getDb().prepare(`DELETE FROM seasons`).run();
+
+    // today=Wed, nextMonday=next week
+    const season = db.ensureActiveSeason('2026-04-08', '2026-04-13');
+    expect(season.number).toBe(1);
+    expect(season.start_date).toBe('2026-04-13');
+    expect(season.status).toBe('upcoming');
+  });
+});
+
+describe('seasons: getSeasonDay + getSeasonWeekNumber', () => {
+  it('day 1 on start date', async () => {
+    const { getSeasonDay } = await import('../db');
+    expect(getSeasonDay('2026-04-06', '2026-04-06')).toBe(1);
+  });
+
+  it('day 7 on day+6', async () => {
+    const { getSeasonDay } = await import('../db');
+    expect(getSeasonDay('2026-04-06', '2026-04-12')).toBe(7);
+  });
+
+  it('day 21 on last day of season', async () => {
+    const { getSeasonDay } = await import('../db');
+    expect(getSeasonDay('2026-04-06', '2026-04-26')).toBe(21);
+  });
+
+  it('week 1 for days 1-7', async () => {
+    const { getSeasonWeekNumber } = await import('../db');
+    expect(getSeasonWeekNumber(1)).toBe(1);
+    expect(getSeasonWeekNumber(7)).toBe(1);
+  });
+
+  it('week 2 for days 8-14', async () => {
+    const { getSeasonWeekNumber } = await import('../db');
+    expect(getSeasonWeekNumber(8)).toBe(2);
+    expect(getSeasonWeekNumber(14)).toBe(2);
+  });
+
+  it('week 3 for days 15-21', async () => {
+    const { getSeasonWeekNumber } = await import('../db');
+    expect(getSeasonWeekNumber(15)).toBe(3);
+    expect(getSeasonWeekNumber(21)).toBe(3);
+  });
+});
+
+describe('seasons: queue management', () => {
+  let testSeasonId: number;
+  let testVideoId: number;
+
+  beforeAll(async () => {
+    const db = await import('../db');
+    // Clean slate
+    db.getDb().prepare(`DELETE FROM season_queue`).run();
+    db.getDb().prepare(`DELETE FROM seasons`).run();
+
+    testSeasonId = db.createSeason(10, '2026-05-04', '2026-05-24');
+    db.activateSeason(testSeasonId);
+
+    testVideoId = db.upsertVideo({
+      youtube_id: 'season-queue-test',
+      title: 'Season Queue Test',
+      channel_name: 'Test',
+      channel_url: null,
+      duration_seconds: 900,
+      duration_label: '15:00',
+      difficulty: 'intermediate',
+      category: 'mobility',
+      muscles: '["спина"]',
+      thumbnail_url: null,
+      video_url: 'https://youtube.com/watch?v=sqt',
+      view_count: 5000,
+      rating: 0,
+      like_ratio: 0.92,
+      channel_subscribers: 20000,
+      search_query: 'test',
+    });
+  });
+
+  it('initSeasonWeekSlots creates 7 empty slots', async () => {
+    const db = await import('../db');
+    db.initSeasonWeekSlots(testSeasonId, 1);
+    const slots = db.getSeasonWeekStatus(testSeasonId, 1);
+    expect(slots.length).toBe(7);
+    for (const s of slots) {
+      expect(s.status).toBe('empty');
+      expect(s.video_id).toBeNull();
+    }
+    // Days should be 1-7
+    expect(slots.map(s => s.day_number)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  });
+
+  it('initSeasonWeekSlots is idempotent', async () => {
+    const db = await import('../db');
+    db.initSeasonWeekSlots(testSeasonId, 1);
+    db.initSeasonWeekSlots(testSeasonId, 1); // second call
+    const slots = db.getSeasonWeekStatus(testSeasonId, 1);
+    expect(slots.length).toBe(7); // still 7, not 14
+  });
+
+  it('week 2 slots start at day 8', async () => {
+    const db = await import('../db');
+    db.initSeasonWeekSlots(testSeasonId, 2);
+    const slots = db.getSeasonWeekStatus(testSeasonId, 2);
+    expect(slots.length).toBe(7);
+    expect(slots[0].day_number).toBe(8);
+    expect(slots[6].day_number).toBe(14);
+  });
+
+  it('setSeasonQueueVideo fills a slot', async () => {
+    const db = await import('../db');
+    db.setSeasonQueueVideo(testSeasonId, 1, testVideoId);
+    const slot = db.getSeasonQueueForDay(testSeasonId, 1);
+    expect(slot).not.toBeNull();
+    expect(slot!.video_id).toBe(testVideoId);
+    expect(slot!.status).toBe('queued');
+  });
+
+  it('getNextEmptySlot skips filled slots', async () => {
+    const db = await import('../db');
+    // Day 1 is already queued from previous test
+    const next = db.getNextEmptySlot(testSeasonId, 1);
+    expect(next).not.toBeNull();
+    expect(next!.day_number).toBe(2); // first empty after day 1
+  });
+
+  it('markSeasonQueuePosted changes status', async () => {
+    const db = await import('../db');
+    db.markSeasonQueuePosted(testSeasonId, 1);
+    const slot = db.getSeasonQueueForDay(testSeasonId, 1);
+    expect(slot).not.toBeNull();
+    expect(slot!.status).toBe('posted');
+  });
+
+  it('getSeasonQueueForDay returns falsy for non-existent day', async () => {
+    const db = await import('../db');
+    const slot = db.getSeasonQueueForDay(testSeasonId, 99);
+    expect(slot).toBeFalsy();
+  });
+
+  it('getSeasonWeekStatus joins video title', async () => {
+    const db = await import('../db');
+    const slots = db.getSeasonWeekStatus(testSeasonId, 1);
+    const filledSlot = slots.find(s => s.day_number === 1);
+    expect(filledSlot).toBeDefined();
+    expect(filledSlot!.title).toBe('Season Queue Test');
+  });
+
+  it('getNextEmptySlot returns null when all filled', async () => {
+    const db = await import('../db');
+    // Fill all remaining slots in week 1
+    for (let d = 2; d <= 7; d++) {
+      db.setSeasonQueueVideo(testSeasonId, d, testVideoId);
+    }
+    const next = db.getNextEmptySlot(testSeasonId, 1);
+    expect(next).toBeFalsy();
   });
 });
