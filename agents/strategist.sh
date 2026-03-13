@@ -556,7 +556,13 @@ PY
 
   if [[ -n "$PACKET_JSON" && "$PACKET_JSON" != "{}" ]]; then
     # Use STRATEGIST_API_KEY if available, fall back to TELEGRAM_BOT_TOKEN
-    API_KEY="$(grep -m1 'STRATEGIST_API_KEY=' "$HOME/.config/sami/community.env" 2>/dev/null | cut -d= -f2- || true)"
+    API_KEY="${STRATEGIST_API_KEY:-}"
+    if [[ -z "$API_KEY" ]]; then
+      API_KEY="${TELEGRAM_BOT_TOKEN:-}"
+    fi
+    if [[ -z "$API_KEY" ]]; then
+      API_KEY="$(grep -m1 'STRATEGIST_API_KEY=' "$HOME/.config/sami/community.env" 2>/dev/null | cut -d= -f2- || true)"
+    fi
     if [[ -z "$API_KEY" ]]; then
       API_KEY="$(grep -m1 'TELEGRAM_BOT_TOKEN=' "$HOME/.config/sami/community.env" 2>/dev/null | cut -d= -f2- || true)"
     fi

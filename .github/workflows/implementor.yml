@@ -16,11 +16,21 @@ env:
 
 jobs:
   implement:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Install project dependencies
+        run: cd agents/community && npm ci
 
       - name: Fetch next task
         id: task
@@ -72,6 +82,8 @@ jobs:
 
       - name: Run Claude Code
         if: steps.task.outputs.has_task == 'true'
+        env:
+          CLAUDE_AUTH_TOKEN: ${{ secrets.CLAUDE_AUTH_TOKEN }}
         run: |
           SPEC=$(cat /tmp/task-spec.txt)
           claude --print --model claude-sonnet-4-6 "

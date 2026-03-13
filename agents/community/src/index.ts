@@ -405,7 +405,32 @@ async function main(): Promise<void> {
       return;
     }
 
-    // POST /packet — receive COMMUNITY_PACKET from Mac strategist
+    // GET /backup — download SQLite database (auth required)
+    if (req.url === '/backup' && req.method === 'GET') {
+      const authHeader = req.headers['x-admin-token'];
+      const expectedToken = config.STRATEGIST_API_KEY ?? config.TELEGRAM_BOT_TOKEN;
+      if (authHeader !== expectedToken) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'unauthorized' }));
+        return;
+      }
+      const dbPath = config.COMMUNITY_DB_PATH;
+      if (!fs.existsSync(dbPath)) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'database not found' }));
+        return;
+      }
+      const stat = fs.statSync(dbPath);
+      res.writeHead(200, {
+        'Content-Type': 'application/octet-stream',
+        'Content-Disposition': `attachment; filename="community-backup-${new Date().toISOString().slice(0, 10)}.db"`,
+        'Content-Length': stat.size,
+      });
+      fs.createReadStream(dbPath).pipe(res);
+      return;
+    }
+
+    // POST /packet — receive COMMUNITY_PACKET from strategist
     if (req.url === '/packet' && req.method === 'POST') {
       const authHeader = req.headers['x-admin-token'];
       const expectedToken = config.STRATEGIST_API_KEY ?? config.TELEGRAM_BOT_TOKEN;
