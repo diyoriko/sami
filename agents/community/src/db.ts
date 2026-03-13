@@ -1258,6 +1258,29 @@ export function getLatestDeploy(): DeployRecord | null {
   ).get() as DeployRecord | null;
 }
 
+export function getDeployStats(): {
+  totalMembers: number;
+  totalVideos: number;
+  totalPosts: number;
+  totalCompletions: number;
+  activeUsers: number;
+  ugcPending: number;
+  modActions7d: number;
+  rejections7d: number;
+} {
+  return getDb().prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM members) as totalMembers,
+      (SELECT COUNT(*) FROM videos) as totalVideos,
+      (SELECT COUNT(*) FROM posts) as totalPosts,
+      (SELECT COUNT(*) FROM completions) as totalCompletions,
+      (SELECT COUNT(DISTINCT telegram_user_id) FROM completions) as activeUsers,
+      (SELECT COUNT(*) FROM ugc_submissions WHERE status = 'pending' AND deleted_at IS NULL) as ugcPending,
+      (SELECT COUNT(*) FROM moderation_log WHERE created_at > datetime('now', '-7 days')) as modActions7d,
+      (SELECT COUNT(*) FROM video_rejections WHERE rejected_at > datetime('now', '-7 days')) as rejections7d
+  `).get() as any;
+}
+
 // --- Video rejections (blocklist) ---
 
 export function recordRejection(youtubeId: string, category: string): void {

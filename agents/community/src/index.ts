@@ -117,6 +117,126 @@ async function auditDescriptions(bot: Bot, config: ReturnType<typeof getConfig>)
   }
 }
 
+async function sendDeployReport(
+  bot: Bot,
+  config: ReturnType<typeof getConfig>,
+  pkgVersion?: string,
+): Promise<void> {
+  const { escV2: e } = await import('./shared');
+  const {
+    getDeployStats, getActiveSeason, getSeasonDay, getSeasonWeekNumber,
+    getChannelStats, getLastStrategistTimestamp, getLatestPost: getLatestPostDb,
+    getSeasonWeekStatus, initSeasonWeekSlots,
+  } = await import('./db');
+  const { todayMsk } = await import('./dates');
+  const { isYtDlpAvailable } = await import('./downloader');
+  const { SEASON_DAY_MAP, CATEGORY_RU, CATEGORY_EMOJI } = await import('./shared');
+
+  const today = todayMsk();
+  const stats = getDeployStats();
+  const season = getActiveSeason();
+  const channelStats = getChannelStats(today);
+  const lastStrat = getLastStrategistTimestamp();
+  const latestPost = getLatestPostDb();
+  const ytDlp = isYtDlpAvailable();
+
+  const rawCommitMsg = process.env.RAILWAY_GIT_COMMIT_MESSAGE?.trim();
+  const sha = process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7);
+
+  // ── Header ──
+  const vTag = pkgVersion ? ` v${e(pkgVersion)}` : '';
+  const shaTag = sha ? ` · \`${sha}\`` : '';
+  const lines: string[] = [
+    `🚀 *Деплой SAMI${vTag}*${shaTag}`,
+  ];
+
+  // ── What changed ──
+  if (rawCommitMsg) {
+    const commitLines = rawCommitMsg
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => l !== '' && !l.startsWith('Co-Authored-By:'));
+
+    if (commitLines.length > 0) {
+      lines.push('');
+      lines.push(`📦 *Что нового:*`);
+      lines.push(`*${e(commitLines[0])}*`);
+      for (let i = 1; i < Math.min(commitLines.length, 15); i++) {
+        const line = commitLines[i];
+        lines.push(line.startsWith('- ') || line.startsWith('• ')
+          ? `  ${e(line)}`
+          : `  \\- ${e(line)}`);
+      }
+    }
+  }
+
+  // ── Services status ──
+  lines.push('');
+  lines.push(`⚙️ *Сервисы:*`);
+  lines.push(`  Community Bot — ✅ online`);
+  lines.push(`  HTTP API — ✅ :${e(process.env.PORT || '3000')}`);
+  lines.push(`  yt\\-dlp — ${ytDlp ? '✅' : '❌ недоступен'}`);
+  lines.push(`  Стратег — ${lastStrat ? `✅ ${e(lastStrat.slice(0, 16).replace('T', ' '))}` : '⏳ нет данных'}`);
+  lines.push(`  Аналитика — ✅ \\(00:30 \\+ вс 10:00\\)`);
+
+  // ── Season ──
+  if (season) {
+    const dayNum = getSeasonDay(season.start_date, today);
+    const weekNum = getSeasonWeekNumber(dayNum);
+    const dow = new Date(today + 'T00:00:00').getDay();
+    const todayCat = SEASON_DAY_MAP[dow];
+    const catLabel = todayCat ? `${CATEGORY_EMOJI[todayCat]} ${CATEGORY_RU[todayCat]}` : '?';
+
+    initSeasonWeekSlots(season.id, weekNum);
+    const slots = getSeasonWeekStatus(season.id, weekNum);
+    const filled = slots.filter(s => s.status === 'queued' || s.status === 'posted').length;
+    const posted = slots.filter(s => s.status === 'posted').length;
+
+    lines.push('');
+    lines.push(`🏆 *Сезон ${e(String(season.number))}:*`);
+    lines.push(`  День ${e(String(dayNum))}/21 · Неделя ${weekNum}`);
+    lines.push(`  Сегодня: ${e(catLabel)}`);
+    lines.push(`  Очередь: ${e(String(filled))}/7 заполнено, ${e(String(posted))} опубликовано`);
+  } else {
+    lines.push('');
+    lines.push(`🏆 *Сезон:* нет активного`);
+  }
+
+  // ── Community metrics ──
+  lines.push('');
+  lines.push(`📊 *Метрики:*`);
+  if (channelStats && channelStats.subscriber_count > 0) {
+    lines.push(`  Подписчики канала: ${e(String(channelStats.subscriber_count))}`);
+    lines.push(`  Участники группы: ${e(String(channelStats.group_member_count))}`);
+  }
+  lines.push(`  Всего участников: ${e(String(stats.totalMembers))}`);
+  lines.push(`  Видео в базе: ${e(String(stats.totalVideos))}`);
+  lines.push(`  Постов: ${e(String(stats.totalPosts))} · Выполнений: ${e(String(stats.totalCompletions))}`);
+  lines.push(`  Активных юзеров: ${e(String(stats.activeUsers))}`);
+  if (stats.ugcPending > 0) {
+    lines.push(`  ⚠️ UGC на модерации: ${e(String(stats.ugcPending))}`);
+  }
+  if (stats.modActions7d > 0) {
+    lines.push(`  Модерация \\(7д\\): ${e(String(stats.modActions7d))} действий`);
+  }
+
+  // ── Last post ──
+  if (latestPost) {
+    lines.push('');
+    lines.push(`📤 Последний пост: ${e(latestPost.category)} · ${e(latestPost.date)}`);
+  }
+
+  // ── Quick actions reminder ──
+  lines.push('');
+  lines.push(`_Кнопки: 🔍 Поиск видео · 📊 Статус · 📈 Аналитика_`);
+
+  await bot.api.sendMessage(
+    config.TELEGRAM_ADMIN_USER_ID,
+    lines.join('\n'),
+    { parse_mode: 'MarkdownV2' },
+  );
+}
+
 async function main(): Promise<void> {
   const config = getConfig();
 
@@ -514,63 +634,10 @@ async function main(): Promise<void> {
         { scope: { type: 'all_private_chats' } }
       ).catch(() => {});
 
-      // Notify admin on startup with deploy info (admin only, never channel/group)
-      const rawCommitMsg = process.env.RAILWAY_GIT_COMMIT_MESSAGE?.trim();
-      const commitSha = process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7);
-
-      const { escV2: escDeploy } = await import('./shared');
-      const versionStr = pkgVersion ? `\\(v${escDeploy(pkgVersion)}\\)` : '';
-      const deployLines = [`*Бот обновлён* ${versionStr}`];
-      if (commitSha) deployLines[0] += ` · \`${commitSha}\``;
-
-      if (rawCommitMsg) {
-        const allLines = rawCommitMsg
-          .split('\n')
-          .map(l => l.trim())
-          .filter(l => l !== '' && !l.startsWith('Co-Authored-By:'));
-
-        // Split into changelog and test checklist (separator: "Test:" line)
-        const testIdx = allLines.findIndex(l => /^Test:?\s*$/i.test(l));
-        const changeLines = testIdx >= 0 ? allLines.slice(0, testIdx) : allLines;
-        const testLines = testIdx >= 0 ? allLines.slice(testIdx + 1) : [];
-
-        // Changelog block
-        if (changeLines.length > 0) {
-          deployLines.push('');
-          deployLines.push(`*${escDeploy(changeLines[0])}*`);
-          for (let i = 1; i < changeLines.length; i++) {
-            const line = changeLines[i];
-            deployLines.push(line.startsWith('- ') || line.startsWith('• ')
-              ? `  ${escDeploy(line)}`
-              : `  \\- ${escDeploy(line)}`);
-          }
-        }
-
-        // Test checklist block
-        if (testLines.length > 0) {
-          deployLines.push('');
-          deployLines.push('*Затестить:*');
-          for (const line of testLines) {
-            const clean = line.replace(/^[-•]\s*/, '');
-            deployLines.push(`  \\- ${escDeploy(clean)}`);
-          }
-        }
-      }
-
-      // Strategist schedule info
-      deployLines.push('');
-      deployLines.push(`Стратег: ежедневно 12:30 МСК \\(launchd Mac\\)`);
-      const { getLastStrategistTimestamp } = await import('./db');
-      const lastStrat = getLastStrategistTimestamp();
-      if (lastStrat) {
-        deployLines.push(`Последний отчёт: ${escDeploy(lastStrat.slice(0, 16).replace('T', ' '))}`);
-      }
-
-      bot.api.sendMessage(
-        config.TELEGRAM_ADMIN_USER_ID,
-        deployLines.join('\n'),
-        { parse_mode: 'MarkdownV2' },
-      ).catch(() => {});
+      // ── Rich deploy notification ──────────────────────────────────
+      await sendDeployReport(bot, config, pkgVersion).catch(err => {
+        log.error('deploy report failed', { error: String(err) });
+      });
 
       // One-time: audit channel/group/bot descriptions — add cross-links if missing
       auditDescriptions(bot, config).catch(err => {
