@@ -320,18 +320,27 @@ export function registerBotMenu(bot: Bot): void {
     const today = todayMsk();
     const season = ensureActiveSeason(today, nextMondayMsk());
 
-    if (season.status !== 'active') {
-      await ctx.reply(`Сезон ${season.number} стартует ${season.start_date} (${season.status}). Подожди до понедельника.`);
-      return;
-    }
-
-    const seasonDay = getSeasonDay(season.start_date, today);
-    if (seasonDay > SEASON_DURATION) {
+    if (season.status === 'completed') {
       await ctx.reply(`Сезон ${season.number} завершён. Новый сезон стартует в понедельник.`);
       return;
     }
 
-    const weekNum = getSeasonWeekNumber(seasonDay);
+    // Allow filling queue even for upcoming seasons (plan ahead)
+    let seasonDay: number;
+    let weekNum: 1 | 2 | 3;
+
+    if (season.status === 'upcoming') {
+      // Season hasn't started yet — show week 1 for planning
+      seasonDay = 0;
+      weekNum = 1;
+    } else {
+      seasonDay = getSeasonDay(season.start_date, today);
+      if (seasonDay > SEASON_DURATION) {
+        await ctx.reply(`Сезон ${season.number} завершён. Новый сезон стартует в понедельник.`);
+        return;
+      }
+      weekNum = getSeasonWeekNumber(seasonDay);
+    }
     initSeasonWeekSlots(season.id, weekNum);
     const slots = getSeasonWeekStatus(season.id, weekNum);
 
@@ -352,8 +361,9 @@ export function registerBotMenu(bot: Bot): void {
 
     const filledCount = slots.filter(s => s.status !== 'empty').length;
 
+    const planTag = season.status === 'upcoming' ? ` · стартует ${escV2(season.start_date)}` : '';
     const msg = [
-      `📅 *Неделя ${weekNum} Сезона ${season.number}* \\(дни ${(weekNum - 1) * 7 + 1}\\-${weekNum * 7}\\)`,
+      `📅 *Неделя ${weekNum} Сезона ${season.number}*${planTag}`,
       ``,
       ...lines.map(l => escV2(l)),
       ``,
