@@ -34,3 +34,10 @@ test-*.db-wal
 
 # Setup results (contains secrets)
 SETUP_RESULTS.md
+
+# YouTube cookies (auth tokens)
+Youtube Cookies/
+cookies*.txt
+
+# Claude Code worktrees
+.claude/

@@ -750,7 +750,6 @@ export function registerBotMenu(bot: Bot): void {
           `*${title}*`,
           '',
           ...tagLines,
-          `\`✅ Сделали: 0\``,
           '',
           `Автор: ${escV2(authorDisplay)}`,
         ].join('\n');
