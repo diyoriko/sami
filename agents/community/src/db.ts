@@ -379,6 +379,35 @@ function migrate(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_impl_tasks_status ON impl_tasks(status);
   `);
 
+  // Seasons — 21-day challenge cycles
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS seasons (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      number INTEGER UNIQUE NOT NULL,
+      start_date TEXT NOT NULL,
+      end_date TEXT NOT NULL,
+      status TEXT CHECK(status IN ('active','completed','upcoming')) DEFAULT 'upcoming',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_seasons_status ON seasons(status);
+
+    CREATE TABLE IF NOT EXISTS season_queue (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      season_id INTEGER NOT NULL REFERENCES seasons(id),
+      day_number INTEGER NOT NULL,
+      video_id INTEGER REFERENCES videos(id),
+      status TEXT CHECK(status IN ('empty','queued','posted')) DEFAULT 'empty',
+      queued_at TEXT,
+      posted_at TEXT,
+      UNIQUE(season_id, day_number)
+    );
+    CREATE INDEX IF NOT EXISTS idx_season_queue_lookup ON season_queue(season_id, status);
+  `);
+
+  // Season columns on posts
+  try { db.exec('ALTER TABLE posts ADD COLUMN season_id INTEGER REFERENCES seasons(id)'); } catch { /* exists */ }
+  try { db.exec('ALTER TABLE posts ADD COLUMN season_day INTEGER'); } catch { /* exists */ }
+
   // Rubrics: weekly ritual challenges, mechanics breakdowns, progress digests
   db.exec(`
     CREATE TABLE IF NOT EXISTS rubric_rituals (
@@ -479,6 +508,10 @@ export interface VideoRow {
   rating: number;
   like_ratio: number;
   channel_subscribers: number;
+}
+
+export function getVideoById(id: number): VideoRow | null {
+  return getDb().prepare('SELECT * FROM videos WHERE id = ?').get(id) as VideoRow | null;
 }
 
 export function upsertVideo(v: Omit<VideoRow, 'id'> & { search_query?: string }): number {
@@ -658,10 +691,15 @@ export function getRecentPosts(days: number = 7): RecentPost[] {
 
 // --- Post helpers ---
 
-export function recordPost(date: string, category: string, videoId: number, channelMessageId: number, postType: 'video' | 'link' = 'video'): number {
+export function recordPost(
+  date: string, category: string, videoId: number, channelMessageId: number,
+  postType: 'video' | 'link' = 'video',
+  seasonId?: number, seasonDay?: number,
+): number {
   const result = getDb().prepare(`
-    INSERT INTO posts (date, category, video_id, channel_message_id, post_type) VALUES (?, ?, ?, ?, ?)
-  `).run(date, category, videoId, channelMessageId, postType);
+    INSERT INTO posts (date, category, video_id, channel_message_id, post_type, season_id, season_day)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(date, category, videoId, channelMessageId, postType, seasonId ?? null, seasonDay ?? null);
   return Number(result.lastInsertRowid);
 }
 
@@ -1600,4 +1638,162 @@ export function getWeeklyTopMembers(weekStart: string, limit: number = 5): { tel
     ORDER BY count DESC
     LIMIT ?
   `).all(weekStart, limit) as { telegram_user_id: number; username: string | null; first_name: string | null; count: number }[];
+}
+
+// ─── SEASONS ────────────────────────────────────────────────────────────────
+
+export interface SeasonRow {
+  id: number;
+  number: number;
+  start_date: string;
+  end_date: string;
+  status: 'active' | 'completed' | 'upcoming';
+  created_at: string;
+}
+
+export interface SeasonQueueRow {
+  id: number;
+  season_id: number;
+  day_number: number;
+  video_id: number | null;
+  status: 'empty' | 'queued' | 'posted';
+  queued_at: string | null;
+  posted_at: string | null;
+}
+
+export function createSeason(num: number, startDate: string, endDate: string): number {
+  const info = getDb().prepare(
+    `INSERT INTO seasons (number, start_date, end_date, status) VALUES (?, ?, ?, 'upcoming')`
+  ).run(num, startDate, endDate);
+  return Number(info.lastInsertRowid);
+}
+
+export function getActiveSeason(): SeasonRow | null {
+  return getDb().prepare(`SELECT * FROM seasons WHERE status = 'active' LIMIT 1`).get() as SeasonRow | null;
+}
+
+export function getUpcomingSeason(): SeasonRow | null {
+  return getDb().prepare(`SELECT * FROM seasons WHERE status = 'upcoming' ORDER BY start_date LIMIT 1`).get() as SeasonRow | null;
+}
+
+export function getLatestSeason(): SeasonRow | null {
+  return getDb().prepare(`SELECT * FROM seasons ORDER BY number DESC LIMIT 1`).get() as SeasonRow | null;
+}
+
+export function activateSeason(seasonId: number): void {
+  getDb().prepare(`UPDATE seasons SET status = 'active' WHERE id = ?`).run(seasonId);
+}
+
+export function completeSeason(seasonId: number): void {
+  getDb().prepare(`UPDATE seasons SET status = 'completed' WHERE id = ?`).run(seasonId);
+}
+
+/**
+ * Ensure there is an active season for today.
+ * - If active exists, return it.
+ * - If upcoming exists and today >= start_date, activate it.
+ * - If nothing exists, create Season 1 from next Monday.
+ */
+export function ensureActiveSeason(today: string, nextMonday: string): SeasonRow {
+  const active = getActiveSeason();
+  if (active) return active;
+
+  const upcoming = getUpcomingSeason();
+  if (upcoming && upcoming.start_date <= today) {
+    activateSeason(upcoming.id);
+    return { ...upcoming, status: 'active' };
+  }
+  if (upcoming) return upcoming; // not yet started
+
+  // No season at all — create first one
+  const latest = getLatestSeason();
+  const num = latest ? latest.number + 1 : 1;
+  const start = nextMonday;
+  const end = addDaysStr(start, 20); // 21 days: day 0..20
+  const id = createSeason(num, start, end);
+  const created: SeasonRow = { id, number: num, start_date: start, end_date: end, status: 'upcoming', created_at: '' };
+  if (start <= today) {
+    activateSeason(id);
+    return { ...created, status: 'active' };
+  }
+  return created;
+}
+
+/** Simple date+days helper for DB layer (no dependency on dates.ts at module level) */
+function addDaysStr(date: string, days: number): string {
+  const d = new Date(date + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Compute season day (1-21) from today's date and season start */
+export function getSeasonDay(seasonStartDate: string, today: string): number {
+  const start = new Date(seasonStartDate + 'T00:00:00');
+  const now = new Date(today + 'T00:00:00');
+  return Math.round((now.getTime() - start.getTime()) / 86_400_000) + 1;
+}
+
+/** Which week of the season (1, 2, or 3) */
+export function getSeasonWeekNumber(seasonDay: number): 1 | 2 | 3 {
+  return Math.ceil(seasonDay / 7) as 1 | 2 | 3;
+}
+
+// --- Season queue ---
+
+/** Create 7 empty slots for a week (idempotent) */
+export function initSeasonWeekSlots(seasonId: number, weekNumber: 1 | 2 | 3): void {
+  const startDay = (weekNumber - 1) * 7 + 1;
+  const stmt = getDb().prepare(
+    `INSERT OR IGNORE INTO season_queue (season_id, day_number, status) VALUES (?, ?, 'empty')`
+  );
+  for (let d = startDay; d < startDay + 7; d++) {
+    stmt.run(seasonId, d);
+  }
+}
+
+/** Get all 7 slots for a week with video info */
+export function getSeasonWeekStatus(seasonId: number, weekNumber: 1 | 2 | 3): (SeasonQueueRow & { title?: string })[] {
+  const startDay = (weekNumber - 1) * 7 + 1;
+  const endDay = startDay + 6;
+  return getDb().prepare(`
+    SELECT sq.*, v.title
+    FROM season_queue sq
+    LEFT JOIN videos v ON v.id = sq.video_id
+    WHERE sq.season_id = ? AND sq.day_number BETWEEN ? AND ?
+    ORDER BY sq.day_number
+  `).all(seasonId, startDay, endDay) as (SeasonQueueRow & { title?: string })[];
+}
+
+/** Fill a queue slot with a video */
+export function setSeasonQueueVideo(seasonId: number, dayNumber: number, videoId: number): void {
+  getDb().prepare(`
+    UPDATE season_queue SET video_id = ?, status = 'queued', queued_at = datetime('now')
+    WHERE season_id = ? AND day_number = ?
+  `).run(videoId, seasonId, dayNumber);
+}
+
+/** Get queue entry for a specific day */
+export function getSeasonQueueForDay(seasonId: number, dayNumber: number): SeasonQueueRow | null {
+  return getDb().prepare(
+    `SELECT * FROM season_queue WHERE season_id = ? AND day_number = ?`
+  ).get(seasonId, dayNumber) as SeasonQueueRow | null;
+}
+
+/** Mark a queue slot as posted */
+export function markSeasonQueuePosted(seasonId: number, dayNumber: number): void {
+  getDb().prepare(`
+    UPDATE season_queue SET status = 'posted', posted_at = datetime('now')
+    WHERE season_id = ? AND day_number = ?
+  `).run(seasonId, dayNumber);
+}
+
+/** Find first empty slot in a week */
+export function getNextEmptySlot(seasonId: number, weekNumber: 1 | 2 | 3): SeasonQueueRow | null {
+  const startDay = (weekNumber - 1) * 7 + 1;
+  const endDay = startDay + 6;
+  return getDb().prepare(`
+    SELECT * FROM season_queue
+    WHERE season_id = ? AND day_number BETWEEN ? AND ? AND status = 'empty'
+    ORDER BY day_number LIMIT 1
+  `).get(seasonId, startDay, endDay) as SeasonQueueRow | null;
 }

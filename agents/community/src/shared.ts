@@ -231,6 +231,110 @@ export const CATEGORY_QUERIES: Record<Category, string[]> = {
   ],
 };
 
+// ─── SEASONS ────────────────────────────────────────────────────────────────
+
+export const SEASON_DURATION = 21; // days per season (3 weeks)
+
+/**
+ * Maps JS day-of-week (0=Sun … 6=Sat) to a Category.
+ * Mon–Sun = 7 categories, one per day.
+ */
+export const SEASON_DAY_MAP: Record<number, Category> = {
+  1: 'stretching',   // Пн
+  2: 'strength',     // Вт
+  3: 'mobility',     // Ср
+  4: 'yoga',         // Чт
+  5: 'cardio',       // Пт
+  6: 'breathing',    // Сб
+  0: 'recovery',     // Вс
+};
+
+/** Emojis for season post headers (override where they differ from CATEGORY_EMOJI) */
+export const SEASON_EMOJI: Record<Category, string> = {
+  stretching: '🧘',
+  strength: '💪',
+  mobility: '🤸',
+  yoga: '🕉️',
+  breathing: '🌬️',
+  recovery: '🛀',
+  cardio: '🏃',
+};
+
+// ─── HASHTAGS ───────────────────────────────────────────────────────────────
+
+export const CATEGORY_HASHTAG: Record<Category, string> = {
+  stretching: '#стретчинг',
+  strength: '#силовая',
+  mobility: '#мобильность',
+  yoga: '#йога',
+  breathing: '#дыхание',
+  recovery: '#восстановление',
+  cardio: '#кардио',
+};
+
+export const DIFFICULTY_HASHTAG: Record<Difficulty, string> = {
+  beginner: '#начинающий',
+  intermediate: '#средний',
+  advanced: '#продвинутый',
+};
+
+export function seasonHashtag(seasonNumber: number): string {
+  return `#сезон${seasonNumber}`;
+}
+
+export function dayHashtag(dayNumber: number): string {
+  return `#день${dayNumber}`;
+}
+
+/** Build hashtag line for a season post */
+export function buildSeasonHashtags(opts: {
+  category: Category;
+  difficulty?: Difficulty;
+  muscles?: string;
+  seasonNumber: number;
+  seasonDay: number;
+}): string {
+  const tags = [CATEGORY_HASHTAG[opts.category]];
+  if (opts.muscles) {
+    const parts = opts.muscles.split(/[,/]/).map(s => s.trim()).filter(Boolean);
+    for (const m of parts) {
+      if (m !== 'всё тело' && m !== 'диафрагма' && m !== 'суставы, всё тело') {
+        tags.push(`#${m.replace(/\s+/g, '_')}`);
+      }
+    }
+  }
+  if (opts.difficulty) tags.push(DIFFICULTY_HASHTAG[opts.difficulty]);
+  tags.push(seasonHashtag(opts.seasonNumber));
+  tags.push(dayHashtag(opts.seasonDay));
+  return tags.join(' ');
+}
+
+/** Build hashtag line for a UGC post (no season/day) */
+export function buildUgcHashtags(opts: {
+  category: Category;
+  difficulty?: Difficulty;
+  muscles?: string;
+}): string {
+  const tags = [CATEGORY_HASHTAG[opts.category]];
+  if (opts.muscles) {
+    const parts = opts.muscles.split(/[,/]/).map(s => s.trim()).filter(Boolean);
+    for (const m of parts) {
+      if (m !== 'всё тело' && m !== 'диафрагма' && m !== 'суставы, всё тело') {
+        tags.push(`#${m.replace(/\s+/g, '_')}`);
+      }
+    }
+  }
+  if (opts.difficulty) tags.push(DIFFICULTY_HASHTAG[opts.difficulty]);
+  return tags.join(' ');
+}
+
+/** Season post header line: «Сезон 1, День 3 — 🤸 Мобильность» */
+export function seasonHeader(seasonNumber: number, seasonDay: number, category: Category): string {
+  const emoji = SEASON_EMOJI[category];
+  const name = CATEGORY_RU[category];
+  return `Сезон ${seasonNumber}, День ${seasonDay} — ${emoji} ${name.charAt(0).toUpperCase() + name.slice(1)}`;
+}
+
 // ─── SQL helpers ─────────────────────────────────────────────────────────────
 
 /** For DB CHECK constraints — comma-separated quoted values */

@@ -217,10 +217,34 @@ export function registerBotMenu(bot: Bot): void {
       ? new InlineKeyboard().text('Опубликовать', 'btn_publish').text('Сбросить выбор', 'btn_reset')
       : undefined;
 
+    // Season info
+    let seasonLine = '';
+    try {
+      const { ensureActiveSeason, getSeasonDay, getSeasonWeekNumber, getSeasonWeekStatus, initSeasonWeekSlots } = await import('./db');
+      const { nextMondayMsk } = await import('./dates');
+      const { SEASON_DAY_MAP, SEASON_EMOJI, CATEGORY_RU: CR, SEASON_DURATION } = await import('./shared');
+      const season = ensureActiveSeason(date, nextMondayMsk());
+      if (season.status === 'active') {
+        const sDay = getSeasonDay(season.start_date, date);
+        if (sDay >= 1 && sDay <= SEASON_DURATION) {
+          const dow = new Date(date + 'T00:00:00').getDay();
+          const cat = SEASON_DAY_MAP[dow];
+          const catRu = cat ? CR[cat] : '?';
+          const emoji = cat ? SEASON_EMOJI[cat] : '❓';
+          const wk = getSeasonWeekNumber(sDay);
+          initSeasonWeekSlots(season.id, wk);
+          const slots = getSeasonWeekStatus(season.id, wk);
+          const filled = slots.filter(s => s.status !== 'empty').length;
+          seasonLine = `Сезон ${season.number} | День ${sDay}/21 | ${emoji} ${catRu} | Очередь: ${filled}/7`;
+        }
+      }
+    } catch { /* no season yet */ }
+
     await ctx.reply(
       [
         `*Sami — статус*`,
         ``,
+        ...(seasonLine ? [escV2(seasonLine), ``] : []),
         `Дата: ${escV2(date)}`,
         `Подписчиков: ${escV2(subscriberCount)} \\| Группа: ${escV2(groupMemberCount)}`,
         `Постов: ${escV2(String(posts))}`,
@@ -284,11 +308,92 @@ export function registerBotMenu(bot: Bot): void {
 
   bot.hears('Поиск видео', async (ctx) => {
     if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
-    const { tomorrowMsk } = await import('./dates');
+    const { todayMsk, nextMondayMsk } = await import('./dates');
+    const {
+      ensureActiveSeason, getSeasonDay, getSeasonWeekNumber,
+      initSeasonWeekSlots, getSeasonWeekStatus, getNextEmptySlot,
+    } = await import('./db');
+    const { SEASON_DAY_MAP, CATEGORY_RU, SEASON_EMOJI, SEASON_DURATION } = await import('./shared');
+
+    const today = todayMsk();
+    const season = ensureActiveSeason(today, nextMondayMsk());
+
+    if (season.status !== 'active') {
+      await ctx.reply(`Сезон ${season.number} стартует ${season.start_date} (${season.status}). Подожди до понедельника.`);
+      return;
+    }
+
+    const seasonDay = getSeasonDay(season.start_date, today);
+    if (seasonDay > SEASON_DURATION) {
+      await ctx.reply(`Сезон ${season.number} завершён. Новый сезон стартует в понедельник.`);
+      return;
+    }
+
+    const weekNum = getSeasonWeekNumber(seasonDay);
+    initSeasonWeekSlots(season.id, weekNum);
+    const slots = getSeasonWeekStatus(season.id, weekNum);
+
+    // Day-of-week labels: Пн, Вт, Ср...
+    const DAY_LABELS = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+    const lines = slots.map(slot => {
+      // Map day_number to day-of-week: day 1 = Mon, day 2 = Tue, etc.
+      const dow = ((slot.day_number - 1) % 7) + 1; // 1=Mon...7=Sun
+      const jsDow = dow === 7 ? 0 : dow; // JS: 0=Sun
+      const cat = SEASON_DAY_MAP[jsDow];
+      const catRu = cat ? CATEGORY_RU[cat] : '?';
+      const emoji = cat ? SEASON_EMOJI[cat] : '❓';
+      const dayLabel = DAY_LABELS[jsDow];
+      const icon = slot.status === 'posted' ? '📤' : slot.status === 'queued' ? '✅' : '⬜';
+      const title = slot.title ? ` — ${slot.title.slice(0, 35)}` : '';
+      return `${icon} ${dayLabel} ${emoji} ${catRu}${title}`;
+    });
+
+    const filledCount = slots.filter(s => s.status !== 'empty').length;
+
+    const msg = [
+      `📅 *Неделя ${weekNum} Сезона ${season.number}* \\(дни ${(weekNum - 1) * 7 + 1}\\-${weekNum * 7}\\)`,
+      ``,
+      ...lines.map(l => escV2(l)),
+      ``,
+      `Заполнено: ${filledCount}/7`,
+    ].join('\n');
+
+    const nextSlot = getNextEmptySlot(season.id, weekNum);
+    const kb = new InlineKeyboard();
+    if (nextSlot) {
+      kb.text('Заполнить следующий', `fill_next:${season.id}:${weekNum}`);
+    }
+
+    await ctx.reply(msg, { parse_mode: 'MarkdownV2', reply_markup: kb });
+  });
+
+  // Fill next empty slot in season week
+  bot.callbackQuery(/^fill_next:(\d+):(\d+)$/, async (ctx) => {
+    if (ctx.from!.id !== config.TELEGRAM_ADMIN_USER_ID) return;
+    await ctx.answerCallbackQuery();
+
+    const seasonId = Number(ctx.match![1]);
+    const weekNum = Number(ctx.match![2]) as 1 | 2 | 3;
+    const { getNextEmptySlot } = await import('./db');
+    const { SEASON_DAY_MAP } = await import('./shared');
     const { runApprovalFlow } = await import('./approval');
-    const date = tomorrowMsk();
-    // Note: runApprovalFlow already sends "Ищу видео..." message
-    await runApprovalFlow(bot, date);
+    const { tomorrowMsk } = await import('./dates');
+
+    const slot = getNextEmptySlot(seasonId, weekNum);
+    if (!slot) {
+      try { await ctx.editMessageText('Все слоты на неделе заполнены! ✅'); } catch {}
+      return;
+    }
+
+    // Determine category for this slot
+    const dow = ((slot.day_number - 1) % 7) + 1;
+    const jsDow = dow === 7 ? 0 : dow;
+    const category = SEASON_DAY_MAP[jsDow];
+    if (!category) return;
+
+    // Run approval flow for single category
+    const date = tomorrowMsk(); // date doesn't matter much, used for session tracking
+    await runApprovalFlow(bot, date, category, { seasonId, dayNumber: slot.day_number });
   });
 
   bot.hears('Опубликовать', async (ctx) => {
