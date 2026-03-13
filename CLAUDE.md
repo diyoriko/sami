@@ -19,14 +19,14 @@ One-liner: "Не мотивация. Структура."
 
 | # | Агент | Платформа | Модель | Расписание |
 |---|---|---|---|---|
-| 1 | **Strategist** | GitHub Actions (ubuntu-latest) | Claude Sonnet 4.6 | 12:30 МСК |
+| 1 | **Strategist** | Mac launchd (GitHub Actions готов при наличии API key) | Claude Sonnet 4.6 | 12:30 МСК |
 | 2 | **Community** | Railway 24/7 | — | Поиск и посты вручную через бота |
 | 3 | **Analytics** | модуль в community | — | 00:30 ежедневно + вс 10:00 + при старте |
 
 ### Как агенты связаны
 
 ```
-Strategist (GitHub Actions, 12:30 МСК)
+Strategist (Mac launchd, 12:30 МСК)
   |- curl -> Railway /report/community, /report/analytics
   |- читает: STRATEGIST_BRIEF.md, COMMUNITY_TASKS.md, PRD и т.д.
   |- пишет: reports/strategist/*.md + COMMUNITY_PACKET
@@ -85,7 +85,7 @@ git add . && git commit -m "..." && git push origin main
 
 - Entrypoint: `agents/strategist.sh`
 - Генератор: `claude --print --model claude-sonnet-4-6` (дефолт)
-- Платформа: GitHub Actions (`ubuntu-latest`), cron `30 9 * * *`
+- Платформа: Mac launchd (GitHub Actions workflow готов, нужен ANTHROPIC_API_KEY)
 - Уведомления: только Telegram DM
 - Бриф: `STRATEGIST_BRIEF.md`
 - Расписание: 12:30 МСК ежедневно
