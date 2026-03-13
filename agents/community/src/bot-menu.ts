@@ -57,11 +57,13 @@ const PAGE_SIZE = 5;
 
 function mainKeyboard(isAdmin = false): Keyboard {
   const kb = new Keyboard()
-    .text('Мои тренировки')
-    .text('Предложить тренировку');
+    .text('🏋️ Мои тренировки')
+    .text('💡 Предложить тренировку');
   if (isAdmin) {
     kb.row()
-      .text('Статус').text('Поиск видео').text('Аналитика');
+      .text('📊 Статус').text('🔍 Поиск видео').text('📈 Аналитика')
+      .row()
+      .text('🧹 Очистить');
   }
   return kb.resized().persistent();
 }
@@ -134,7 +136,7 @@ export function registerBotMenu(bot: Bot): void {
   });
 
   // --- "Мои тренировки" button ---
-  bot.hears('Мои тренировки', async (ctx) => {
+  bot.hears('🏋️ Мои тренировки', async (ctx) => {
     if (ctx.chat.type !== 'private') return;
     deleteUgcState(ctx.from!.id);
     await sendMyWorkouts(ctx, ctx.from!.id, 0);
@@ -148,7 +150,7 @@ export function registerBotMenu(bot: Bot): void {
   });
 
   // --- Admin buttons ---
-  bot.hears('Статус', async (ctx) => {
+  bot.hears('📊 Статус', async (ctx) => {
     if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
     const { todayMsk, tomorrowMsk } = await import('./dates');
     const { getPostCountForDate, getCompletionCountForDate, getUniqueCompletionUsersForDate, getApprovalQueue } = await import('./db');
@@ -306,7 +308,7 @@ export function registerBotMenu(bot: Bot): void {
     } catch {}
   });
 
-  bot.hears('Поиск видео', async (ctx) => {
+  bot.hears('🔍 Поиск видео', async (ctx) => {
     if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
     const { todayMsk, nextMondayMsk } = await import('./dates');
     const {
@@ -443,12 +445,37 @@ export function registerBotMenu(bot: Bot): void {
     await ctx.reply(`Сброшено ${total} сессий (${today}: ${countToday}, ${tomorrow}: ${countTomorrow}). Нажми «Поиск видео» для нового поиска.`);
   });
 
-  bot.hears('Аналитика', async (ctx) => {
+  bot.hears('📈 Аналитика', async (ctx) => {
     if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
     const { todayMsk } = await import('./dates');
     const { runDailyAnalytics } = await import('./analytics');
     await ctx.reply('Запускаю аналитику...');
     await runDailyAnalytics(bot, todayMsk());
+  });
+
+  // --- "Очистить" button (admin only) ---
+  bot.hears('🧹 Очистить', async (ctx) => {
+    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
+    const chatId = ctx.chat.id;
+    const msgId = ctx.message?.message_id;
+    if (!msgId) return;
+
+    // Delete recent messages in this chat (bot messages + user commands)
+    let deleted = 0;
+    for (let id = msgId; id > msgId - 200 && id > 0; id--) {
+      try {
+        await ctx.api.deleteMessage(chatId, id);
+        deleted++;
+      } catch {
+        // Message already deleted or too old — stop
+        if (deleted > 5) break;
+      }
+    }
+
+    // Send fresh start message with keyboard
+    await ctx.reply('🧹 Чат очищен. Начинаем заново!', {
+      reply_markup: mainKeyboard(true),
+    });
   });
 
   // --- "Профиль" button ---
@@ -533,7 +560,7 @@ export function registerBotMenu(bot: Bot): void {
   });
 
   // --- "Предложить тренировку" button ---
-  bot.hears('Предложить тренировку', async (ctx) => {
+  bot.hears('💡 Предложить тренировку', async (ctx) => {
     if (ctx.chat.type !== 'private') return;
     saveUgcState(ctx.from!.id, 'waiting_link');
     const cancelKb = new InlineKeyboard().text('Отменить', 'ugc_cancel');

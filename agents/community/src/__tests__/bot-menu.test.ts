@@ -86,8 +86,8 @@ describe('UGC submissions', () => {
 describe('bot-menu module structure', () => {
   it('has persistent keyboard with correct buttons', () => {
     const source = fs.readFileSync(path.join(__dirname, '..', 'bot-menu.ts'), 'utf8');
-    expect(source).toContain("'Мои тренировки'");
-    expect(source).toContain("'Предложить тренировку'");
+    expect(source).toContain("'🏋️ Мои тренировки'");
+    expect(source).toContain("'💡 Предложить тренировку'");
     expect(source).toContain('.persistent()');
   });
 

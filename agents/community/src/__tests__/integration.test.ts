@@ -332,7 +332,7 @@ describe('UGC flow end-to-end', () => {
 
   it('completes full UGC submission from YouTube link to admin review', async () => {
     // Step 1: "Предложить тренировку"
-    await bot.handleUpdate(textUpdate('Предложить тренировку', { chat_id: USER_ID, user_id: USER_ID }));
+    await bot.handleUpdate(textUpdate('💡 Предложить тренировку', { chat_id: USER_ID, user_id: USER_ID }));
 
     let state = db.getUgcState(USER_ID);
     expect(state?.step).toBe('waiting_link');
@@ -396,7 +396,7 @@ describe('UGC flow end-to-end', () => {
 
   it('rejects invalid YouTube link', async () => {
     // Start UGC flow
-    await bot.handleUpdate(textUpdate('Предложить тренировку', { chat_id: USER_ID + 10, user_id: USER_ID + 10 }));
+    await bot.handleUpdate(textUpdate('💡 Предложить тренировку', { chat_id: USER_ID + 10, user_id: USER_ID + 10 }));
 
     // Send invalid link
     await bot.handleUpdate(textUpdate('not-a-youtube-link', { chat_id: USER_ID + 10, user_id: USER_ID + 10 }));
@@ -412,7 +412,7 @@ describe('UGC flow end-to-end', () => {
   it('cancel button clears UGC state', async () => {
     const uid = USER_ID + 20;
     // Start flow
-    await bot.handleUpdate(textUpdate('Предложить тренировку', { chat_id: uid, user_id: uid }));
+    await bot.handleUpdate(textUpdate('💡 Предложить тренировку', { chat_id: uid, user_id: uid }));
     expect(db.getUgcState(uid)?.step).toBe('waiting_link');
 
     // Send YouTube link to create submission
