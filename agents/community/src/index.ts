@@ -420,6 +420,8 @@ async function main(): Promise<void> {
         res.end(JSON.stringify({ error: 'database not found' }));
         return;
       }
+      // Checkpoint WAL to ensure backup includes all committed data
+      try { getDb().pragma('wal_checkpoint(TRUNCATE)'); } catch {}
       const stat = fs.statSync(dbPath);
       res.writeHead(200, {
         'Content-Type': 'application/octet-stream',
