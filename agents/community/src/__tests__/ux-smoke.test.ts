@@ -138,6 +138,44 @@ describe('UX smoke: shared constants', () => {
   });
 });
 
+describe('UX smoke: "Мои тренировки" enriched cards', () => {
+  const botMenuSource = readSrc('bot-menu.ts');
+
+  it('shows category emoji, duration, difficulty in workout list', () => {
+    expect(botMenuSource).toContain('CATEGORY_EMOJI');
+    expect(botMenuSource).toContain('formatDurationLabel');
+    expect(botMenuSource).toContain('DIFFICULTY_EMOJI');
+  });
+
+  it('shows equipment info when not "none"', () => {
+    expect(botMenuSource).toContain('EQUIPMENT_VALUE_RU');
+  });
+
+  it('delete button for each workout', () => {
+    expect(botMenuSource).toContain('ugc_del:');
+    expect(botMenuSource).toContain('ugc_del_yes:');
+  });
+});
+
+describe('UX smoke: admin rubric selection', () => {
+  const botMenuSource = readSrc('bot-menu.ts');
+
+  it('rubric picker with 3 options', () => {
+    expect(botMenuSource).toContain('ugc_rubric:');
+    expect(botMenuSource).toContain('Сезон');
+    expect(botMenuSource).toContain('От участника');
+    expect(botMenuSource).toContain('Своя рубрика');
+  });
+
+  it('waiting_rubric step for custom text', () => {
+    expect(botMenuSource).toContain('waiting_rubric');
+  });
+
+  it('rubric line in post caption', () => {
+    expect(botMenuSource).toContain('rubricLine');
+  });
+});
+
 describe('UX smoke: rubrics', () => {
   const rubricsSource = readSrc('rubrics.ts');
 

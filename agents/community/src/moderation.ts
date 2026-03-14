@@ -17,6 +17,7 @@ import {
   getMemberLevel, getMemberJoinedAt,
   logModAction, getStopPhrases,
   wasBuddyInviteSent, markBuddyInviteSent,
+  upsertPollResult,
 } from './db';
 
 // ─── CAPTCHA ──────────────────────────────────────────────────────────────────
@@ -748,7 +749,7 @@ export function registerModeration(bot: Bot): void {
   bot.callbackQuery(/^rating:(\d+)$/, async (ctx) => {
     const videoId = parseInt(ctx.match[1]);
     const rating = updateVideoRating(videoId);
-    const ratingStr = rating > 0 ? rating.toFixed(1) : '—';
+    const ratingStr = rating.toFixed(1);
     await ctx.answerCallbackQuery({
       text: `⭐ Рейтинг: ${ratingStr} из 10\n\nФормула:\n• 35% — просмотры на YouTube\n• 30% — соотношение лайков\n• 20% — авторитет канала\n• 15% — выполнения в Sami\n\nЧем больше людей делает тренировку, тем выше рейтинг.`,
       show_alert: true,
@@ -773,6 +774,20 @@ export function registerModeration(bot: Bot): void {
         show_alert: true,
       });
     }
+  });
+
+  // ---- Poll results tracking (S5) ----
+  bot.on('poll', (ctx) => {
+    const poll = ctx.poll;
+    if (!poll) return;
+    const options = poll.options.map(o => ({ text: o.text, voter_count: o.voter_count }));
+    // Extract season/week from question ("Первая неделя Сезона N позади!")
+    const seasonMatch = poll.question.match(/Сезона\s+(\d+)/);
+    const weekMatch = poll.question.match(/(Первая|Вторая|Третья)/);
+    const seasonNum = seasonMatch ? parseInt(seasonMatch[1], 10) : undefined;
+    const weekNum = weekMatch ? (weekMatch[1] === 'Первая' ? 1 : weekMatch[1] === 'Вторая' ? 2 : 3) : undefined;
+    upsertPollResult(poll.id, poll.question, poll.total_voter_count, options, seasonNum, weekNum);
+    log.info('poll results updated', { pollId: poll.id, voters: poll.total_voter_count });
   });
 
   log.info('handlers registered');

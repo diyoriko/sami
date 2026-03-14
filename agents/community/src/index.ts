@@ -674,6 +674,7 @@ async function main(): Promise<void> {
       'message', 'edited_message', 'callback_query',
       'chat_member',  // Required for captcha: new member join events
       'channel_post', 'edited_channel_post',
+      'poll',  // Required for poll results tracking
     ],
     onStart: async (botInfo) => {
       log.info(`bot @${botInfo.username} is running`);

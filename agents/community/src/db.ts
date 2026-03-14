@@ -347,6 +347,7 @@ function migrate(db: Database.Database): void {
   try { db.exec('ALTER TABLE ugc_submissions ADD COLUMN duration_label TEXT'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE ugc_submissions ADD COLUMN muscles TEXT'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE ugc_submissions ADD COLUMN equipment TEXT'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE ugc_submissions ADD COLUMN rubric TEXT'); } catch { /* already exists */ }
 
   // Migration: rebuild tables with updated CHECK constraints (added yoga, breathing, recovery, cardio)
   migrateCheckConstraints(db);
@@ -484,6 +485,22 @@ function migrate(db: Database.Database): void {
     );
     CREATE INDEX IF NOT EXISTS idx_ritual_part_user ON rubric_ritual_participants(telegram_user_id);
   `);
+
+  // Poll results — stores aggregated results from Telegram poll updates
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS poll_results (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      poll_id TEXT UNIQUE NOT NULL,
+      question TEXT NOT NULL,
+      total_voters INTEGER DEFAULT 0,
+      options_json TEXT NOT NULL,  -- JSON: [{text, voter_count}]
+      season_number INTEGER,
+      week_number INTEGER,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_poll_season ON poll_results(season_number);
+  `);
 }
 
 // --- Captcha state (persistent) ---
@@ -518,7 +535,7 @@ export function getExpiredCaptchas(): CaptchaRow[] {
 
 // --- UGC conversation state (persistent) ---
 
-export type UgcStep = 'waiting_link' | 'waiting_category' | 'waiting_difficulty' | 'waiting_duration' | 'waiting_equipment' | 'waiting_title';
+export type UgcStep = 'waiting_link' | 'waiting_category' | 'waiting_difficulty' | 'waiting_duration' | 'waiting_equipment' | 'waiting_rubric' | 'waiting_title';
 
 export interface UgcConversationRow {
   telegram_user_id: number;
@@ -1105,6 +1122,31 @@ export function getWeeklyConsistentUsers(startDate: string, endDate: string): { 
   `).all(startDate, endDate, daysDiff) as { telegram_user_id: number; first_name: string }[];
 }
 
+// --- Poll results ---
+
+export interface PollOption {
+  text: string;
+  voter_count: number;
+}
+
+export function upsertPollResult(pollId: string, question: string, totalVoters: number, options: PollOption[], seasonNumber?: number, weekNumber?: number): void {
+  getDb().prepare(`
+    INSERT INTO poll_results (poll_id, question, total_voters, options_json, season_number, week_number, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(poll_id) DO UPDATE SET
+      total_voters = excluded.total_voters,
+      options_json = excluded.options_json,
+      updated_at = datetime('now')
+  `).run(pollId, question, totalVoters, JSON.stringify(options), seasonNumber ?? null, weekNumber ?? null);
+}
+
+export function getPollResults(seasonNumber?: number): { poll_id: string; question: string; total_voters: number; options: PollOption[]; season_number: number | null; week_number: number | null; updated_at: string }[] {
+  const rows = seasonNumber != null
+    ? getDb().prepare(`SELECT * FROM poll_results WHERE season_number = ? ORDER BY created_at DESC`).all(seasonNumber) as any[]
+    : getDb().prepare(`SELECT * FROM poll_results ORDER BY created_at DESC LIMIT 10`).all() as any[];
+  return rows.map(r => ({ ...r, options: JSON.parse(r.options_json) }));
+}
+
 export function getPostByMessageId(channelMessageId: number): { id: number; video_id: number; category: string; date: string } | null {
   return (getDb().prepare(
     `SELECT id, video_id, category, date FROM posts WHERE channel_message_id = ?`
@@ -1256,6 +1298,7 @@ export interface UgcSubmission {
   duration_label: string | null;
   muscles: string | null;
   equipment: string | null;
+  rubric: string | null;
   status: string;
   admin_message_id: number | null;
   created_at: string;
@@ -1278,7 +1321,7 @@ export function createUgcSubmission(userId: number, username: string | null, vid
   return Number(result.lastInsertRowid);
 }
 
-export function updateUgcSubmission(id: number, fields: Partial<Pick<UgcSubmission, 'title' | 'category' | 'difficulty' | 'duration_seconds' | 'duration_label' | 'muscles' | 'equipment' | 'status' | 'admin_message_id' | 'published_at'>>): void {
+export function updateUgcSubmission(id: number, fields: Partial<Pick<UgcSubmission, 'title' | 'category' | 'difficulty' | 'duration_seconds' | 'duration_label' | 'muscles' | 'equipment' | 'rubric' | 'status' | 'admin_message_id' | 'published_at'>>): void {
   const sets: string[] = [];
   const values: any[] = [];
   for (const [key, val] of Object.entries(fields)) {

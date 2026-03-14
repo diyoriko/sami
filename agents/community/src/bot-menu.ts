@@ -43,7 +43,7 @@ import {
 import {
   type Category, type Difficulty, type EquipmentValue,
   CATEGORIES, DIFFICULTIES,
-  CATEGORY_RU, CATEGORY_EMOJI, DIFFICULTY_RU,
+  CATEGORY_RU, CATEGORY_EMOJI, DIFFICULTY_RU, DIFFICULTY_EMOJI,
   CATEGORY_BUTTONS, DIFFICULTY_BUTTONS,
   EQUIPMENT_BUTTONS, EQUIPMENT_VALUES, EQUIPMENT_VALUE_RU, EQUIPMENT_NO_GEAR,
   DURATION_BUTTONS, formatDurationLabel,
@@ -753,11 +753,30 @@ export function registerBotMenu(bot: Bot): void {
         const kb = buildDurationKeyboard(subId);
         try { await ctx.editMessageText('Сколько длится тренировка?', { reply_markup: kb }); } catch {}
       }
-    } else if (currentStep === 'waiting_title') {
+    } else if (currentStep === 'waiting_rubric') {
       // Back to equipment
       saveUgcState(userId, 'waiting_equipment', subId);
       const kb = buildEquipmentKeyboard(subId);
       try { await ctx.editMessageText('Нужен ли инвентарь?', { reply_markup: kb }); } catch {}
+    } else if (currentStep === 'waiting_title') {
+      if (isAdmin(userId)) {
+        // Admin: back to rubric
+        saveUgcState(userId, 'waiting_rubric', subId);
+        const rubricKb = new InlineKeyboard()
+          .text('📅 Сезон', `ugc_rubric:${subId}:season`)
+          .text('👤 От участника', `ugc_rubric:${subId}:ugc`)
+          .row()
+          .text('✏️ Своя рубрика', `ugc_rubric:${subId}:custom`)
+          .row()
+          .text('← Назад', `ugc_back:${subId}:waiting_rubric`)
+          .text('Отмена', 'ugc_cancel');
+        try { await ctx.editMessageText('Рубрика поста:', { reply_markup: rubricKb }); } catch {}
+      } else {
+        // Regular user: back to equipment
+        saveUgcState(userId, 'waiting_equipment', subId);
+        const kb = buildEquipmentKeyboard(subId);
+        try { await ctx.editMessageText('Нужен ли инвентарь?', { reply_markup: kb }); } catch {}
+      }
     }
   });
 
@@ -868,6 +887,22 @@ export function registerBotMenu(bot: Bot): void {
       const kb = buildCategoryKeyboard(subId);
 
       await ctx.reply('Какой тип тренировки?', { reply_markup: kb });
+      return;
+    }
+
+    // Step: custom rubric text (admin only)
+    if (state.step === 'waiting_rubric') {
+      if (text.length < 2 || text.length > 100) {
+        await ctx.reply('Рубрика от 2 до 100 символов.');
+        return;
+      }
+      updateUgcSubmission(state.submission_id!, { rubric: text });
+      saveUgcState(userId, 'waiting_title', state.submission_id!);
+
+      const titleKb = new InlineKeyboard()
+        .text('← Назад', `ugc_back:${state.submission_id!}:waiting_title`)
+        .text('Отмена', 'ugc_cancel');
+      await ctx.reply('Как назвать тренировку? Напиши короткое название.', { reply_markup: titleKb });
       return;
     }
 
@@ -1009,6 +1044,65 @@ export function registerBotMenu(bot: Bot): void {
     }
     await ctx.answerCallbackQuery();
     updateUgcSubmission(subId, { equipment: EQUIPMENT_VALUE_RU[equipValue] ?? equipValue });
+
+    if (isAdmin(userId)) {
+      // Admin: rubric selection before title
+      saveUgcState(userId, 'waiting_rubric', subId);
+      const rubricKb = new InlineKeyboard()
+        .text('📅 Сезон', `ugc_rubric:${subId}:season`)
+        .text('👤 От участника', `ugc_rubric:${subId}:ugc`)
+        .row()
+        .text('✏️ Своя рубрика', `ugc_rubric:${subId}:custom`)
+        .row()
+        .text('← Назад', `ugc_back:${subId}:waiting_rubric`)
+        .text('Отмена', 'ugc_cancel');
+      try {
+        await ctx.editMessageText('Рубрика поста:', { reply_markup: rubricKb });
+      } catch {
+        await ctx.reply('Рубрика поста:', { reply_markup: rubricKb });
+      }
+    } else {
+      saveUgcState(userId, 'waiting_title', subId);
+      const titleKb = new InlineKeyboard()
+        .text('← Назад', `ugc_back:${subId}:waiting_title`)
+        .text('Отмена', 'ugc_cancel');
+      try {
+        await ctx.editMessageText('Как назвать тренировку? Напиши короткое название.', { reply_markup: titleKb });
+      } catch {
+        await ctx.reply('Как назвать тренировку? Напиши короткое название.', { reply_markup: titleKb });
+      }
+    }
+  });
+
+  // --- UGC rubric callback (admin only) ---
+  bot.callbackQuery(/^ugc_rubric:(\d+):(season|ugc|custom)$/, async (ctx) => {
+    const subId = parseInt(ctx.match[1]);
+    const rubricType = ctx.match[2];
+    const userId = ctx.from!.id;
+    const state = getUgcState(userId);
+    if (!state || state.submission_id !== subId) {
+      await ctx.answerCallbackQuery('Сессия устарела');
+      return;
+    }
+    await ctx.answerCallbackQuery();
+
+    if (rubricType === 'custom') {
+      // Ask admin to type custom rubric
+      saveUgcState(userId, 'waiting_rubric', subId);
+      const backKb = new InlineKeyboard()
+        .text('← Назад', `ugc_back:${subId}:waiting_rubric`)
+        .text('Отмена', 'ugc_cancel');
+      try {
+        await ctx.editMessageText('Напиши название рубрики (будет первой строкой поста):', { reply_markup: backKb });
+      } catch {
+        await ctx.reply('Напиши название рубрики:', { reply_markup: backKb });
+      }
+      return;
+    }
+
+    // Predefined rubrics
+    const rubricLabel = rubricType === 'season' ? null : 'Тренировка от участника';
+    updateUgcSubmission(subId, { rubric: rubricLabel });
     saveUgcState(userId, 'waiting_title', subId);
 
     const titleKb = new InlineKeyboard()
@@ -1061,7 +1155,10 @@ export function registerBotMenu(bot: Bot): void {
           `\`🎾 ${equipmentTag}\``,
         ];
 
+        // Rubric: custom text, default "Тренировка от участника", or omit for season
+        const rubricLine = sub.rubric ? `*${escV2(sub.rubric)}*` : null;
         const caption = [
+          ...(rubricLine ? [rubricLine, ''] : []),
           `*${title}*`,
           '',
           ...tagLines,
@@ -1264,11 +1361,16 @@ async function sendMyWorkouts(
 
   const lines = items.map((item, i) => {
     const num = offset + i + 1;
+    const catEmoji = item.category ? (CATEGORY_EMOJI[item.category as Category] ?? '') : '';
     const catRu = item.category ? (CATEGORY_RU[item.category as Category] ?? item.category) : '—';
     const title = item.title ? decodeHtmlEntities(item.title) : 'Без названия';
-    const dateShort = (item.published_at ?? item.created_at).slice(0, 10);
     const status = item.published_at ? '\u2705 опубликовано' : (STATUS_LABEL[item.status] ?? item.status);
-    return `${escV2(String(num))}\\. *${escV2(title)}*\n   ${escV2(catRu)} · ${escV2(status)} · ${escV2(dateShort)}`;
+    // Build info line: category · duration · difficulty
+    const infoParts: string[] = [`${catEmoji} ${catRu}`];
+    if (item.duration_seconds) infoParts.push(formatDurationLabel(item.duration_seconds));
+    if (item.difficulty) infoParts.push(DIFFICULTY_EMOJI[item.difficulty as Difficulty] ?? item.difficulty);
+    if (item.equipment && item.equipment !== 'none') infoParts.push(EQUIPMENT_VALUE_RU[item.equipment as EquipmentValue] ?? item.equipment);
+    return `${escV2(String(num))}\\. *${escV2(title)}*\n   ${escV2(infoParts.join(' · '))}\n   ${escV2(status)}`;
   });
 
   const header = `*Мои тренировки* \\(${escV2(String(total))}\\)\n`;

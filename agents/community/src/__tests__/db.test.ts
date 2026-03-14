@@ -162,6 +162,78 @@ describe('stability wall', () => {
   });
 });
 
+describe('poll results', () => {
+  it('upsertPollResult stores and updates poll results', async () => {
+    const db = await import('../db');
+
+    const options = [
+      { text: 'День 1–7', voter_count: 5 },
+      { text: 'День 8–14', voter_count: 3 },
+      { text: 'День 15–21', voter_count: 1 },
+      { text: 'Пропустил(а) неделю', voter_count: 2 },
+    ];
+
+    db.upsertPollResult('poll-1', 'Первая неделя Сезона 1 позади!', 11, options, 1, 1);
+
+    let results = db.getPollResults(1);
+    expect(results.length).toBe(1);
+    expect(results[0].poll_id).toBe('poll-1');
+    expect(results[0].total_voters).toBe(11);
+    expect(results[0].options).toHaveLength(4);
+    expect(results[0].options[0].voter_count).toBe(5);
+    expect(results[0].season_number).toBe(1);
+    expect(results[0].week_number).toBe(1);
+
+    // Update with more votes
+    db.upsertPollResult('poll-1', 'Первая неделя Сезона 1 позади!', 15, [
+      { text: 'День 1–7', voter_count: 7 },
+      { text: 'День 8–14', voter_count: 4 },
+      { text: 'День 15–21', voter_count: 2 },
+      { text: 'Пропустил(а) неделю', voter_count: 2 },
+    ], 1, 1);
+
+    results = db.getPollResults(1);
+    expect(results.length).toBe(1);
+    expect(results[0].total_voters).toBe(15);
+  });
+
+  it('getPollResults without season returns recent polls', async () => {
+    const db = await import('../db');
+
+    db.upsertPollResult('poll-2', 'Вторая неделя Сезона 1', 8, [
+      { text: 'День 1–7', voter_count: 4 },
+      { text: 'День 8–14', voter_count: 4 },
+    ], 1, 2);
+
+    const all = db.getPollResults();
+    expect(all.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('UGC rubric field', () => {
+  it('updateUgcSubmission stores and retrieves rubric', async () => {
+    const db = await import('../db');
+
+    const subId = db.createUgcSubmission(70001, 'rubricuser', 'https://youtube.com/watch?v=rubric1', 'rubric1');
+    db.updateUgcSubmission(subId, { title: 'Rubric Test' });
+
+    // Initially null
+    let sub = db.getUgcSubmission(subId);
+    expect(sub).not.toBeNull();
+    expect(sub!.rubric).toBeNull();
+
+    // Set rubric
+    db.updateUgcSubmission(subId, { rubric: 'Утренний ритуал' });
+    sub = db.getUgcSubmission(subId);
+    expect(sub!.rubric).toBe('Утренний ритуал');
+
+    // Update to null (season rubric)
+    db.updateUgcSubmission(subId, { rubric: null });
+    sub = db.getUgcSubmission(subId);
+    expect(sub!.rubric).toBeNull();
+  });
+});
+
 describe('approval queue', () => {
   it('getApprovalQueue filters by date range', async () => {
     const db = await import('../db');
