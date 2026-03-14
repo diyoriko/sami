@@ -55,7 +55,7 @@ export function startScheduler(bot: Bot): void {
         const dow = new Date(today + 'T00:00:00').getDay();
         const cat = SEASON_DAY_MAP[dow];
         const catRu = cat ? CATEGORY_RU[cat] : '?';
-        await notifyAdmin(bot, 'Season', `Нет видео на сегодня\\!\n\`День ${dayNumber}, ${catRu}\`\nНайди и добавь через «Поиск видео»`);
+        await notifyAdmin(bot, 'Season', `Нет видео на сегодня\\!\n\`День ${dayNumber}, ${catRu}\`\nНайди и добавь через «Неделя»`);
         return;
       }
 
@@ -128,5 +128,5 @@ export function startScheduler(bot: Bot): void {
     }
   }, 3000);
 
-  // Auto-search catch-up disabled — admin uses "Поиск видео" button manually
+  // Auto-search catch-up disabled — admin uses "Неделя" button manually
 }

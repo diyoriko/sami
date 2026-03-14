@@ -149,9 +149,13 @@ export async function runApprovalFlow(
     const videos = allVideos[category];
 
     if (!videos || videos.length === 0) {
+      const retryKb = new InlineKeyboard()
+        .text('🔄 Повторить', `retry_search:${date}:${category}`)
+        .text('📅 Назад к неделе', 'show_week_status');
       await bot.api.sendMessage(
         config.TELEGRAM_ADMIN_USER_ID,
-        `⚠️ Не нашёл видео для ${category}${seasonLabel}.`
+        `⚠️ Не нашёл видео для ${CATEGORY_RU[category] ?? category}${seasonLabel}.\nНет результатов по запросу.`,
+        { reply_markup: retryKb }
       );
       continue;
     }
@@ -392,6 +396,44 @@ export function registerApprovalCallbacks(bot: Bot): void {
         await ctx.api.sendMessage(config.TELEGRAM_ADMIN_USER_ID, `❌ ${label}: не удалось опубликовать (${result})`);
       } catch {}
     }
+  });
+
+  // Retry search for a specific category
+  bot.callbackQuery(/^retry_search:(.+):(.+)$/, async (ctx) => {
+    const date = ctx.match[1];
+    const category = ctx.match[2] as Category;
+    const config = getConfig();
+    if (ctx.from?.id !== config.TELEGRAM_ADMIN_USER_ID) return;
+    await ctx.answerCallbackQuery('Ищу...');
+    try { await ctx.editMessageText(`🔍 Повторный поиск для ${CATEGORY_RU[category] ?? category}...`); } catch {}
+    await runApprovalFlow(bot, date, category);
+  });
+
+  // Show week status
+  bot.callbackQuery('show_week_status', async (ctx) => {
+    const config = getConfig();
+    if (ctx.from?.id !== config.TELEGRAM_ADMIN_USER_ID) return;
+    await ctx.answerCallbackQuery();
+    const { todayMsk } = await import('./dates');
+    const { getActiveSeason, getSeasonDay, getSeasonWeekNumber, getSeasonWeekStatus } = await import('./db');
+    const { SEASON_DAY_MAP } = await import('./shared');
+    const season = getActiveSeason();
+    if (!season) {
+      try { await ctx.editMessageText('Нет активного сезона.'); } catch {}
+      return;
+    }
+    const today = todayMsk();
+    const dayNum = getSeasonDay(season.start_date, today);
+    const weekNum = getSeasonWeekNumber(dayNum);
+    const slots = getSeasonWeekStatus(season.id, weekNum);
+    const lines = slots.map(s => {
+      const dow = ((s.day_number - 1) % 7 + 1) % 7; // day_number to JS day of week
+      const cat = SEASON_DAY_MAP[dow];
+      const catLabel = cat ? `${CATEGORY_EMOJI[cat] ?? ''} ${CATEGORY_RU[cat] ?? cat}` : `День ${s.day_number}`;
+      const emoji = s.status === 'posted' ? '✅' : s.status === 'queued' ? '📦' : '⬜';
+      return `${emoji} ${catLabel}${(s as any).title ? ` — ${(s as any).title}` : ''}`;
+    });
+    try { await ctx.editMessageText(`Сезон ${season.number}, Неделя ${weekNum}:\n\n${lines.join('\n')}`); } catch {}
   });
 
   bot.callbackQuery('noop', async (ctx) => {

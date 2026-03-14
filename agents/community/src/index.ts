@@ -228,7 +228,7 @@ async function sendDeployReport(
 
   // ── Quick actions reminder ──
   lines.push('');
-  lines.push(`_Кнопки: 🔍 Поиск видео · 📊 Статус · 📈 Аналитика_`);
+  lines.push(`_Кнопки: 📅 Неделя · 📊 Статус · 📈 Аналитика_`);
 
   await bot.api.sendMessage(
     config.TELEGRAM_ADMIN_USER_ID,

@@ -61,9 +61,9 @@ function mainKeyboard(isAdmin = false): Keyboard {
     .text('💡 Предложить тренировку');
   if (isAdmin) {
     kb.row()
-      .text('📊 Статус').text('🔍 Поиск видео').text('📈 Аналитика')
+      .text('📊 Статус').text('📅 Неделя').text('📈 Аналитика')
       .row()
-      .text('🧹 Очистить');
+      .text('🧹 Очистить канал');
   }
   return kb.resized().persistent();
 }
@@ -119,10 +119,21 @@ export function registerBotMenu(bot: Bot): void {
 
   const isAdmin = (userId: number) => userId === config.TELEGRAM_ADMIN_USER_ID;
 
-  // /start in private chat — show menu
+  // /start in private chat — clean slate + show menu
   bot.command('start', async (ctx) => {
     if (ctx.chat.type !== 'private') return;
     deleteUgcState(ctx.from!.id);
+
+    // Clear previous messages in this chat for a fresh start
+    const msgId = ctx.message?.message_id;
+    if (msgId) {
+      for (let id = msgId; id > msgId - 200 && id > 0; id--) {
+        try { await ctx.api.deleteMessage(ctx.chat.id, id); } catch {
+          break; // stop on first failure (too old or already deleted)
+        }
+      }
+    }
+
     const firstName = ctx.from?.first_name ?? '';
     const greeting = firstName ? `Привет, ${firstName}!` : 'Привет!';
     await ctx.reply(
@@ -304,11 +315,11 @@ export function registerBotMenu(bot: Bot): void {
     const tomorrow = tomorrowMsk();
     const total = resetApprovalSessions(today) + resetApprovalSessions(tomorrow);
     try {
-      await ctx.editMessageText(`Сброшено ${total} сессий. Нажми «Поиск видео» для нового поиска.`);
+      await ctx.editMessageText(`Сброшено ${total} сессий. Нажми «Неделя» для нового поиска.`);
     } catch {}
   });
 
-  bot.hears('🔍 Поиск видео', async (ctx) => {
+  bot.hears('📅 Неделя', async (ctx) => {
     if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
     const { todayMsk, nextMondayMsk } = await import('./dates');
     const {
@@ -421,7 +432,7 @@ export function registerBotMenu(bot: Bot): void {
     const date = hasTomorrow ? tomorrow : hasToday ? today : null;
 
     if (!date) {
-      await ctx.reply('Нет одобренных видео. Сначала «Поиск видео».');
+      await ctx.reply('Нет одобренных видео. Сначала «Неделя».');
       return;
     }
 
@@ -452,7 +463,7 @@ export function registerBotMenu(bot: Bot): void {
     const countToday = resetApprovalSessions(today);
     const countTomorrow = resetApprovalSessions(tomorrow);
     const total = countToday + countTomorrow;
-    await ctx.reply(`Сброшено ${total} сессий (${today}: ${countToday}, ${tomorrow}: ${countTomorrow}). Нажми «Поиск видео» для нового поиска.`);
+    await ctx.reply(`Сброшено ${total} сессий (${today}: ${countToday}, ${tomorrow}: ${countTomorrow}). Нажми «Неделя» для нового поиска.`);
   });
 
   bot.hears('📈 Аналитика', async (ctx) => {
@@ -463,29 +474,45 @@ export function registerBotMenu(bot: Bot): void {
     await runDailyAnalytics(bot, todayMsk());
   });
 
-  // --- "Очистить" button (admin only) ---
-  bot.hears('🧹 Очистить', async (ctx) => {
+  // --- "Очистить" button (admin only) — clear channel posts ---
+  bot.hears('🧹 Очистить канал', async (ctx) => {
     if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
-    const chatId = ctx.chat.id;
-    const msgId = ctx.message?.message_id;
-    if (!msgId) return;
+    const kb = new InlineKeyboard()
+      .text('Да, удалить все посты', 'clear_channel_confirm')
+      .text('Отмена', 'clear_channel_cancel');
+    await ctx.reply('Удалить все посты из канала @sami_workouts?\nЭто действие необратимо.', { reply_markup: kb });
+  });
 
-    // Delete recent messages in this chat (bot messages + user commands)
+  bot.callbackQuery('clear_channel_confirm', async (ctx) => {
+    if (!isAdmin(ctx.from!.id)) return;
+    await ctx.answerCallbackQuery('Удаляю...');
+
+    const channelId = config.TELEGRAM_CHANNEL_ID;
+    // Get all post message IDs from DB
+    const { getDb } = await import('./db');
+    const posts = getDb().prepare(
+      `SELECT channel_message_id FROM posts WHERE channel_message_id IS NOT NULL ORDER BY channel_message_id DESC`
+    ).all() as { channel_message_id: number }[];
+
     let deleted = 0;
-    for (let id = msgId; id > msgId - 200 && id > 0; id--) {
+    for (const post of posts) {
       try {
-        await ctx.api.deleteMessage(chatId, id);
+        await ctx.api.deleteMessage(channelId, post.channel_message_id);
         deleted++;
-      } catch {
-        // Message already deleted or too old — stop
-        if (deleted > 5) break;
-      }
+      } catch { /* already deleted or too old */ }
     }
 
-    // Send fresh start message with keyboard
-    await ctx.reply('🧹 Чат очищен. Начинаем заново!', {
-      reply_markup: mainKeyboard(true),
-    });
+    // Clear posts from DB
+    getDb().prepare(`DELETE FROM posts`).run();
+
+    try {
+      await ctx.editMessageText(`🧹 Удалено ${deleted} постов из канала. БД постов очищена.`);
+    } catch {}
+  });
+
+  bot.callbackQuery('clear_channel_cancel', async (ctx) => {
+    await ctx.answerCallbackQuery('Отменено');
+    try { await ctx.editMessageText('Очистка канала отменена.'); } catch {}
   });
 
   // --- "Профиль" button ---
