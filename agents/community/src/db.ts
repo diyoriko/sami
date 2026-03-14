@@ -1820,3 +1820,33 @@ export function getNextEmptySlot(seasonId: number, weekNumber: 1 | 2 | 3): Seaso
     ORDER BY day_number LIMIT 1
   `).get(seasonId, startDay, endDay) as SeasonQueueRow | null;
 }
+
+// ─── WIPE ALL DATA ──────────────────────────────────────────────────────────
+
+/** Delete all user-generated data. Keeps schema, config, stop_phrases. */
+export function wipeAllData(): { tables: string[]; deleted: Record<string, number> } {
+  const db = getDb();
+  const tables = [
+    'videos', 'completions', 'approval_sessions', 'posts',
+    'ugc_submissions', 'ugc_conversation_state',
+    'seasons', 'season_queue',
+    'members', 'user_favorites',
+    'pending_captchas', 'moderation_log', 'video_rejections',
+    'channel_stats', 'daily_stats', 'deploy_history',
+    'strategist_packets', 'strategist_actions',
+    'impl_tasks', 'rubric_rituals', 'rubric_ritual_participants',
+  ];
+  const deleted: Record<string, number> = {};
+  db.transaction(() => {
+    // Disable FK checks for clean delete order
+    db.pragma('foreign_keys = OFF');
+    for (const t of tables) {
+      try {
+        const info = db.prepare(`DELETE FROM ${t}`).run();
+        deleted[t] = info.changes;
+      } catch { /* table may not exist */ }
+    }
+    db.pragma('foreign_keys = ON');
+  })();
+  return { tables, deleted };
+}

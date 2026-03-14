@@ -368,6 +368,32 @@ async function main(): Promise<void> {
     await ctx.reply(`🔄 Сброшено ${count} сессий на ${date}. Запусти /search для нового поиска.`);
   });
 
+  // /wipe — clear all data (videos, posts, seasons, UGC, etc.)
+  bot.command('wipe', async (ctx) => {
+    if (ctx.from?.id !== config.TELEGRAM_ADMIN_USER_ID) return;
+
+    // Two-step confirmation: first call shows warning, second (with "confirm") executes
+    const args = ctx.match?.trim();
+    if (args !== 'confirm') {
+      await ctx.reply(
+        '⚠️ Это удалит ВСЕ данные: видео, посты, сезоны, UGC, участников, статистику.\n\n' +
+        'Схема и настройки сохранятся.\n\n' +
+        'Для подтверждения напиши: /wipe confirm'
+      );
+      return;
+    }
+
+    const { wipeAllData } = await import('./db');
+    const result = wipeAllData();
+    const nonZero = Object.entries(result.deleted)
+      .filter(([, n]) => n > 0)
+      .map(([t, n]) => `  ${t}: ${n}`)
+      .join('\n');
+    await ctx.reply(
+      `🗑 БД очищена.\n\n${nonZero || '  (всё уже было пусто)'}\n\nГотово к чистому старту.`
+    );
+  });
+
   // /analytics — manually run daily analytics
   bot.command('analytics', async (ctx) => {
     if (ctx.from?.id !== config.TELEGRAM_ADMIN_USER_ID) return;
