@@ -142,7 +142,7 @@ bash agents/uninstall-1x-daily-mac.sh              # удалить cron
 - `npm run typecheck` + `npm test` перед каждым деплоем (из `agents/community/`)
 - Pre-commit hook: `tsc --noEmit` (настроен через `.githooks/`)
 - CI: GitHub Actions `ci.yml` — typecheck + tests на каждый push/PR
-- Claude Code Review: `claude-review.yml` — автоматический ревью PR (нужен `ANTHROPIC_API_KEY`)
+- CodeRabbit: автоматический ревью PR → замечания попадают в `COMMUNITY_TASKS.md` через `coderabbit-to-backlog.yml`
 - Coverage: `npm run test:coverage` — отчёт покрытия (@vitest/coverage-v8)
 
 ## Guardrails

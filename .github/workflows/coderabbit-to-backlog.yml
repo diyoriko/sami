@@ -1,0 +1,66 @@
+name: CodeRabbit Review → Backlog
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  extract-suggestions:
+    if: github.event.review.user.login == 'coderabbitai[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Extract review comments to backlog
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          COMMENTS=$(gh api repos/${{ github.repository }}/pulls/${PR_NUMBER}/comments \
+            --jq '[.[] | select(.user.login == "coderabbitai[bot]") | {path: .path, body: .body}]')
+
+          if [ "$COMMENTS" = "[]" ] || [ -z "$COMMENTS" ]; then
+            echo "No CodeRabbit comments found"
+            exit 0
+          fi
+
+          TASKS=$(echo "$COMMENTS" | python3 -c "
+          import json, sys
+          comments = json.load(sys.stdin)
+          for c in comments:
+            path = c['path']
+            lines = c['body'].strip().split('\n')
+            title = lines[0][:100].replace('**', '').strip()
+            if not title:
+              continue
+            print(f'- [ ] **CodeRabbit: {title}** — {path} (PR #{sys.argv[1]})')
+          " "$PR_NUMBER")
+
+          if [ -z "$TASKS" ]; then
+            echo "No tasks extracted"
+            exit 0
+          fi
+
+          if ! grep -q "### CodeRabbit Suggestions" COMMUNITY_TASKS.md; then
+            echo -e "\n### CodeRabbit Suggestions\n" >> COMMUNITY_TASKS.md
+          fi
+
+          echo "$TASKS" >> COMMUNITY_TASKS.md
+          echo "Added $(echo "$TASKS" | wc -l) tasks to COMMUNITY_TASKS.md"
+
+      - name: Commit changes
+        run: |
+          git config user.name "SAMI Bot"
+          git config user.email "noreply@sami.bot"
+          git add COMMUNITY_TASKS.md
+          CHANGES=$(git diff --cached --stat)
+          if [ -n "$CHANGES" ]; then
+            git commit -m "chore: add CodeRabbit review suggestions to backlog (PR #${{ github.event.pull_request.number }})"
+            git push origin main
+          fi
