@@ -1,0 +1,74 @@
+name: Copilot Review → Backlog
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  extract-suggestions:
+    if: github.event.review.user.login == 'copilot-pull-request-reviewer[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Extract review comments to backlog
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REVIEW_BODY: ${{ github.event.review.body }}
+        run: |
+          DATE=$(date -u +%Y-%m-%d)
+
+          # Get all review comments for this review
+          COMMENTS=$(gh api repos/${{ github.repository }}/pulls/${PR_NUMBER}/comments \
+            --jq '[.[] | select(.user.login == "copilot-pull-request-reviewer[bot]") | {path: .path, body: .body}]')
+
+          if [ "$COMMENTS" = "[]" ] || [ -z "$COMMENTS" ]; then
+            echo "No Copilot comments found"
+            exit 0
+          fi
+
+          # Format as backlog tasks
+          TASKS=$(echo "$COMMENTS" | python3 -c "
+          import json, sys
+          comments = json.load(sys.stdin)
+          for c in comments:
+            path = c['path']
+            # Take first line as title, rest as description
+            lines = c['body'].strip().split('\n')
+            title = lines[0][:100].replace('**', '').strip()
+            if title.startswith('P') and title[1].isdigit():
+              print(f'- [ ] **Copilot: {title}** — {path} (PR #{sys.argv[1]})')
+            else:
+              print(f'- [ ] **Copilot: {title}** — {path} (PR #{sys.argv[1]})')
+          " "$PR_NUMBER")
+
+          if [ -z "$TASKS" ]; then
+            echo "No tasks extracted"
+            exit 0
+          fi
+
+          # Append to COMMUNITY_TASKS.md under a Copilot section
+          if ! grep -q "### Copilot Suggestions" COMMUNITY_TASKS.md; then
+            echo -e "\n### Copilot Suggestions\n" >> COMMUNITY_TASKS.md
+          fi
+
+          echo "$TASKS" >> COMMUNITY_TASKS.md
+          echo "Added $(echo "$TASKS" | wc -l) tasks to COMMUNITY_TASKS.md"
+
+      - name: Commit changes
+        run: |
+          git config user.name "SAMI Bot"
+          git config user.email "noreply@sami.bot"
+          git add COMMUNITY_TASKS.md
+          CHANGES=$(git diff --cached --stat)
+          if [ -n "$CHANGES" ]; then
+            git commit -m "chore: add Copilot review suggestions to backlog (PR #${{ github.event.pull_request.number }})"
+            git push origin main
+          fi
