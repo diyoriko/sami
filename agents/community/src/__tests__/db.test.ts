@@ -129,6 +129,39 @@ describe('rating', () => {
   });
 });
 
+describe('stability wall', () => {
+  it('getWeeklyConsistentUsers returns users with completions every day', async () => {
+    const db = await import('../db');
+
+    // Create a video and post
+    const vid = db.upsertVideo({
+      youtube_id: 'wall-test', title: 'Wall Test', channel_name: 'Test',
+      channel_url: null, duration_seconds: 600, duration_label: '10:00',
+      difficulty: 'beginner', category: 'stretching', muscles: null,
+      thumbnail_url: null, video_url: 'https://youtube.com/watch?v=wt1',
+      view_count: 1000, rating: 0, like_ratio: 0.9, channel_subscribers: 5000,
+    });
+    const p1 = db.recordPost('2026-03-10', 'stretching', vid, 7777);
+    const p2 = db.recordPost('2026-03-11', 'stretching', vid, 7778);
+    const p3 = db.recordPost('2026-03-12', 'stretching', vid, 7779);
+
+    // Insert completions for user 90001 on 3 consecutive days
+    const rawDb = db.getDb();
+    rawDb.prepare(`INSERT INTO completions (post_id, video_id, telegram_user_id, completed_at) VALUES (?, ?, ?, ?)`).run(p1, vid, 90001, '2026-03-10T10:00:00Z');
+    rawDb.prepare(`INSERT INTO completions (post_id, video_id, telegram_user_id, completed_at) VALUES (?, ?, ?, ?)`).run(p2, vid, 90001, '2026-03-11T10:00:00Z');
+    rawDb.prepare(`INSERT INTO completions (post_id, video_id, telegram_user_id, completed_at) VALUES (?, ?, ?, ?)`).run(p3, vid, 90001, '2026-03-12T10:00:00Z');
+
+    // User 90002 only completed 2 days
+    rawDb.prepare(`INSERT INTO completions (post_id, video_id, telegram_user_id, completed_at) VALUES (?, ?, ?, ?)`).run(p1, vid, 90002, '2026-03-10T10:00:00Z');
+    rawDb.prepare(`INSERT INTO completions (post_id, video_id, telegram_user_id, completed_at) VALUES (?, ?, ?, ?)`).run(p2, vid, 90002, '2026-03-11T10:00:00Z');
+
+    // Query for 3-day range: only user 90001 should qualify
+    const consistent = db.getWeeklyConsistentUsers('2026-03-10', '2026-03-12');
+    expect(consistent.length).toBe(1);
+    expect(consistent[0].telegram_user_id).toBe(90001);
+  });
+});
+
 describe('approval queue', () => {
   it('getApprovalQueue filters by date range', async () => {
     const db = await import('../db');

@@ -30,7 +30,7 @@ describe('UX smoke: bot-menu handlers', () => {
 
   it('UGC flow: cancel button present', () => {
     expect(botMenuSource).toContain('ugc_cancel');
-    expect(botMenuSource).toContain('Отменить');
+    expect(botMenuSource).toContain('Отмена');
   });
 
   it('UGC flow: video file handler (message:document)', () => {

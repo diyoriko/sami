@@ -102,10 +102,82 @@ export function startScheduler(bot: Bot): void {
     }
   }, { timezone: 'Europe/Moscow' });
 
+  // ---- S5: Weekly progress poll (Sunday 12:00 MSK) ----
+  cron.schedule('0 9 * * 0', async () => {
+    log.info('posting weekly progress poll');
+    try {
+      const { ensureActiveSeason, getSeasonDay, getSeasonWeekNumber } = require('./db') as typeof import('./db');
+      const { nextMondayMsk } = require('./dates') as typeof import('./dates');
+
+      const today = todayMsk();
+      const season = ensureActiveSeason(today, nextMondayMsk());
+      if (season.status !== 'active') return;
+
+      const dayNum = getSeasonDay(season.start_date, today);
+      const weekNum = getSeasonWeekNumber(dayNum);
+
+      const weekLabel = weekNum === 1 ? 'Первая' : weekNum === 2 ? 'Вторая' : 'Третья';
+      const question = `${weekLabel} неделя Сезона ${season.number} позади! На каком вы дне?`;
+
+      await bot.api.sendPoll(config.TELEGRAM_CHANNEL_ID, question, [
+        { text: `День 1–7` },
+        { text: `День 8–14` },
+        { text: `День 15–21` },
+        { text: `Пропустил(а) неделю` },
+      ], { is_anonymous: true });
+
+      log.info('weekly poll posted');
+    } catch (err) {
+      log.error('weekly poll failed', { error: String(err) });
+    }
+  }, { timezone: 'Europe/Moscow' });
+
+  // ---- S6: Stability wall (Friday 19:00 MSK) ----
+  cron.schedule('0 16 * * 5', async () => {
+    log.info('posting stability wall');
+    try {
+      const { getWeeklyConsistentUsers, ensureActiveSeason, getSeasonDay } = require('./db') as typeof import('./db');
+      const { nextMondayMsk } = require('./dates') as typeof import('./dates');
+
+      const today = todayMsk();
+      const season = ensureActiveSeason(today, nextMondayMsk());
+      if (season.status !== 'active') return;
+
+      // Get the last 7 days range
+      const endDate = today;
+      const startMs = new Date(today + 'T00:00:00').getTime() - 6 * 86_400_000;
+      const startDate = new Date(startMs).toISOString().slice(0, 10);
+
+      const users = getWeeklyConsistentUsers(startDate, endDate);
+      if (users.length === 0) {
+        log.info('no consistent users this week');
+        return;
+      }
+
+      const names = users.map(u => u.first_name).join('\n• ');
+      const dayNum = getSeasonDay(season.start_date, today);
+      const text = [
+        `🧱 *Стена стабильности*`,
+        ``,
+        `Эти люди не пропустили ни дня за последнюю неделю:`,
+        ``,
+        `• ${names}`,
+        ``,
+        `Сезон ${season.number}, день ${dayNum}/21`,
+        `#прогресс`,
+      ].join('\n');
+
+      await bot.api.sendMessage(config.TELEGRAM_CHANNEL_ID, text, { parse_mode: 'Markdown' });
+      log.info(`stability wall posted (${users.length} users)`);
+    } catch (err) {
+      log.error('stability wall failed', { error: String(err) });
+    }
+  }, { timezone: 'Europe/Moscow' });
+
   // Strategist runs on Mac (claude --print, Max subscription) and POSTs packet to /packet endpoint.
   // If ANTHROPIC_API_KEY is set, can also run locally on Railway (future option).
 
-  log.info('all cron jobs registered (community + analytics)');
+  log.info('all cron jobs registered (community + analytics + poll + stability)');
 
   // Cleanup old approval sessions on startup
   setTimeout(() => {

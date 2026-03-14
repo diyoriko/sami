@@ -639,11 +639,59 @@ export function registerBotMenu(bot: Bot): void {
   bot.hears('💡 Предложить тренировку', async (ctx) => {
     if (ctx.chat.type !== 'private') return;
     saveUgcState(ctx.from!.id, 'waiting_link');
-    const cancelKb = new InlineKeyboard().text('Отменить', 'ugc_cancel');
-    await ctx.reply(
-      'Отправь ссылку на YouTube-видео или загрузи видеофайл напрямую.',
-      { reply_markup: cancelKb }
-    );
+
+    if (isAdmin(ctx.from!.id)) {
+      // Admin sees extra option: YouTube search
+      const kb = new InlineKeyboard()
+        .text('🔍 Поиск YouTube', 'ugc_yt_search')
+        .row()
+        .text('Отмена', 'ugc_cancel');
+      await ctx.reply(
+        'Отправь ссылку на YouTube, загрузи видеофайл или найди через поиск.',
+        { reply_markup: kb }
+      );
+    } else {
+      const cancelKb = new InlineKeyboard().text('Отмена', 'ugc_cancel');
+      await ctx.reply(
+        'Отправь ссылку на YouTube-видео или загрузи видеофайл напрямую.',
+        { reply_markup: cancelKb }
+      );
+    }
+  });
+
+  // Admin: YouTube search in UGC flow — pick category then run approval-style search
+  bot.callbackQuery('ugc_yt_search', async (ctx) => {
+    if (!isAdmin(ctx.from!.id)) return;
+    await ctx.answerCallbackQuery();
+    deleteUgcState(ctx.from!.id);
+
+    // Show category picker for search
+    const kb = new InlineKeyboard();
+    CATEGORY_BUTTONS.forEach((btn, i) => {
+      kb.text(btn.label, `ugc_search_cat:${btn.value}`);
+      if (i % 2 === 1) kb.row();
+    });
+    if (CATEGORY_BUTTONS.length % 2 === 1) kb.row();
+    kb.text('Отмена', 'ugc_cancel');
+
+    try {
+      await ctx.editMessageText('Какую категорию ищем?', { reply_markup: kb });
+    } catch {
+      await ctx.reply('Какую категорию ищем?', { reply_markup: kb });
+    }
+  });
+
+  // Admin: run search for selected category (standalone, not season)
+  const ugcSearchCatPattern = new RegExp(`^ugc_search_cat:(${CATEGORIES.join('|')})$`);
+  bot.callbackQuery(ugcSearchCatPattern, async (ctx) => {
+    if (!isAdmin(ctx.from!.id)) return;
+    const category = ctx.match[1] as Category;
+    await ctx.answerCallbackQuery('Ищу...');
+    try { await ctx.editMessageText(`🔍 Ищу видео для ${CATEGORY_RU[category]}...`); } catch {}
+
+    const { runApprovalFlow } = await import('./approval');
+    const { todayMsk } = await import('./dates');
+    await runApprovalFlow(bot, todayMsk(), category);
   });
 
   // Cancel UGC flow — inline button or /cancel command

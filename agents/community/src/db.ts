@@ -1085,6 +1085,26 @@ export function getUserStreak(userId: number): number {
   return streak;
 }
 
+/**
+ * Get users who completed workouts every day in a date range.
+ * Returns list of {telegram_user_id, first_name} for users with completions on ALL days.
+ */
+export function getWeeklyConsistentUsers(startDate: string, endDate: string): { telegram_user_id: number; first_name: string }[] {
+  // Count distinct days in the range
+  const daysDiff = Math.round(
+    (new Date(endDate + 'T00:00:00').getTime() - new Date(startDate + 'T00:00:00').getTime()) / 86_400_000
+  ) + 1;
+
+  return getDb().prepare(`
+    SELECT c.telegram_user_id, COALESCE(m.first_name, 'Участник') as first_name
+    FROM completions c
+    LEFT JOIN members m ON m.telegram_user_id = c.telegram_user_id
+    WHERE date(c.completed_at, '+3 hours') BETWEEN ? AND ?
+    GROUP BY c.telegram_user_id
+    HAVING COUNT(DISTINCT date(c.completed_at, '+3 hours')) >= ?
+  `).all(startDate, endDate, daysDiff) as { telegram_user_id: number; first_name: string }[];
+}
+
 export function getPostByMessageId(channelMessageId: number): { id: number; video_id: number; category: string; date: string } | null {
   return (getDb().prepare(
     `SELECT id, video_id, category, date FROM posts WHERE channel_message_id = ?`
