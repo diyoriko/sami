@@ -137,6 +137,14 @@ bash agents/uninstall-1x-daily-mac.sh              # удалить cron
 - Валидация: zod
 - Модульно, но без over-engineering
 
+## Quality Gate
+
+- `npm run typecheck` + `npm test` перед каждым деплоем (из `agents/community/`)
+- Pre-commit hook: `tsc --noEmit` (настроен через `.githooks/`)
+- CI: GitHub Actions `ci.yml` — typecheck + tests на каждый push/PR
+- Claude Code Review: `claude-review.yml` — автоматический ревью PR (нужен `ANTHROPIC_API_KEY`)
+- Coverage: `npm run test:coverage` — отчёт покрытия (@vitest/coverage-v8)
+
 ## Guardrails
 
 - Не создавать группы/каналы автоматически — только вручную, потом добавлять бота
