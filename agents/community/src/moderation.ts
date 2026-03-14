@@ -4,6 +4,7 @@ import { getConfig } from './config';
 import { createLogger } from './logger';
 import { type Category, CATEGORY_RU, escV2 } from './shared';
 import { moscowHour } from './dates';
+import { incrementNewMembers } from './scheduler';
 
 const log = createLogger('moderation');
 import {
@@ -289,6 +290,8 @@ export function registerModeration(bot: Bot): void {
     }
 
     await ctx.answerCallbackQuery('✅ Верно!');
+
+    incrementNewMembers();
 
     const goalKeyboard = new InlineKeyboard();
     GOAL_OPTIONS.forEach((opt, i) => {
