@@ -245,7 +245,10 @@ export function registerApprovalCallbacks(bot: Bot): void {
     }
 
     const newKeyboard = action === 'approve'
-      ? new InlineKeyboard().text('✅ Выбрано', 'noop').text('↩️ Отменить', `unapprove:${session.id}`)
+      ? new InlineKeyboard()
+          .text('✅ Выбрано', 'noop').text('↩️ Отменить', `unapprove:${session.id}`)
+          .row()
+          .text('📢 Опубликовать', `publish_card:${session.id}`)
       : new InlineKeyboard().text('❌ Пропущено', 'noop').text('↩️ Вернуть', `unapprove:${session.id}`);
 
     await editKeyboard(ctx as any, newKeyboard);
@@ -360,6 +363,34 @@ export function registerApprovalCallbacks(bot: Bot): void {
       } catch (err) {
         refreshLog.error('refresh send failed', { error: String(err) });
       }
+    }
+  });
+
+  // Publish single video directly from approval card
+  bot.callbackQuery(/^publish_card:(\d+)$/, async (ctx) => {
+    const sessionId = parseInt(ctx.match[1]);
+    const config = getConfig();
+    if (ctx.from?.id !== config.TELEGRAM_ADMIN_USER_ID) return;
+
+    const session = getApprovalSessionById(sessionId);
+    if (!session || session.status !== 'approved') {
+      await ctx.answerCallbackQuery('Сессия не найдена или не одобрена');
+      return;
+    }
+
+    await ctx.answerCallbackQuery('Публикую...');
+
+    const { postVideoToChannel } = await import('./poster');
+    const result = await postVideoToChannel(bot, session.date, session.category as Category, { force: true });
+
+    const label = `${CATEGORY_EMOJI[session.category as Category] ?? ''} ${CATEGORY_RU[session.category as Category] ?? session.category}`;
+    if (result === 'posted') {
+      const doneKeyboard = new InlineKeyboard().text('✅ Опубликовано', 'noop');
+      await editKeyboard(ctx as any, doneKeyboard);
+    } else {
+      try {
+        await ctx.api.sendMessage(config.TELEGRAM_ADMIN_USER_ID, `❌ ${label}: не удалось опубликовать (${result})`);
+      } catch {}
     }
   });
 

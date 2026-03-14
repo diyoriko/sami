@@ -11,6 +11,7 @@ import {
   upsertMember, setMemberGoal, addWarning, muteMember,
   recordCompletion, getCompletionCount, hasUserCompleted,
   getPostByMessageId, getLatestPostByVideoId, getPostByGroupCommentId, setGroupCommentId, updateVideoRating, getLastCompletionTime,
+  getUserStreak,
   saveCaptcha, getCaptcha, deleteCaptcha, getExpiredCaptchas,
   getLatestPostForDate,
   getMemberLevel, getMemberJoinedAt,
@@ -605,6 +606,22 @@ export function registerModeration(bot: Bot): void {
         try { await ctx.editMessageReplyMarkup({ reply_markup: keyboard }); } catch {}
       }
 
+      // Post streak comment in discussion group
+      const streak = getUserStreak(userId);
+      const firstName = ctx.from?.first_name ?? 'Участник';
+      const streakText = streak > 1 ? ` 🔥 ${streak} дн. подряд.` : '';
+      const commentText = `${firstName} сделаль тренировку!${streakText} Всего сделали: ${count}`;
+      try {
+        const msgId = ctx.callbackQuery.message?.message_id;
+        if (msgId) {
+          await bot.api.sendMessage(config.TELEGRAM_GROUP_ID, commentText, {
+            reply_parameters: { message_id: msgId },
+          });
+        }
+      } catch (err) {
+        log.warn('failed to post streak comment', { error: String(err) });
+      }
+
       await ctx.answerCallbackQuery('Тренировка записана.');
 
       // Buddy invite check
@@ -706,6 +723,22 @@ export function registerModeration(bot: Bot): void {
       try {
         await ctx.editMessageReplyMarkup({ reply_markup: keyboard });
       } catch { /* message too old, that's ok */ }
+    }
+
+    // Post streak comment in discussion group
+    const streak = getUserStreak(userId);
+    const firstName = ctx.from?.first_name ?? 'Участник';
+    const streakText = streak > 1 ? ` 🔥 ${streak} дн. подряд.` : '';
+    const commentText = `${firstName} сделаль тренировку!${streakText} Всего сделали: ${count}`;
+    try {
+      const msgId = ctx.callbackQuery.message?.message_id;
+      if (msgId) {
+        await bot.api.sendMessage(config.TELEGRAM_GROUP_ID, commentText, {
+          reply_parameters: { message_id: msgId },
+        });
+      }
+    } catch (err) {
+      log.warn('failed to post streak comment', { error: String(err) });
     }
 
     await ctx.answerCallbackQuery('Тренировка записана.');

@@ -575,16 +575,16 @@ export function setApprovalStatus(sessionId: number, status: 'approved' | 'rejec
   `).run(status, sessionId);
 }
 
-export function getApprovalSessionByMessageId(messageId: number): { id: number; video_id: number; category: string; date: string } | null {
+export function getApprovalSessionByMessageId(messageId: number): { id: number; video_id: number; category: string; date: string; status: string } | null {
   return getDb().prepare(`
-    SELECT id, video_id, category, date FROM approval_sessions WHERE message_id = ? AND deleted_at IS NULL
-  `).get(messageId) as { id: number; video_id: number; category: string; date: string } | null;
+    SELECT id, video_id, category, date, status FROM approval_sessions WHERE message_id = ? AND deleted_at IS NULL
+  `).get(messageId) as { id: number; video_id: number; category: string; date: string; status: string } | null;
 }
 
-export function getApprovalSessionById(sessionId: number): { id: number; video_id: number; category: string; date: string } | null {
+export function getApprovalSessionById(sessionId: number): { id: number; video_id: number; category: string; date: string; status: string } | null {
   return (getDb().prepare(`
-    SELECT id, video_id, category, date FROM approval_sessions WHERE id = ? AND deleted_at IS NULL
-  `).get(sessionId) as { id: number; video_id: number; category: string; date: string } | undefined) ?? null;
+    SELECT id, video_id, category, date, status FROM approval_sessions WHERE id = ? AND deleted_at IS NULL
+  `).get(sessionId) as { id: number; video_id: number; category: string; date: string; status: string } | undefined) ?? null;
 }
 
 export function resetApprovalSessions(date: string): number {
@@ -993,6 +993,44 @@ export function getLastCompletionTime(userId: number): string | null {
     `SELECT completed_at FROM completions WHERE telegram_user_id = ? ORDER BY completed_at DESC LIMIT 1`
   ).get(userId) as { completed_at: string } | undefined;
   return row?.completed_at ?? null;
+}
+
+/**
+ * Count consecutive days with completions going back from today (MSK).
+ * If the most recent completion is older than yesterday — streak is 0.
+ */
+export function getUserStreak(userId: number): number {
+  const rows = getDb().prepare(`
+    SELECT DISTINCT date(completed_at, '+3 hours') as d
+    FROM completions
+    WHERE telegram_user_id = ?
+    ORDER BY d DESC
+  `).all(userId) as { d: string }[];
+
+  if (rows.length === 0) return 0;
+
+  // Today in MSK (inline to avoid circular import)
+  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Moscow' }));
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+  const mostRecent = rows[0].d;
+  const diffMs = new Date(todayStr + 'T00:00:00').getTime() - new Date(mostRecent + 'T00:00:00').getTime();
+  const diffDays = Math.round(diffMs / 86_400_000);
+
+  if (diffDays > 1) return 0;
+
+  let streak = 1;
+  for (let i = 1; i < rows.length; i++) {
+    const prev = new Date(rows[i - 1].d + 'T00:00:00').getTime();
+    const curr = new Date(rows[i].d + 'T00:00:00').getTime();
+    if (prev - curr === 86_400_000) {
+      streak++;
+    } else {
+      break;
+    }
+  }
+
+  return streak;
 }
 
 export function getPostByMessageId(channelMessageId: number): { id: number; video_id: number; category: string; date: string } | null {
