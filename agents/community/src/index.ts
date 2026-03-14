@@ -173,11 +173,11 @@ async function sendDeployReport(
   // ── Services status ──
   lines.push('');
   lines.push(`⚙️ *Сервисы:*`);
-  lines.push(`  Community Bot — ✅ online`);
-  lines.push(`  HTTP API — ✅ :${e(process.env.PORT || '3000')}`);
-  lines.push(`  yt\\-dlp — ${ytDlp ? '✅' : '❌ недоступен'}`);
-  lines.push(`  Стратег — ${lastStrat ? `✅ ${e(lastStrat.slice(0, 16).replace('T', ' '))}` : '⏳ нет данных'}`);
-  lines.push(`  Аналитика — ✅ \\(00:30 \\+ вс 10:00\\)`);
+  lines.push(`  Бот — отвечает на команды ✅`);
+  lines.push(`  Веб\\-сервер — принимает данные от стратега ✅ :${e(process.env.PORT || '3000')}`);
+  lines.push(`  Загрузчик видео — скачивает с YouTube ${ytDlp ? '✅' : '❌'}`);
+  lines.push(`  Стратег — ежедневный анализ ${lastStrat ? `✅ ${e(lastStrat.slice(0, 16).replace('T', ' '))}` : '⏳ нет данных'}`);
+  lines.push(`  Аналитика — метрики и дашборды ✅`);
 
   // ── Season ──
   if (season) {
@@ -214,7 +214,7 @@ async function sendDeployReport(
   lines.push(`  Постов: ${e(String(stats.totalPosts))} · Выполнений: ${e(String(stats.totalCompletions))}`);
   lines.push(`  Активных юзеров: ${e(String(stats.activeUsers))}`);
   if (stats.ugcPending > 0) {
-    lines.push(`  ⚠️ UGC на модерации: ${e(String(stats.ugcPending))}`);
+    lines.push(`  ⚠️ Тренировки на модерации: ${e(String(stats.ugcPending))}`);
   }
   if (stats.modActions7d > 0) {
     lines.push(`  Модерация \\(7д\\): ${e(String(stats.modActions7d))} действий`);
@@ -376,7 +376,7 @@ async function main(): Promise<void> {
     const args = ctx.match?.trim();
     if (args !== 'confirm') {
       await ctx.reply(
-        '⚠️ Это удалит ВСЕ данные: видео, посты, сезоны, UGC, участников, статистику.\n\n' +
+        '⚠️ Это удалит ВСЕ данные: видео, посты, сезоны, тренировки, участников, статистику.\n\n' +
         'Схема и настройки сохранятся.\n\n' +
         'Для подтверждения напиши: /wipe confirm'
       );
@@ -699,8 +699,11 @@ async function main(): Promise<void> {
 
       // Run download diagnostic — only notify if something is wrong
       runDiagnostic().then((report) => {
-        const hasIssue = report.toLowerCase().includes('fail') || report.toLowerCase().includes('error') || report.toLowerCase().includes('not found');
-        if (hasIssue) {
+        // Only alert if yt-dlp binary missing or ALL download attempts failed
+        const lines = report.split('\n');
+        const binaryMissing = lines.some(l => l.includes('FAIL: yt-dlp not found'));
+        const allFailed = lines.some(l => l.includes('ALL ATTEMPTS FAILED'));
+        if (binaryMissing || allFailed) {
           bot.api.sendMessage(
             config.TELEGRAM_ADMIN_USER_ID,
             `Проблема с загрузкой видео:\n${report}`,

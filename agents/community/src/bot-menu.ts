@@ -251,7 +251,7 @@ export function registerBotMenu(bot: Bot): void {
         `Подписчиков: ${escV2(subscriberCount)} \\| Группа: ${escV2(groupMemberCount)}`,
         `Постов: ${escV2(String(posts))}`,
         `Выполнений: ${escV2(String(completions))} \\(${escV2(String(users))} чел\\.\\)`,
-        `UGC на модерации: ${escV2(String(pendingUgc))}`,
+        `Тренировки на модерации: ${escV2(String(pendingUgc))}`,
         escV2(strategistLine),
         `Аптайм: ${escV2(uptimeStr)}`,
         queueText,
@@ -756,7 +756,8 @@ export function registerBotMenu(bot: Bot): void {
     saveUgcState(userId, 'waiting_difficulty', subId);
 
     const kb = new InlineKeyboard();
-    DIFFICULTY_BUTTONS.forEach(btn => {
+    DIFFICULTY_BUTTONS.forEach((btn, i) => {
+      if (i > 0) kb.row();
       kb.text(btn.label, `ugc_diff:${subId}:${btn.value}`);
     });
 
@@ -906,7 +907,7 @@ export function registerBotMenu(bot: Bot): void {
 
         const videoId = upsertVideo({
           youtube_id: syntheticYoutubeId,
-          title: sub.title ?? 'UGC Тренировка',
+          title: sub.title ?? 'Тренировка',
           channel_name: authorDisplay,
           channel_url: null,
           duration_seconds: sub.duration_seconds ?? null,
@@ -1002,7 +1003,7 @@ export function registerBotMenu(bot: Bot): void {
         }
 
         published = true;
-        updateUgcSubmission(subId, { published_at: new Date().toISOString() });
+        updateUgcSubmission(subId, { status: 'published', published_at: new Date().toISOString() });
         log.info('UGC published to channel', { subId, videoId });
       } catch (err) {
         publishError = String(err);
@@ -1010,7 +1011,7 @@ export function registerBotMenu(bot: Bot): void {
         try {
           const isTg = sub.video_url.startsWith('tg:');
           const details = [
-            `Не удалось опубликовать UGC #${subId}`,
+            `Не удалось опубликовать тренировку #${subId}`,
             `Тип: ${isTg ? 'видеофайл' : 'YouTube'}`,
             `Видео: ${isTg ? '(file_id)' : sub.video_url}`,
             `Ошибка: ${publishError.slice(0, 300)}`,
@@ -1085,6 +1086,7 @@ async function sendMyWorkouts(
     draft: '\u270F\uFE0F черновик',
     pending: '\u23F3 на модерации',
     approved: '\u2705 одобрено',
+    published: '\u2705 опубликовано',
     rejected: '\u274C отклонено',
   };
 
@@ -1132,7 +1134,7 @@ async function sendUgcToAdmin(bot: Bot, sub: UgcSubmission): Promise<void> {
   const videoLink = sub.video_url.startsWith('tg:') ? '\\(видеофайл\\)' : escV2(sub.video_url);
 
   const text = [
-    `*UGC: предложенная тренировка*`,
+    `*Предложенная тренировка*`,
     '',
     `Автор: ${escV2(author)}`,
     `Название: ${safeTitle}`,

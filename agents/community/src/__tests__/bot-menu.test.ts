@@ -37,12 +37,12 @@ describe('getUserSubmissions (Мои тренировки)', () => {
 
     // published
     const publishedId = db.createUgcSubmission(80, 'user80', 'https://youtube.com/watch?v=pub1', 'pub1');
-    db.updateUgcSubmission(publishedId, { title: 'My Stretch', category: 'stretching', difficulty: 'beginner', status: 'approved', published_at: '2026-03-11T20:00:00.000Z' });
+    db.updateUgcSubmission(publishedId, { title: 'My Stretch', category: 'stretching', difficulty: 'beginner', status: 'published', published_at: '2026-03-11T20:00:00.000Z' });
 
     const items = db.getUserSubmissions(80, 5, 0);
     expect(items).toHaveLength(3);
     // newest first (by created_at)
-    expect(items.find(i => i.title === 'My Stretch')?.status).toBe('approved');
+    expect(items.find(i => i.title === 'My Stretch')?.status).toBe('published');
     expect(items.find(i => i.title === 'Pending Stretch')?.status).toBe('pending');
 
     expect(db.getUserSubmissionTotal(80)).toBe(3);
@@ -80,6 +80,25 @@ describe('UGC submissions', () => {
     const id = db.createUgcSubmission(43, null, 'https://youtube.com/watch?v=xyz', 'xyz');
     db.deleteUgcSubmission(id);
     expect(db.getUgcSubmission(id)).toBeNull();
+  });
+
+  it('published status clears pending count', async () => {
+    const db = await import('../db');
+    const id = db.createUgcSubmission(90, 'pub_test', 'https://youtube.com/watch?v=pubtest', 'pubtest');
+    db.updateUgcSubmission(id, { title: 'Pub Test', category: 'stretching', difficulty: 'beginner', status: 'pending' });
+
+    const before = db.getPendingUgcCount();
+    expect(before).toBeGreaterThan(0);
+
+    // Simulate approve + publish
+    db.updateUgcSubmission(id, { status: 'published', published_at: new Date().toISOString() });
+    const sub = db.getUgcSubmission(id)!;
+    expect(sub.status).toBe('published');
+    expect(sub.published_at).not.toBeNull();
+
+    // Pending count should not include published
+    const after = db.getPendingUgcCount();
+    expect(after).toBe(before - 1);
   });
 });
 

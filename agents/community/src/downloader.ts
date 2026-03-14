@@ -149,7 +149,7 @@ export async function runDiagnostic(): Promise<string> {
   // 3. Cookies
   const cookieCandidates = [COOKIES_PATH, path.join(os.tmpdir(), 'yt-cookies.txt')];
   const cookieFile = cookieCandidates.find(p => fs.existsSync(p));
-  log(`cookies: ${cookieFile ?? 'none'}`);
+  log(`cookies: ${cookieFile ?? 'none (опционально)'}`);
 
   // 4. Test download — short public domain video
   const testUrl = 'https://www.youtube.com/watch?v=jNQXAC9IVRw'; // "Me at the zoo" — first YouTube video, always available

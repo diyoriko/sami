@@ -97,7 +97,7 @@ function migrateCheckConstraints(db: Database.Database): void {
         title TEXT,
         category TEXT CHECK(category IN (${CATEGORIES_SQL})),
         difficulty TEXT CHECK(difficulty IN (${DIFFICULTIES_SQL})),
-        status TEXT CHECK(status IN ('draft','pending','approved','rejected')) DEFAULT 'draft',
+        status TEXT CHECK(status IN ('draft','pending','approved','rejected','published')) DEFAULT 'draft',
         admin_message_id INTEGER,
         created_at TEXT DEFAULT (datetime('now')),
         decided_at TEXT,
@@ -125,6 +125,55 @@ function migrateCheckConstraints(db: Database.Database): void {
   const fkErrors = db.pragma('foreign_key_check');
   if ((fkErrors as unknown[]).length > 0) {
     throw new Error(`FK integrity broken after constraint migration: ${JSON.stringify(fkErrors)}`);
+  }
+}
+
+function migrateUgcPublishedStatus(db: Database.Database): void {
+  // Test if CHECK allows 'published' status
+  try {
+    db.exec(`INSERT INTO ugc_submissions (telegram_user_id, username, video_url, status) VALUES (0, '__test__', '__test__', 'published')`);
+    db.exec(`DELETE FROM ugc_submissions WHERE username = '__test__'`);
+    return; // Already supports 'published'
+  } catch {
+    // Need to rebuild
+  }
+
+  db.pragma('foreign_keys = OFF');
+  try {
+    db.exec('BEGIN');
+    db.exec(`ALTER TABLE ugc_submissions RENAME TO ugc_submissions_old`);
+    db.exec(`
+      CREATE TABLE ugc_submissions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        telegram_user_id INTEGER NOT NULL,
+        username TEXT,
+        video_url TEXT NOT NULL,
+        youtube_id TEXT,
+        title TEXT,
+        category TEXT CHECK(category IN (${CATEGORIES_SQL})),
+        difficulty TEXT CHECK(difficulty IN (${DIFFICULTIES_SQL})),
+        status TEXT CHECK(status IN ('draft','pending','approved','rejected','published')) DEFAULT 'draft',
+        admin_message_id INTEGER,
+        created_at TEXT DEFAULT (datetime('now')),
+        decided_at TEXT,
+        deleted_at TEXT,
+        published_at TEXT,
+        duration_seconds INTEGER,
+        duration_label TEXT,
+        muscles TEXT,
+        equipment TEXT
+      )
+    `);
+    db.exec(`INSERT INTO ugc_submissions SELECT * FROM ugc_submissions_old`);
+    db.exec(`DROP TABLE ugc_submissions_old`);
+    // Auto-fix: mark items with published_at as 'published'
+    db.exec(`UPDATE ugc_submissions SET status = 'published' WHERE published_at IS NOT NULL AND status = 'approved'`);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  } finally {
+    db.pragma('foreign_keys = ON');
   }
 }
 
@@ -230,7 +279,7 @@ function migrate(db: Database.Database): void {
       title TEXT,
       category TEXT CHECK(category IN (${CATEGORIES_SQL})),
       difficulty TEXT CHECK(difficulty IN (${DIFFICULTIES_SQL})),
-      status TEXT CHECK(status IN ('draft','pending','approved','rejected')) DEFAULT 'draft',
+      status TEXT CHECK(status IN ('draft','pending','approved','rejected','published')) DEFAULT 'draft',
       admin_message_id INTEGER,
       created_at TEXT DEFAULT (datetime('now')),
       decided_at TEXT,
@@ -301,6 +350,9 @@ function migrate(db: Database.Database): void {
 
   // Migration: rebuild tables with updated CHECK constraints (added yoga, breathing, recovery, cardio)
   migrateCheckConstraints(db);
+
+  // Migration: allow 'published' status in ugc_submissions
+  migrateUgcPublishedStatus(db);
 
   // Video rejections (blocklist): tracks admin "Другое" clicks
   db.exec(`
