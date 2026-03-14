@@ -111,6 +111,22 @@ describe('rating', () => {
 
     expect(computeRating(highVideo)).toBeGreaterThan(computeRating(lowVideo));
   });
+
+  it('UGC videos get base rating 5.0', async () => {
+    const { computeRating } = await import('../db');
+
+    const ugcVideo = {
+      id: 999, youtube_id: 'ugc-42', title: 'UGC Test', channel_name: 'user',
+      channel_url: null, duration_seconds: 300, duration_label: '5:00',
+      difficulty: 'beginner' as const, category: 'stretching' as const,
+      muscles: null, thumbnail_url: null, video_url: 'tg:file123',
+      view_count: 0, rating: 0, like_ratio: 0, channel_subscribers: 0,
+    };
+
+    const rating = computeRating(ugcVideo);
+    expect(rating).toBeGreaterThanOrEqual(5.0);
+    expect(rating).toBeLessThanOrEqual(8.0);
+  });
 });
 
 describe('approval queue', () => {

@@ -1162,6 +1162,12 @@ function getVideoCompletionCount(videoId: number): number {
  *  15% completions (Telegram engagement — people who actually did the workout)
  */
 export function computeRating(video: VideoRow): number {
+  // UGC videos (no YouTube metrics) — base 5.0 + completions boost up to 8.0
+  if (video.youtube_id?.startsWith('ugc-')) {
+    const completionScore = normalizeCompletions(getVideoCompletionCount(video.id));
+    return Math.round(Math.min(5 + completionScore * 3, 8) * 10) / 10;
+  }
+
   const viewScore = normalizeViews(video.view_count);
   const likeScore = normalizeLikeRatio(video.like_ratio ?? 0);
   const channelScore = video.channel_subscribers > 0

@@ -26,7 +26,7 @@ import {
 
 const CAPTCHA_TIMEOUT_MS = 2 * 60 * 1000;
 
-function generateCaptcha(): { question: string; answer: number; options: number[] } {
+export function generateCaptcha(): { question: string; answer: number; options: number[] } {
   const a = Math.floor(Math.random() * 9) + 1;
   const b = Math.floor(Math.random() * 9) + 1;
   const answer = a + b;
@@ -71,12 +71,12 @@ const SPAM_PATTERNS = [
   // Adult/dating spam
   /(?:знакомств|dating|18\+|секс|sex|порн|porn|onlyfans|эскорт|escort)/i,
   // MLM/pyramid
-  /(?:пассивн\w{0,5}\s*доход|passive\s*income|mlm|сетев\w{0,5}\s*маркетинг|network\s*marketing|пирамид)/i,
+  /(?:пассивн.{0,10}доход|passive\s*income|mlm|сетев.{0,10}маркетинг|network\s*marketing|пирамид)/i,
   // Telegram channel/group promo (except our own)
   /(?:t\.me\/(?!sami)\w+|телеграм.{0,10}канал|telegram.{0,10}channel)/i,
 ];
 
-function isSpam(text: string): boolean {
+export function isSpam(text: string): boolean {
   return SPAM_PATTERNS.some(re => re.test(text));
 }
 
@@ -529,7 +529,7 @@ export function registerModeration(bot: Bot): void {
     if (post) {
       const count = getCompletionCount(post.id);
       const rating = updateVideoRating(post.video_id);
-      const ratingStr = rating > 0 ? rating.toFixed(1) : '—';
+      const ratingStr = rating.toFixed(1);
       keyboard = new InlineKeyboard()
         .text(`Я сделаль${count > 0 ? ` · ${count}` : ''}`, `done:${post.video_id}`)
         .row()
@@ -540,7 +540,7 @@ export function registerModeration(bot: Bot): void {
       keyboard = new InlineKeyboard()
         .text('Я сделаль', `done_msg:${channelMsgId}`)
         .row()
-        .text('⭐ —/10', `rating_msg:${channelMsgId}`);
+        .text('⭐ рейтинг', `rating_msg:${channelMsgId}`);
     }
 
     try {
@@ -594,7 +594,7 @@ export function registerModeration(bot: Bot): void {
 
       // Upgrade button to use proper done: callback with video_id
       const rating = updateVideoRating(post.video_id);
-      const ratingStr = rating > 0 ? rating.toFixed(1) : '—';
+      const ratingStr = rating.toFixed(1);
       const keyboard = new InlineKeyboard()
         .text(`Я сделаль · ${count}`, `done:${post.video_id}`)
         .row()
@@ -762,7 +762,7 @@ export function registerModeration(bot: Bot): void {
     const post = getPostByMessageId(channelMsgId);
     if (post) {
       const rating = updateVideoRating(post.video_id);
-      const ratingStr = rating > 0 ? rating.toFixed(1) : '—';
+      const ratingStr = rating.toFixed(1);
       await ctx.answerCallbackQuery({
         text: `⭐ Рейтинг: ${ratingStr} из 10\n\nФормула:\n• 35% — просмотры на YouTube\n• 30% — соотношение лайков\n• 20% — авторитет канала\n• 15% — выполнения в Sami\n\nЧем больше людей делает тренировку, тем выше рейтинг.`,
         show_alert: true,
