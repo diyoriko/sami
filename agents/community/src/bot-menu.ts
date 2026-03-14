@@ -89,6 +89,8 @@ function buildCategoryKeyboard(subId: number): InlineKeyboard {
     kb.text(btn.label, `ugc_cat:${subId}:${btn.value}`);
     if (i % 2 === 1) kb.row(); // 2 per row
   });
+  if (CATEGORY_BUTTONS.length % 2 === 1) kb.row();
+  kb.text('Отмена', 'ugc_cancel');
   return kb;
 }
 
@@ -99,16 +101,20 @@ function buildDurationKeyboard(subId: number): InlineKeyboard {
     kb.text(btn.label, `ugc_dur:${subId}:${btn.seconds}`);
     if (i % 2 === 1) kb.row();
   });
+  if (DURATION_BUTTONS.length % 2 === 1) kb.row();
+  kb.text('← Назад', `ugc_back:${subId}:waiting_duration`).text('Отмена', 'ugc_cancel');
   return kb;
 }
 
 /** Build equipment inline keyboard: 2 buttons per row */
-function buildEquipmentKeyboard(subId: number): InlineKeyboard {
+function buildEquipmentKeyboard(subId: number, skippedDuration: boolean = false): InlineKeyboard {
   const kb = new InlineKeyboard();
   EQUIPMENT_BUTTONS.forEach((btn, i) => {
     kb.text(btn.label, `ugc_equip:${subId}:${btn.value}`);
     if (i % 2 === 1) kb.row();
   });
+  if (EQUIPMENT_BUTTONS.length % 2 === 1) kb.row();
+  kb.text('← Назад', `ugc_back:${subId}:waiting_equipment`).text('Отмена', 'ugc_cancel');
   return kb;
 }
 
@@ -157,6 +163,39 @@ export function registerBotMenu(bot: Bot): void {
   bot.callbackQuery(/^mywk:(\d+)$/, async (ctx) => {
     const offset = parseInt(ctx.match[1]);
     await ctx.answerCallbackQuery();
+    await sendMyWorkouts(ctx, ctx.from!.id, offset, ctx.callbackQuery.message?.message_id);
+  });
+
+  // Delete workout — confirmation prompt
+  bot.callbackQuery(/^ugc_del:(\d+):(\d+)$/, async (ctx) => {
+    const subId = parseInt(ctx.match[1]);
+    const offset = parseInt(ctx.match[2]);
+    const sub = getUgcSubmission(subId);
+    if (!sub || sub.telegram_user_id !== ctx.from!.id) {
+      await ctx.answerCallbackQuery('Не найдено');
+      return;
+    }
+    await ctx.answerCallbackQuery();
+    const title = sub.title ? decodeHtmlEntities(sub.title) : 'Без названия';
+    const kb = new InlineKeyboard()
+      .text('Да, удалить', `ugc_del_yes:${subId}:${offset}`)
+      .text('Отмена', `mywk:${offset}`);
+    try {
+      await ctx.editMessageText(`Удалить тренировку «${title}»?`, { reply_markup: kb });
+    } catch {}
+  });
+
+  // Delete workout — confirmed
+  bot.callbackQuery(/^ugc_del_yes:(\d+):(\d+)$/, async (ctx) => {
+    const subId = parseInt(ctx.match[1]);
+    const offset = parseInt(ctx.match[2]);
+    const sub = getUgcSubmission(subId);
+    if (!sub || sub.telegram_user_id !== ctx.from!.id) {
+      await ctx.answerCallbackQuery('Не найдено');
+      return;
+    }
+    deleteUgcSubmission(subId);
+    await ctx.answerCallbackQuery('Удалено');
     await sendMyWorkouts(ctx, ctx.from!.id, offset, ctx.callbackQuery.message?.message_id);
   });
 
@@ -620,6 +659,60 @@ export function registerBotMenu(bot: Bot): void {
     } catch {}
   });
 
+  // Back button in UGC flow — return to previous step
+  bot.callbackQuery(/^ugc_back:(\d+):(.+)$/, async (ctx) => {
+    const subId = parseInt(ctx.match[1]);
+    const currentStep = ctx.match[2] as UgcStep;
+    const userId = ctx.from!.id;
+    await ctx.answerCallbackQuery();
+
+    const sub = getUgcSubmission(subId);
+    if (!sub) {
+      deleteUgcState(userId);
+      try { await ctx.editMessageText('Сессия устарела.'); } catch {}
+      return;
+    }
+
+    if (currentStep === 'waiting_difficulty') {
+      // Back to category
+      saveUgcState(userId, 'waiting_category', subId);
+      const kb = buildCategoryKeyboard(subId);
+      try { await ctx.editMessageText('Какой тип тренировки?', { reply_markup: kb }); } catch {}
+    } else if (currentStep === 'waiting_duration') {
+      // Back to difficulty
+      saveUgcState(userId, 'waiting_difficulty', subId);
+      const kb = new InlineKeyboard();
+      DIFFICULTY_BUTTONS.forEach((btn, i) => {
+        if (i > 0) kb.row();
+        kb.text(btn.label, `ugc_diff:${subId}:${btn.value}`);
+      });
+      kb.row().text('← Назад', `ugc_back:${subId}:waiting_difficulty`).text('Отмена', 'ugc_cancel');
+      try { await ctx.editMessageText('Уровень сложности?', { reply_markup: kb }); } catch {}
+    } else if (currentStep === 'waiting_equipment') {
+      // Back to duration or difficulty (if duration was auto-detected)
+      if (sub.duration_seconds) {
+        // Duration was auto-detected, go back to difficulty
+        saveUgcState(userId, 'waiting_difficulty', subId);
+        const kb = new InlineKeyboard();
+        DIFFICULTY_BUTTONS.forEach((btn, i) => {
+          if (i > 0) kb.row();
+          kb.text(btn.label, `ugc_diff:${subId}:${btn.value}`);
+        });
+        kb.row().text('← Назад', `ugc_back:${subId}:waiting_difficulty`).text('Отмена', 'ugc_cancel');
+        try { await ctx.editMessageText('Уровень сложности?', { reply_markup: kb }); } catch {}
+      } else {
+        saveUgcState(userId, 'waiting_duration', subId);
+        const kb = buildDurationKeyboard(subId);
+        try { await ctx.editMessageText('Сколько длится тренировка?', { reply_markup: kb }); } catch {}
+      }
+    } else if (currentStep === 'waiting_title') {
+      // Back to equipment
+      saveUgcState(userId, 'waiting_equipment', subId);
+      const kb = buildEquipmentKeyboard(subId);
+      try { await ctx.editMessageText('Нужен ли инвентарь?', { reply_markup: kb }); } catch {}
+    }
+  });
+
   bot.command('cancel', async (ctx) => {
     if (ctx.chat.type !== 'private') return;
     const state = getUgcState(ctx.from!.id);
@@ -787,6 +880,7 @@ export function registerBotMenu(bot: Bot): void {
       if (i > 0) kb.row();
       kb.text(btn.label, `ugc_diff:${subId}:${btn.value}`);
     });
+    kb.row().text('← Назад', `ugc_back:${subId}:waiting_difficulty`).text('Отмена', 'ugc_cancel');
 
     try {
       await ctx.editMessageText('Уровень сложности?', { reply_markup: kb });
@@ -869,10 +963,13 @@ export function registerBotMenu(bot: Bot): void {
     updateUgcSubmission(subId, { equipment: EQUIPMENT_VALUE_RU[equipValue] ?? equipValue });
     saveUgcState(userId, 'waiting_title', subId);
 
+    const titleKb = new InlineKeyboard()
+      .text('← Назад', `ugc_back:${subId}:waiting_title`)
+      .text('Отмена', 'ugc_cancel');
     try {
-      await ctx.editMessageText('Как назвать тренировку? Напиши короткое название.');
+      await ctx.editMessageText('Как назвать тренировку? Напиши короткое название.', { reply_markup: titleKb });
     } catch {
-      await ctx.reply('Как назвать тренировку? Напиши короткое название.');
+      await ctx.reply('Как назвать тренировку? Напиши короткое название.', { reply_markup: titleKb });
     }
   });
 
@@ -1130,6 +1227,15 @@ async function sendMyWorkouts(
   const text = header + '\n' + lines.join('\n\n');
 
   const kb = new InlineKeyboard();
+  // Delete buttons for each item
+  items.forEach((item, i) => {
+    const title = item.title ? decodeHtmlEntities(item.title) : 'Без названия';
+    const shortTitle = title.length > 15 ? title.slice(0, 12) + '…' : title;
+    kb.text(`🗑 ${shortTitle}`, `ugc_del:${item.id}:${offset}`);
+    if (i % 2 === 1) kb.row();
+  });
+  if (items.length % 2 === 1) kb.row();
+  // Pagination
   if (offset > 0) {
     kb.text('← Назад', `mywk:${Math.max(0, offset - PAGE_SIZE)}`);
   }

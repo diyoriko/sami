@@ -432,6 +432,57 @@ describe('UGC flow end-to-end', () => {
     }
   });
 
+  it('back button returns to previous UGC step', async () => {
+    const uid = USER_ID + 40;
+
+    // Start flow + send link
+    await bot.handleUpdate(textUpdate('💡 Предложить тренировку', { chat_id: uid, user_id: uid }));
+    await bot.handleUpdate(textUpdate('https://youtube.com/watch?v=back_test_1', { chat_id: uid, user_id: uid }));
+
+    const state1 = db.getUgcState(uid);
+    expect(state1?.step).toBe('waiting_category');
+    const subId = state1!.submission_id!;
+
+    // Pick category
+    await bot.handleUpdate(callbackUpdate(`ugc_cat:${subId}:strength`, { user_id: uid, chat_id: uid }));
+    expect(db.getUgcState(uid)?.step).toBe('waiting_difficulty');
+
+    // Back from difficulty → category
+    await bot.handleUpdate(callbackUpdate(`ugc_back:${subId}:waiting_difficulty`, { user_id: uid, chat_id: uid }));
+    expect(db.getUgcState(uid)?.step).toBe('waiting_category');
+
+    // Pick category again, then difficulty
+    await bot.handleUpdate(callbackUpdate(`ugc_cat:${subId}:mobility`, { user_id: uid, chat_id: uid }));
+    await bot.handleUpdate(callbackUpdate(`ugc_diff:${subId}:intermediate`, { user_id: uid, chat_id: uid }));
+    expect(db.getUgcState(uid)?.step).toBe('waiting_duration');
+
+    // Back from duration → difficulty
+    await bot.handleUpdate(callbackUpdate(`ugc_back:${subId}:waiting_duration`, { user_id: uid, chat_id: uid }));
+    expect(db.getUgcState(uid)?.step).toBe('waiting_difficulty');
+
+    // Cleanup
+    db.deleteUgcState(uid);
+    db.deleteUgcSubmission(subId);
+  });
+
+  it('delete workout from "Мои тренировки" soft-deletes', async () => {
+    const uid = USER_ID + 50;
+
+    // Create a submission
+    const subId = db.createUgcSubmission(uid, 'testdel', 'https://youtube.com/watch?v=del_test_1', 'del_test_1');
+    db.updateUgcSubmission(subId, { title: 'Тест удаления', category: 'stretching', difficulty: 'beginner', status: 'pending' });
+
+    // Verify it exists
+    expect(db.getUgcSubmission(subId)).toBeTruthy();
+    expect(db.getUserSubmissionTotal(uid)).toBeGreaterThan(0);
+
+    // Confirm delete
+    await bot.handleUpdate(callbackUpdate(`ugc_del_yes:${subId}:0`, { user_id: uid, chat_id: uid }));
+
+    // getUgcSubmission filters deleted_at IS NULL, so returns null after soft delete
+    expect(db.getUgcSubmission(subId)).toBeNull();
+  });
+
   it('muscle auto-detection works from title', async () => {
     const uid = USER_ID + 30;
 
