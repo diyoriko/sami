@@ -175,7 +175,7 @@ export function startScheduler(bot: Bot): void {
   }, { timezone: 'Europe/Moscow' });
 
   // ---- 48h inactivity reminder (daily 10:00 MSK) ----
-  cron.schedule('0 7 * * *', async () => {
+  cron.schedule('0 10 * * *', async () => {
     log.info('checking for inactive users (48h reminder)');
     try {
       const { getInactiveUsers, markReminderSent, getLatestPost } = require('./db') as typeof import('./db');

@@ -118,11 +118,14 @@ export function insertTaskIntoBacklog(markdown: string, task: string, priority: 
 
   if (insertIdx === -1) return null;
 
-  // Check for duplicates (fuzzy: first 40 chars of task)
-  const taskStart = task.slice(0, 40).toLowerCase();
-  const isDuplicate = lines.some(line =>
-    line.toLowerCase().includes(taskStart)
-  );
+  // Check for duplicates: extract bold title from task (e.g. "**Title** — desc" → "title")
+  const titleMatch = task.match(/\*\*(.+?)\*\*/);
+  const titleForDedup = titleMatch ? titleMatch[1].toLowerCase().trim() : task.slice(0, 60).toLowerCase();
+  const isDuplicate = lines.some(line => {
+    const lineTitle = line.match(/\*\*(.+?)\*\*/);
+    if (lineTitle) return lineTitle[1].toLowerCase().trim() === titleForDedup;
+    return false;
+  });
   if (isDuplicate) {
     log.info('task already exists in backlog, skipping', { task: task.slice(0, 50) });
     return null;

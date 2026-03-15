@@ -84,4 +84,35 @@ describe('insertTaskIntoBacklog', () => {
     expect(result).toContain('Баг один');
     expect(result).toContain('Монетизация');
   });
+
+  it('does not false-positive on similar but different titles', () => {
+    const result = insertTaskIntoBacklog(
+      SAMPLE_BACKLOG,
+      '**Существующая P2 расширенная** — совсем другая задача',
+      'P2'
+    );
+    // Different bold title → should NOT be duplicate
+    expect(result).not.toBeNull();
+    expect(result).toContain('Существующая P2 расширенная');
+  });
+
+  it('detects exact title duplicate regardless of description', () => {
+    const result = insertTaskIntoBacklog(
+      SAMPLE_BACKLOG,
+      '**Баг один** — совершенно другое описание',
+      'P2'
+    );
+    // Same bold title → duplicate
+    expect(result).toBeNull();
+  });
+
+  it('inserts task without bold formatting (fallback dedup)', () => {
+    const result = insertTaskIntoBacklog(
+      SAMPLE_BACKLOG,
+      'Простая задача без форматирования — описание',
+      'P2'
+    );
+    expect(result).not.toBeNull();
+    expect(result).toContain('- [ ] Простая задача без форматирования');
+  });
 });
