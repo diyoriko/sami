@@ -174,10 +174,55 @@ export function startScheduler(bot: Bot): void {
     }
   }, { timezone: 'Europe/Moscow' });
 
+  // ---- 48h inactivity reminder (daily 10:00 MSK) ----
+  cron.schedule('0 7 * * *', async () => {
+    log.info('checking for inactive users (48h reminder)');
+    try {
+      const { getInactiveUsers, markReminderSent, getLatestPost } = require('./db') as typeof import('./db');
+
+      const inactiveUsers = getInactiveUsers(48);
+      if (inactiveUsers.length === 0) {
+        log.info('no inactive users to remind');
+        return;
+      }
+
+      const latestPost = getLatestPost();
+      const channelHandle = config.TELEGRAM_CHANNEL_ID.startsWith('@')
+        ? config.TELEGRAM_CHANNEL_ID.slice(1)
+        : `c/${config.TELEGRAM_CHANNEL_ID.replace(/^-100/, '')}`;
+
+      let postLink = 'https://t.me/sami_workouts';
+      if (latestPost) {
+        const { getLatestPostForDate: getLP } = require('./db') as typeof import('./db');
+        const todayPost = getLP(todayMsk());
+        if (todayPost) {
+          postLink = `https://t.me/${channelHandle}/${todayPost.channel_message_id}`;
+        }
+      }
+
+      let sent = 0;
+      for (const user of inactiveUsers) {
+        try {
+          await bot.api.sendMessage(
+            user.telegram_user_id,
+            `Давно не виделись! Пропустил тренировку? Ничего страшного — вот свежая, можно начать прямо сейчас:\n\n${postLink}\n\nОдна тренировка — уже победа.`
+          );
+          markReminderSent(user.telegram_user_id);
+          sent++;
+        } catch {
+          // User blocked DMs — that's ok
+        }
+      }
+      log.info(`48h reminders sent: ${sent}/${inactiveUsers.length}`);
+    } catch (err) {
+      log.error('48h reminder failed', { error: String(err) });
+    }
+  }, { timezone: 'Europe/Moscow' });
+
   // Strategist runs on Mac (claude --print, Max subscription) and POSTs packet to /packet endpoint.
   // If ANTHROPIC_API_KEY is set, can also run locally on Railway (future option).
 
-  log.info('all cron jobs registered (community + analytics + poll + stability)');
+  log.info('all cron jobs registered (community + analytics + poll + stability + reminder)');
 
   // Cleanup old approval sessions on startup
   setTimeout(() => {

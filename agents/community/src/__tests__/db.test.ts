@@ -443,6 +443,37 @@ describe('user favorites', () => {
   });
 });
 
+describe('inactive users (48h reminder)', () => {
+  it('getInactiveUsers returns users with old last_activity_at', async () => {
+    const db = await import('../db');
+    const rawDb = db.getDb();
+
+    // Create active user (recent activity)
+    rawDb.prepare(`INSERT OR REPLACE INTO members (telegram_user_id, first_name, completions_total, last_activity_at) VALUES (?, ?, ?, datetime('now'))`).run(80001, 'Активный', 5);
+
+    // Create inactive user (3 days ago)
+    rawDb.prepare(`INSERT OR REPLACE INTO members (telegram_user_id, first_name, completions_total, last_activity_at) VALUES (?, ?, ?, datetime('now', '-3 days'))`).run(80002, 'Неактивный', 3);
+
+    // Create user with zero completions (should not appear)
+    rawDb.prepare(`INSERT OR REPLACE INTO members (telegram_user_id, first_name, completions_total, last_activity_at) VALUES (?, ?, ?, datetime('now', '-5 days'))`).run(80003, 'Новичок', 0);
+
+    const inactive = db.getInactiveUsers(48);
+    const ids = inactive.map(u => u.telegram_user_id);
+    expect(ids).toContain(80002);
+    expect(ids).not.toContain(80001); // active
+    expect(ids).not.toContain(80003); // 0 completions
+  });
+
+  it('markReminderSent prevents re-sending within 72h', async () => {
+    const db = await import('../db');
+
+    db.markReminderSent(80002);
+    const inactive = db.getInactiveUsers(48);
+    const ids = inactive.map(u => u.telegram_user_id);
+    expect(ids).not.toContain(80002); // just reminded
+  });
+});
+
 describe('member levels', () => {
   it('returns новичок for users with few completions', async () => {
     const db = await import('../db');

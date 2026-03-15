@@ -333,6 +333,7 @@ function migrate(db: Database.Database): void {
   try { db.exec('ALTER TABLE members ADD COLUMN last_activity_at TEXT'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE members ADD COLUMN completions_total INTEGER DEFAULT 0'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE members ADD COLUMN buddy_invite_sent INTEGER DEFAULT 0'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE members ADD COLUMN reminder_sent_at TEXT'); } catch { /* already exists */ }
 
   // Discussion comment message ID (bot's reply in group thread)
   try { db.exec('ALTER TABLE posts ADD COLUMN group_comment_id INTEGER'); } catch { /* already exists */ }
@@ -1682,6 +1683,35 @@ export function getMemberJoinedAt(userId: number): string | null {
     `SELECT joined_at FROM members WHERE telegram_user_id = ?`
   ).get(userId) as { joined_at: string } | undefined;
   return row?.joined_at ?? null;
+}
+
+// --- Inactive users (48h reminder) ---
+
+export interface InactiveUser {
+  telegram_user_id: number;
+  first_name: string;
+  last_activity_at: string;
+}
+
+/**
+ * Get users who completed at least 1 workout but haven't been active for `hours` hours.
+ * Excludes users who were already reminded (reminder_sent_at within last 72h).
+ */
+export function getInactiveUsers(hours: number): InactiveUser[] {
+  return getDb().prepare(`
+    SELECT m.telegram_user_id, COALESCE(m.first_name, 'Участник') as first_name, m.last_activity_at
+    FROM members m
+    WHERE m.completions_total >= 1
+      AND m.last_activity_at IS NOT NULL
+      AND datetime(m.last_activity_at) < datetime('now', '-' || ? || ' hours')
+      AND (m.reminder_sent_at IS NULL OR datetime(m.reminder_sent_at) < datetime('now', '-72 hours'))
+  `).all(hours) as InactiveUser[];
+}
+
+export function markReminderSent(userId: number): void {
+  getDb().prepare(
+    `UPDATE members SET reminder_sent_at = datetime('now') WHERE telegram_user_id = ?`
+  ).run(userId);
 }
 
 // --- Implementor tasks ---

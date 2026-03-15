@@ -70,7 +70,7 @@ async function formatApprovalMessage(video: ScoredVideo, category: Category): Pr
     equipmentLine,
     `${escV2(formatViews(video.view_count))} просмотров`,
     '',
-    `Рейтинг: ${escV2(String(video.total_score))}/100 _\\(бренд: ${escV2(String(video.brand_score))}\\)_`,
+    `Рейтинг поиска: ${escV2(String((video.total_score / 10).toFixed(1)))}/10 _\\(бренд: ${escV2(String((video.brand_score / 10).toFixed(1)))}\\)_`,
   ].join('\n');
 }
 

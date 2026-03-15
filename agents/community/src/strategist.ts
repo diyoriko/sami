@@ -107,7 +107,7 @@ export function getActionById(actionId: number): StrategistAction | null {
 
 // --- Strategist Actions (v2) ---
 
-export type StrategistActionType = 'create_poll' | 'update_welcome' | 'limit_posts' | 'send_digest' | 'update_stop_list' | 'create_impl_task';
+export type StrategistActionType = 'create_poll' | 'update_welcome' | 'limit_posts' | 'send_digest' | 'update_stop_list' | 'create_impl_task' | 'backlog_proposal';
 
 export interface StrategistAction {
   type: StrategistActionType;
@@ -300,6 +300,13 @@ function buildPrompt(): string {
 
 Цель: построить Telegram-сообщество так, чтобы оно конвертировалось в будущий запуск приложения.
 
+ВАЖНО — тон и язык:
+- Пиши ПО-ЧЕЛОВЕЧЕСКИ, как умный друг, а не как аналитик. Никаких «δ=0», «acquisition», «retention», «posts today = 0», «engagement», «ICP».
+- Используй простой русский: «новых подписчиков нет», «никто не тренировался», «канал молчит».
+- Метрики — конкретные цифры, но описывай словами: «3 подписчика, за неделю ни одного нового» вместо «subscribers: 3, δ=0».
+- Фокус дня — как совет другу: «Запости тренировку — канал уже 2 дня молчит».
+- Решения — простым языком без маркетингового жаргона.
+
 ВАЖНО — экономия токенов:
 - Будь лаконичен. Не повторяй контекст обратно.
 - Каждый раздел: 3-5 конкретных пунктов, без воды.
@@ -307,17 +314,17 @@ function buildPrompt(): string {
 - Фокус на actionable items, а не описания.
 
 Обязательные блоки:
-1. ## Резюме — 5-7 кратких буллетов (самое важное)
-2. ## Фокус дня — 3 конкретных действия на сегодня
+1. ## Резюме — 5-7 кратких буллетов (самое важное, простым языком)
+2. ## Фокус дня — 3 конкретных действия на сегодня (как совет другу)
 3. ## Эксперименты — таблица: гипотеза, шаги, метрика, дедлайн (только активные)
-4. ## Метрики — North Star + 3-4 ведущих показателя (цифры, не описания)
-5. ## Решения — 3 решения для владельца проекта
+4. ## Метрики — главный показатель + 3-4 цифры (словами, не кодом)
+5. ## Решения — 3 решения для владельца проекта (без жаргона)
 6. ## Ресерч — 3 внешних инсайта с источниками
 
 Также включи (кратко, по 2-3 пункта):
-- Позиционирование и ICP
+- Позиционирование и целевая аудитория
 - Контентные рубрики
-- Growth loops
+- Как растёт сообщество (циклы роста)
 - Риски
 
 Обязательно в конце добавь блок:
@@ -334,6 +341,7 @@ function buildPrompt(): string {
 - "send_digest" — отправить дайджест в канал. params: { text: string }
 - "update_stop_list" — обновить стоп-лист спам-фраз. params: { add?: string[], remove?: string[] }
 - "create_impl_task" — создать задачу для имплементор-агента (автокод). params: { title: string, spec: string, priority?: "P0"|"P1"|"P2"|"P3" }. spec: что изменить, какие файлы, ожидаемый результат, ограничения.
+- "backlog_proposal" — предложить задачу в бэклог (COMMUNITY_TASKS.md). params: { task: string, priority: "P1"|"P2" }. task: **Название** — описание в формате бэклога. При одобрении автоматически добавится в бэклог через GitHub API.
 Если нет предложений — actions: []
 
 Формат: валидный Markdown. Заголовок: "# Sami Strategist Report — YYYY-MM-DD".
@@ -487,6 +495,7 @@ const ACTION_TYPE_LABELS: Record<StrategistActionType, string> = {
   send_digest: 'Отправить дайджест',
   update_stop_list: 'Обновить стоп-лист',
   create_impl_task: 'Создать задачу для имплементора',
+  backlog_proposal: 'Добавить в бэклог',
 };
 
 export async function sendActionToAdmin(bot: Bot, actionId: number, action: StrategistAction): Promise<void> {
@@ -578,6 +587,19 @@ async function executeAction(bot: Bot, actionId: number, type: StrategistActionT
       const priority = String(params.priority ?? 'P2');
       const taskId = createImplTask(title, spec, 'strategist', priority);
       return `Задача #${taskId} создана: "${title}" (${priority})`;
+    }
+
+    case 'backlog_proposal': {
+      const { addTaskToBacklog } = await import('./github');
+      const task = String(params.task ?? params.description ?? '');
+      const priority = String(params.priority ?? 'P2');
+      if (!task) return 'Нет описания задачи';
+      const result = await addTaskToBacklog(task, priority);
+      if (result.ok) {
+        return `Добавлено в бэклог (${priority}): ${task.slice(0, 60)}`;
+      } else {
+        return `Не удалось: ${result.error}`;
+      }
     }
 
     default:
