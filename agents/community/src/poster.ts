@@ -85,7 +85,7 @@ async function formatCaption(video: VideoRow, seasonInfo?: SeasonInfo): Promise<
     `*${title}*`,
     '',
     ...tagLines,
-    ...(ratingStr ? [`\`⭐ ${ratingStr} из 10\``] : []),
+    ...(ratingStr ? [`\`⭐ ${ratingStr}/10\`  _просмотры · лайки · канал · ваши тренировки_`] : []),
     ...(hashtags ? ['', escV2(hashtags)] : []),
     '',
     `Автор: ${channelName}, 📎 [YouTube](${safeUrl})`,

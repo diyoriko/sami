@@ -529,19 +529,13 @@ export function registerModeration(bot: Bot): void {
     let keyboard: InlineKeyboard;
     if (post) {
       const count = getCompletionCount(post.id);
-      const rating = updateVideoRating(post.video_id);
-      const ratingStr = rating.toFixed(1);
       keyboard = new InlineKeyboard()
-        .text(`Я сделаль${count > 0 ? ` · ${count}` : ''}`, `done:${post.video_id}`)
-        .row()
-        .text(`⭐ ${ratingStr}/10`, `rating:${post.video_id}`);
+        .text(`Я сделаль${count > 0 ? ` · ${count}` : ''}`, `done:${post.video_id}`);
     } else {
       // Post not tracked in DB (e.g. manual publish) — still show button with channel msg ID
       log.warn('auto-forward: no post in DB, using channel msg ID as fallback', { channelMsgId });
       keyboard = new InlineKeyboard()
-        .text('Я сделаль', `done_msg:${channelMsgId}`)
-        .row()
-        .text('⭐ рейтинг', `rating_msg:${channelMsgId}`);
+        .text('Я сделаль', `done_msg:${channelMsgId}`);
     }
 
     try {
@@ -594,12 +588,8 @@ export function registerModeration(bot: Bot): void {
       const count = getCompletionCount(post.id);
 
       // Upgrade button to use proper done: callback with video_id
-      const rating = updateVideoRating(post.video_id);
-      const ratingStr = rating.toFixed(1);
       const keyboard = new InlineKeyboard()
-        .text(`Я сделаль · ${count}`, `done:${post.video_id}`)
-        .row()
-        .text(`⭐ ${ratingStr}/10`, `rating:${post.video_id}`);
+        .text(`Я сделаль · ${count}`, `done:${post.video_id}`);
 
       try {
         await ctx.editMessageText('Сделал(а) тренировку? Нажми кнопку:', { reply_markup: keyboard });
@@ -607,11 +597,14 @@ export function registerModeration(bot: Bot): void {
         try { await ctx.editMessageReplyMarkup({ reply_markup: keyboard }); } catch {}
       }
 
-      // Post streak comment in discussion group
+      // Post celebratory comment in discussion group
       const streak = getUserStreak(userId);
       const firstName = ctx.from?.first_name ?? 'Участник';
-      const streakText = streak > 1 ? ` 🔥 ${streak} дн. подряд.` : '';
-      const commentText = `${firstName} сделаль тренировку!${streakText} Всего сделали: ${count}`;
+      const celebrationEmojis = ['🎉', '💪', '🔥', '⚡', '🙌'];
+      const celebEmoji = celebrationEmojis[Math.floor(Math.random() * celebrationEmojis.length)];
+      const streakText = streak > 1 ? `\n🔥 ${streak} дн. подряд!` : '';
+      const countText = count > 1 ? `\nУже ${count} человек сделали эту тренировку!` : '';
+      const commentText = `${celebEmoji} ${firstName} сделаль тренировку!${streakText}${countText}`;
       try {
         const msgId = ctx.callbackQuery.message?.message_id;
         if (msgId) {
@@ -705,13 +698,9 @@ export function registerModeration(bot: Bot): void {
 
     const count = getCompletionCount(post.id);
 
-    // Update buttons with new count (preserve rating button)
-    const rating = updateVideoRating(videoId);
-    const ratingStr = rating > 0 ? rating.toFixed(1) : '—';
+    // Update button with new count
     const keyboard = new InlineKeyboard()
-      .text(`Я сделаль · ${count}`, `done:${videoId}`)
-      .row()
-      .text(`⭐ ${ratingStr}/10`, `rating:${videoId}`);
+      .text(`Я сделаль · ${count}`, `done:${videoId}`);
 
     try {
       const msgText = ctx.callbackQuery.message?.text;
@@ -726,11 +715,14 @@ export function registerModeration(bot: Bot): void {
       } catch { /* message too old, that's ok */ }
     }
 
-    // Post streak comment in discussion group
+    // Post celebratory comment in discussion group
     const streak = getUserStreak(userId);
     const firstName = ctx.from?.first_name ?? 'Участник';
-    const streakText = streak > 1 ? ` 🔥 ${streak} дн. подряд.` : '';
-    const commentText = `${firstName} сделаль тренировку!${streakText} Всего сделали: ${count}`;
+    const celebrationEmojis = ['🎉', '💪', '🔥', '⚡', '🙌'];
+    const celebEmoji = celebrationEmojis[Math.floor(Math.random() * celebrationEmojis.length)];
+    const streakText = streak > 1 ? `\n🔥 ${streak} дн. подряд!` : '';
+    const countText = count > 1 ? `\nУже ${count} человек сделали эту тренировку!` : '';
+    const commentText = `${celebEmoji} ${firstName} сделаль тренировку!${streakText}${countText}`;
     try {
       const msgId = ctx.callbackQuery.message?.message_id;
       if (msgId) {

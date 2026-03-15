@@ -206,7 +206,7 @@ function findCalls(method: string) {
 
 describe('auto-forward → autocomment', () => {
 
-  it('posts autocomment with "Я сделаль" + rating when post is in DB', async () => {
+  it('posts autocomment with "Я сделаль" button when post is in DB', async () => {
     // Arrange: create video + post in DB
     const videoId = db.upsertVideo(makeVideo({ youtube_id: 'fwd_test_1', title: 'Forward Test' }));
     const channelMsgId = 42;
@@ -215,16 +215,15 @@ describe('auto-forward → autocomment', () => {
     // Act: simulate auto-forward
     await bot.handleUpdate(autoForwardUpdate(channelMsgId));
 
-    // Assert: sendMessage called with both buttons
+    // Assert: sendMessage called with "Я сделаль" button (no rating button)
     const sends = findCalls('sendMessage');
     expect(sends.length).toBeGreaterThan(0);
     const buttons = JSON.stringify(sends[0].payload);
     expect(buttons).toContain('done:');
-    expect(buttons).toContain('rating:');
     expect(buttons).toContain('Я сделаль');
   });
 
-  it('fallback autocomment has both "Я сделаль" and rating when post NOT in DB', async () => {
+  it('fallback autocomment has "Я сделаль" when post NOT in DB', async () => {
     const unknownChannelMsgId = 99999;
 
     await bot.handleUpdate(autoForwardUpdate(unknownChannelMsgId));
@@ -233,7 +232,6 @@ describe('auto-forward → autocomment', () => {
     expect(sends.length).toBeGreaterThan(0);
     const buttons = JSON.stringify(sends[0].payload);
     expect(buttons).toContain('done_msg:');
-    expect(buttons).toContain('rating_msg:');
   });
 
   it('does not pin autocomment in group', async () => {

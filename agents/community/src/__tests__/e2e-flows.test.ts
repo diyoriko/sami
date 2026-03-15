@@ -614,7 +614,6 @@ describe('completion + rating full flow', () => {
     expect(sends.length).toBeGreaterThan(0);
     const commentPayload = JSON.stringify(sends[0].payload);
     expect(commentPayload).toContain('done:');
-    expect(commentPayload).toContain('rating:');
 
     // 2. User clicks "Я сделаль"
     const uid1 = USER_ID + 300;
@@ -647,7 +646,6 @@ describe('completion + rating full flow', () => {
     expect(sends.length).toBeGreaterThan(0);
     const payload = JSON.stringify(sends[0].payload);
     expect(payload).toContain('done_msg:');
-    expect(payload).toContain('rating_msg:');
   });
 });
 
