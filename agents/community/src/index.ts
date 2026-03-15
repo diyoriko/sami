@@ -158,14 +158,25 @@ async function sendDeployReport(
       .filter(l => l !== '' && !l.startsWith('Co-Authored-By:'));
 
     if (commitLines.length > 0) {
+      const TYPE_RU: Record<string, string> = {
+        feat: '✨ Новое', fix: '🔧 Исправлено', chore: '🔩 Обслуживание',
+        test: '🧪 Тесты', ci: '⚙️ CI', refactor: '♻️ Рефакторинг',
+        docs: '📝 Документация', perf: '⚡ Оптимизация', impl: '🔨 Задача',
+        style: '🎨 Оформление', build: '📦 Сборка',
+      };
+
+      const header = commitLines[0];
+      const convMatch = header.match(/^(\w+)(?:\([^)]*\))?!?:\s*(.+)$/);
+      const typeLabel = convMatch ? (TYPE_RU[convMatch[1]] ?? convMatch[1]) : null;
+      const summary = convMatch ? convMatch[2] : header;
+
       lines.push('');
-      lines.push(`📦 *Что нового:*`);
-      lines.push(`*${e(commitLines[0])}*`);
+      lines.push(`${typeLabel ?? '📦 Обновление'}: *${e(summary)}*`);
+
       for (let i = 1; i < Math.min(commitLines.length, 15); i++) {
         const line = commitLines[i];
-        lines.push(line.startsWith('- ') || line.startsWith('• ')
-          ? `  ${e(line)}`
-          : `  \\- ${e(line)}`);
+        const cleaned = line.replace(/^[-•]\s*/, '');
+        lines.push(`  · ${e(cleaned)}`);
       }
     }
   }
