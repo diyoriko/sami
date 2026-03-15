@@ -219,10 +219,38 @@ export function startScheduler(bot: Bot): void {
     }
   }, { timezone: 'Europe/Moscow' });
 
+  // ---- Owner reminder: no posts today (15:00 MSK) ----
+  cron.schedule('0 15 * * *', async () => {
+    log.info('checking if owner posted today (15:00 reminder)');
+    try {
+      const { getPostCountForDate } = require('./db') as typeof import('./db');
+
+      const today = todayMsk();
+      const postCount = getPostCountForDate(today);
+
+      if (postCount > 0) {
+        log.info(`owner reminder skipped — ${postCount} post(s) already today`);
+        return;
+      }
+
+      const { InlineKeyboard } = require('grammy');
+      const kb = new InlineKeyboard().text('📅 Искать тренировку', 'show_week_status');
+
+      await bot.api.sendMessage(
+        config.TELEGRAM_ADMIN_USER_ID,
+        'Сегодня ещё не было постов в канале. Найди тренировку и опубликуй — канал не должен молчать.',
+        { reply_markup: kb }
+      );
+      log.info('owner reminder sent — no posts today');
+    } catch (err) {
+      log.error('owner reminder failed', { error: String(err) });
+    }
+  }, { timezone: 'Europe/Moscow' });
+
   // Strategist runs on Mac (claude --print, Max subscription) and POSTs packet to /packet endpoint.
   // If ANTHROPIC_API_KEY is set, can also run locally on Railway (future option).
 
-  log.info('all cron jobs registered (community + analytics + poll + stability + reminder)');
+  log.info('all cron jobs registered (community + analytics + poll + stability + reminder + owner)');
 
   // Cleanup old approval sessions on startup
   setTimeout(() => {

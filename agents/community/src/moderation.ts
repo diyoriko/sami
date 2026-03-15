@@ -18,7 +18,45 @@ import {
   logModAction, getStopPhrases,
   wasBuddyInviteSent, markBuddyInviteSent,
   upsertPollResult,
+  getRecentPostsByCategory,
 } from './db';
+
+// ─── FIRST COMPLETION DM ─────────────────────────────────────────────────────
+// After the very first "Я сделаль", send a personal congratulation + 2-3 videos
+// from the same category so the user sticks around.
+
+async function sendFirstCompletionDM(bot: Bot, userId: number, category: string): Promise<void> {
+  const config = getConfig();
+  const channelHandle = config.TELEGRAM_CHANNEL_ID.startsWith('@')
+    ? config.TELEGRAM_CHANNEL_ID.slice(1)
+    : `c/${config.TELEGRAM_CHANNEL_ID.replace(/^-100/, '')}`;
+
+  const catLabel = CATEGORY_RU[category as Category] ?? category;
+  const recentPosts = getRecentPostsByCategory(category, 3);
+
+  let linksBlock = '';
+  if (recentPosts.length > 0) {
+    const links = recentPosts.map(p =>
+      `• [${escV2(p.title.slice(0, 50))}](https://t.me/${channelHandle}/${p.channel_message_id})`
+    ).join('\n');
+    linksBlock = `\n\n*Ещё ${escV2(catLabel)}:*\n${links}`;
+  }
+
+  try {
+    await bot.api.sendMessage(
+      userId,
+      `🎉 *Поздравляем с первой тренировкой\\!*\n\n` +
+      `Ты только что сделал\\(а\\) первый шаг — это уже победа\\. ` +
+      `Теперь главное — не останавливаться\\.` +
+      linksBlock +
+      `\n\nКаждый день в канале новая тренировка — заглядывай\\.`,
+      { parse_mode: 'MarkdownV2' }
+    );
+    log.info('first completion DM sent', { userId, category });
+  } catch {
+    // User blocked DMs — that's ok
+  }
+}
 
 // ─── CAPTCHA ──────────────────────────────────────────────────────────────────
 // Simple math captcha to filter bots. New member is muted until they pass.
@@ -585,6 +623,13 @@ export function registerModeration(bot: Bot): void {
       }
 
       recordCompletion(post.id, post.video_id, userId);
+
+      // First completion DM
+      const { completions: doneCount } = getMemberLevel(userId);
+      if (doneCount === 1) {
+        sendFirstCompletionDM(bot, userId, post.category);
+      }
+
       const count = getCompletionCount(post.id);
 
       // Upgrade button to use proper done: callback with video_id
@@ -678,8 +723,15 @@ export function registerModeration(bot: Bot): void {
 
     recordCompletion(post.id, videoId, userId);
 
-    // Buddy invite: after 3rd completion, suggest inviting a friend (once)
+    // DM milestones based on completion count
     const { completions } = getMemberLevel(userId);
+
+    // First completion ever — personal congrats + category recommendations
+    if (completions === 1) {
+      sendFirstCompletionDM(bot, userId, post.category);
+    }
+
+    // Buddy invite: after 3rd completion, suggest inviting a friend (once)
     if (completions === 3 && !wasBuddyInviteSent(userId)) {
       markBuddyInviteSent(userId);
       try {

@@ -474,6 +474,53 @@ describe('inactive users (48h reminder)', () => {
   });
 });
 
+describe('getRecentPostsByCategory', () => {
+  it('returns recent posts filtered by category', async () => {
+    const db = await import('../db');
+
+    // Insert a video + post for stretching
+    const videoId = db.upsertVideo({
+      youtube_id: 'recent-cat-1',
+      title: 'Recent Stretching',
+      channel_name: 'Test',
+      channel_url: null,
+      duration_seconds: 600,
+      duration_label: '10:00',
+      difficulty: 'beginner',
+      category: 'stretching',
+      muscles: null,
+      thumbnail_url: null,
+      video_url: 'https://youtube.com/watch?v=rc1',
+      view_count: 1000,
+      rating: 0,
+      like_ratio: 0.9,
+      channel_subscribers: 5000,
+      search_query: 'test',
+    });
+    db.recordPost('2026-03-15', 'stretching', videoId, 9001);
+
+    const posts = db.getRecentPostsByCategory('stretching', 3);
+    expect(posts.length).toBeGreaterThanOrEqual(1);
+    expect(posts.some(p => p.channel_message_id === 9001)).toBe(true);
+
+    // Different category returns different results
+    const mobilityPosts = db.getRecentPostsByCategory('mobility', 3);
+    expect(mobilityPosts.every(p => p.channel_message_id !== 9001)).toBe(true);
+  });
+});
+
+describe('getPostCountForDate', () => {
+  it('counts posts for a specific date', async () => {
+    const db = await import('../db');
+
+    const count = db.getPostCountForDate('2026-03-15');
+    expect(count).toBeGreaterThanOrEqual(1); // from the post above
+
+    const emptyCount = db.getPostCountForDate('2099-01-01');
+    expect(emptyCount).toBe(0);
+  });
+});
+
 describe('member levels', () => {
   it('returns новичок for users with few completions', async () => {
     const db = await import('../db');

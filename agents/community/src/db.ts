@@ -796,6 +796,18 @@ export function wasPostedToday(date: string, category: string): boolean {
   return row.cnt > 0;
 }
 
+/** Get recent posts by category with channel links (for recommendation DMs). */
+export function getRecentPostsByCategory(category: string, limit: number = 3): { title: string; channel_message_id: number }[] {
+  return getDb().prepare(`
+    SELECT v.title, p.channel_message_id
+    FROM posts p
+    JOIN videos v ON v.id = p.video_id
+    WHERE p.category = ? AND p.channel_message_id IS NOT NULL
+    ORDER BY p.date DESC, p.posted_at DESC
+    LIMIT ?
+  `).all(category, limit) as { title: string; channel_message_id: number }[];
+}
+
 // --- Check-in helpers ---
 
 export function recordCheckin(date: string, userId: number, result: 'did' | 'partial' | 'didnt'): boolean {
