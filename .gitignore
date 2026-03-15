@@ -32,6 +32,9 @@ agents/google-token.json
 test-*.db-shm
 test-*.db-wal
 
+# Test coverage
+coverage/
+
 # Setup results (contains secrets)
 SETUP_RESULTS.md
 

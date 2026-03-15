@@ -1,9 +1,9 @@
 name: Implementor Agent
 
 on:
-  schedule:
-    # 14:00 MSK = 11:00 UTC
-    - cron: '0 11 * * *'
+  # schedule disabled — needs ANTHROPIC_API_KEY for Claude Code CLI
+  # schedule:
+  #   - cron: '0 11 * * *'
   workflow_dispatch:
     inputs:
       task_id:

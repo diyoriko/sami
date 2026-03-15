@@ -1,9 +1,9 @@
 name: Strategist Agent
 
 on:
-  schedule:
-    # 12:30 MSK = 09:30 UTC
-    - cron: '30 9 * * *'
+  # schedule disabled — strategist runs via Mac launchd (needs ANTHROPIC_API_KEY for GH Actions)
+  # schedule:
+  #   - cron: '30 9 * * *'
   workflow_dispatch:
     inputs:
       dry_run:
