@@ -369,18 +369,18 @@
 
 - [x] **Единые иконки статуса в расписании** — ⬜ не выбрано, 📋 выбрано (ждёт публикации), ✅ опубликовано. Исправлена рассинхронизация между approval.ts и bot-menu.ts (были разные эмодзи для одних состояний)
 
-### P1: Code Quality Audit (16.03) — в работе
+### P1: Code Quality Audit (16.03) — DONE
 
-- [x] **channel_subscribers: 0 хардкод** — добавлен `channels.list` API call в youtube.ts, подписчики канала теперь запрашиваются batch-запросом при поиске видео
-- [x] **Рейтинг: хардкод весов в db.ts** — вынесены в config.ts (`RATING_VIEW_WEIGHT`, `RATING_LIKE_WEIGHT`, `RATING_CHANNEL_WEIGHT`, `RATING_COMPLETION_WEIGHT`)
-- [x] **channel_subscribers fallback 0.4 → 0.3** — более консервативная оценка для неизвестных каналов
-- [x] **Silent schema migrations** — `addColumn()` хелпер, ловит только "duplicate column", логирует реальные ошибки. Заменены все 20 silent try/catch
-- [x] **Inconsistent scoring weights** — `scoreDuration` использует config вместо хардкода 300с
-- [x] **Magic numbers** — `MAX_PENALTY` → `config.VIDEO_PENALTY_CAP`, TG API limits → именованные константы
-- [ ] **Empty catch blocks** — 40+ мест. Разделить intentional от unintentional. Логировать реальные ошибки
-- [ ] **Hardcoded timeouts** — yt-dlp: 120s, approval delay: 300ms, poster retry: 3s. Вынести в config
-- [x] **Celebration emojis дубликат** — `buildCelebrationComment()` хелпер, 10 фраз + milestones + streak + crowd
-- [x] **Telegram API limits** — `TG_DESCRIPTION_LIMIT` и т.д. в shared.ts
+- [x] **channel_subscribers: 0 хардкод** — `channels.list` API call, batch-запрос подписчиков
+- [x] **Рейтинг: хардкод весов** — вынесены в config.ts (4 RATING_*_WEIGHT)
+- [x] **channel_subscribers fallback** — 0.4 → 0.3 (консервативнее)
+- [x] **Silent schema migrations** — `addColumn()` хелпер, логирует реальные ошибки. 20 блоков заменены
+- [x] **Inconsistent scoring** — `scoreDuration` + `MAX_PENALTY` → config
+- [x] **Magic numbers** — TG API limits → именованные константы в shared.ts
+- [x] **Empty catch blocks** — 7 бизнес-catch добавлен логгинг, ~90 Telegram/test catch — ОК
+- [x] **Hardcoded timeouts** — 9 именованных констант в downloader/approval/poster
+- [x] **Celebration emojis** — `buildCelebrationComment()`, 10 фраз + milestones + streak
+- [x] **Telegram API limits** — `TG_DESCRIPTION_LIMIT` и т.д.
 
 ### P2: Growth (ручная работа, не код)
 
