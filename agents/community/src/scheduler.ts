@@ -274,5 +274,34 @@ export function startScheduler(bot: Bot): void {
     }
   }, 3000);
 
+  // Catch-up on startup: publish today's season video if queued but not yet posted
+  setTimeout(async () => {
+    try {
+      const { ensureActiveSeason, getSeasonDay, getSeasonQueueForDay } = require('./db') as typeof import('./db');
+      const { postSeasonVideo } = require('./poster') as typeof import('./poster');
+      const { nextMondayMsk } = require('./dates') as typeof import('./dates');
+      const { SEASON_DURATION } = require('./shared') as typeof import('./shared');
+
+      const today = todayMsk();
+      const season = ensureActiveSeason(today, nextMondayMsk());
+      if (season.status !== 'active') return;
+
+      const dayNumber = getSeasonDay(season.start_date, today);
+      if (dayNumber < 1 || dayNumber > SEASON_DURATION) return;
+
+      const slot = getSeasonQueueForDay(season.id, dayNumber);
+      if (!slot || slot.status !== 'queued' || !slot.video_id) return;
+
+      log.info(`catch-up: publishing season ${season.number} day ${dayNumber}`);
+      const result = await postSeasonVideo(bot, season, dayNumber);
+      log.info(`catch-up: season publish result: ${result}`);
+      if (result !== 'posted') {
+        await notifyAdmin(bot, 'Season', `Catch-up публикация: день ${dayNumber}, результат: ${result}`);
+      }
+    } catch (err) {
+      log.error('catch-up season publish failed', { error: String(err) });
+    }
+  }, 5000);
+
   // Auto-search catch-up disabled — admin uses "Неделя" button manually
 }

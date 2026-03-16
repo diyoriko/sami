@@ -271,6 +271,12 @@ export function registerBotMenu(bot: Bot): void {
             return `${icon} ${dayLabel} ${slotEmoji} ${slotCatRu}${title}${marker}`;
           });
           weekQueueText = `\n\n*Неделя ${wk}:*\n${lines.map(l => escV2(l)).join('\n')}`;
+
+          // Show publish button if today's slot is queued but not yet posted
+          const todaySlot = slots.find(s => s.day_number === sDay);
+          if (todaySlot && todaySlot.status === 'queued') {
+            statusKb = new InlineKeyboard().text('📤 Опубликовать сегодня', `season_pub:${season.id}:${sDay}`);
+          }
         }
       }
     } catch { /* no season yet */ }
@@ -405,7 +411,17 @@ export function registerBotMenu(bot: Bot): void {
 
     const nextSlot = getNextEmptySlot(season.id, weekNum);
     const kb = new InlineKeyboard();
+
+    // Publish button if today's slot is queued
+    if (season.status === 'active' && seasonDay >= 1) {
+      const todaySlot = slots.find(s => s.day_number === seasonDay);
+      if (todaySlot && todaySlot.status === 'queued') {
+        kb.text('📤 Опубликовать сегодня', `season_pub:${season.id}:${seasonDay}`);
+      }
+    }
+
     if (nextSlot) {
+      if (kb.inline_keyboard && kb.inline_keyboard.length > 0) kb.row();
       kb.text('Заполнить следующий', `fill_next:${season.id}:${weekNum}`);
     }
 
@@ -439,6 +455,30 @@ export function registerBotMenu(bot: Bot): void {
     // Run approval flow for single category
     const date = tomorrowMsk(); // date doesn't matter much, used for session tracking
     await runApprovalFlow(bot, date, category, { seasonId, dayNumber: slot.day_number });
+  });
+
+  // Manual season publish for today
+  bot.callbackQuery(/^season_pub:(\d+):(\d+)$/, async (ctx) => {
+    if (ctx.from!.id !== config.TELEGRAM_ADMIN_USER_ID) return;
+    await ctx.answerCallbackQuery('Публикую...');
+
+    const seasonId = Number(ctx.match![1]);
+    const dayNumber = Number(ctx.match![2]);
+    const { getActiveSeason } = await import('./db');
+    const { postSeasonVideo } = await import('./poster');
+
+    const season = getActiveSeason();
+    if (!season || season.id !== seasonId) {
+      try { await ctx.editMessageText('Сезон не найден или неактивен.'); } catch {}
+      return;
+    }
+
+    const result = await postSeasonVideo(bot, season, dayNumber);
+    if (result === 'posted') {
+      try { await ctx.editMessageText('✅ Опубликовано!'); } catch {}
+    } else {
+      try { await ctx.editMessageText(`Ошибка публикации: ${result}`); } catch {}
+    }
   });
 
   bot.hears('Опубликовать', async (ctx) => {
