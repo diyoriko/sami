@@ -58,6 +58,66 @@ async function sendFirstCompletionDM(bot: Bot, userId: number, category: string)
   }
 }
 
+// ─── CELEBRATION MESSAGES ─────────────────────────────────────────────────────
+
+const CELEBRATION_PHRASES = [
+  (n: string) => `${n} на коврике!`,
+  (n: string) => `${n} сделаль!`,
+  (n: string) => `${n} в деле.`,
+  (n: string) => `Есть! ${n} размялся.`,
+  (n: string) => `${n} — тренировка в кармане.`,
+  (n: string) => `Коврик не пустовал — ${n} поработал.`,
+  (n: string) => `${n} — done.`,
+  (n: string) => `+1 от ${n}. Уважение.`,
+  (n: string) => `${n} потянулся. Красиво.`,
+  (n: string) => `${n} зашёл, сделал, ушёл.`,
+];
+
+const STREAK_PHRASES = [
+  (d: number) => `${d} дн. подряд — машина.`,
+  (d: number) => `Серия ${d} дн. Не сбивайся.`,
+  (d: number) => `${d}-й день подряд. Стабильность.`,
+  (d: number) => `${d} дн. без перерыва.`,
+];
+
+const MILESTONE_PHRASES: Record<number, string> = {
+  5: '🏅 Пять подряд — это уже привычка.',
+  7: '🗓 Неделя без пропусков. Уровень.',
+  14: '💎 Две недели. Ты в элите.',
+  21: '👑 21 день. Сезон пройден. Легенда.',
+};
+
+const CROWD_PHRASES = [
+  (n: number) => `Уже ${n} чел. сделали эту тренировку.`,
+  (n: number) => `${n} человек — вместе проще.`,
+  (n: number) => `Нас уже ${n}. Кто следующий?`,
+];
+
+function buildCelebrationComment(firstName: string, streak: number, completionCount: number): string {
+  const emojis = ['🎉', '💪', '🔥', '⚡', '🙌', '✊', '🧘', '🏋️'];
+  const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+
+  // Main phrase
+  const phrase = CELEBRATION_PHRASES[Math.floor(Math.random() * CELEBRATION_PHRASES.length)];
+  let text = `${emoji} ${phrase(firstName)}`;
+
+  // Milestone takes priority over generic streak
+  if (MILESTONE_PHRASES[streak]) {
+    text += `\n${MILESTONE_PHRASES[streak]}`;
+  } else if (streak > 1) {
+    const sp = STREAK_PHRASES[Math.floor(Math.random() * STREAK_PHRASES.length)];
+    text += `\n🔥 ${sp(streak)}`;
+  }
+
+  // Crowd
+  if (completionCount > 1) {
+    const cp = CROWD_PHRASES[Math.floor(Math.random() * CROWD_PHRASES.length)];
+    text += `\n${cp(completionCount)}`;
+  }
+
+  return text;
+}
+
 // ─── CAPTCHA ──────────────────────────────────────────────────────────────────
 // Simple math captcha to filter bots. New member is muted until they pass.
 // Wrong answer or timeout (2 min) → kick.
@@ -645,11 +705,7 @@ export function registerModeration(bot: Bot): void {
       // Post celebratory comment in discussion group
       const streak = getUserStreak(userId);
       const firstName = ctx.from?.first_name ?? 'Участник';
-      const celebrationEmojis = ['🎉', '💪', '🔥', '⚡', '🙌'];
-      const celebEmoji = celebrationEmojis[Math.floor(Math.random() * celebrationEmojis.length)];
-      const streakText = streak > 1 ? `\n🔥 ${streak} дн. подряд!` : '';
-      const countText = count > 1 ? `\nУже ${count} человек сделали эту тренировку!` : '';
-      const commentText = `${celebEmoji} ${firstName} сделаль тренировку!${streakText}${countText}`;
+      const commentText = buildCelebrationComment(firstName, streak, count);
       try {
         const msgId = ctx.callbackQuery.message?.message_id;
         if (msgId) {
@@ -770,11 +826,7 @@ export function registerModeration(bot: Bot): void {
     // Post celebratory comment in discussion group
     const streak = getUserStreak(userId);
     const firstName = ctx.from?.first_name ?? 'Участник';
-    const celebrationEmojis = ['🎉', '💪', '🔥', '⚡', '🙌'];
-    const celebEmoji = celebrationEmojis[Math.floor(Math.random() * celebrationEmojis.length)];
-    const streakText = streak > 1 ? `\n🔥 ${streak} дн. подряд!` : '';
-    const countText = count > 1 ? `\nУже ${count} человек сделали эту тренировку!` : '';
-    const commentText = `${celebEmoji} ${firstName} сделаль тренировку!${streakText}${countText}`;
+    const commentText = buildCelebrationComment(firstName, streak, count);
     try {
       const msgId = ctx.callbackQuery.message?.message_id;
       if (msgId) {
