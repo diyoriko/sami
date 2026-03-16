@@ -676,7 +676,7 @@ export function registerBotMenu(bot: Bot): void {
     } else {
       const cancelKb = new InlineKeyboard().text('Отмена', 'ugc_cancel');
       await ctx.reply(
-        'Отправь ссылку на YouTube-видео или загрузи видеофайл напрямую.',
+        'Предложи тренировку:\n\n• Ссылку на YouTube-видео любимого автора\n• Или загрузи свой видеофайл напрямую',
         { reply_markup: cancelKb }
       );
     }
@@ -886,7 +886,7 @@ export function registerBotMenu(bot: Bot): void {
     if (state.step === 'waiting_link') {
       const ytId = extractYoutubeId(text);
       if (!ytId) {
-        await ctx.reply('Не могу распознать ссылку. Отправь ссылку на YouTube-видео или загрузи видеофайл напрямую.');
+        await ctx.reply('Не могу распознать ссылку. Отправь ссылку на YouTube-видео или загрузи видеофайл.');
         return;
       }
       if (isUgcDuplicate(ytId)) {
