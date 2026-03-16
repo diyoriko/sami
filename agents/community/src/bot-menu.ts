@@ -202,10 +202,9 @@ export function registerBotMenu(bot: Bot): void {
   // --- Admin buttons ---
   bot.hears('📊 Статус', async (ctx) => {
     if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
-    const { todayMsk, tomorrowMsk } = await import('./dates');
-    const { getPostCountForDate, getCompletionCountForDate, getUniqueCompletionUsersForDate, getApprovalQueue } = await import('./db');
+    const { todayMsk } = await import('./dates');
+    const { getPostCountForDate, getCompletionCountForDate, getUniqueCompletionUsersForDate } = await import('./db');
     const date = todayMsk();
-    const tomorrow = tomorrowMsk();
     const posts = getPostCountForDate(date);
     const completions = getCompletionCountForDate(date);
     const users = getUniqueCompletionUsersForDate(date);
@@ -232,45 +231,10 @@ export function registerBotMenu(bot: Bot): void {
     // Uptime
     const uptimeStr = formatUptime(process.uptime());
 
-    const STATUS_ICON: Record<string, string> = {
-      approved: '✅',
-      pending: '⏳',
-    };
-
-    const queue = getApprovalQueue(date, tomorrow);
-    let queueText = '';
-    if (queue.length > 0) {
-      const grouped = new Map<string, typeof queue>();
-      for (const item of queue) {
-        const key = item.date;
-        if (!grouped.has(key)) grouped.set(key, []);
-        grouped.get(key)!.push(item);
-      }
-      const parts: string[] = [];
-      for (const [qDate, items] of grouped) {
-        const lines = items.map(item => {
-          const cat = CATEGORY_RU[item.category as Category] ?? item.category;
-          const icon = STATUS_ICON[item.status] ?? item.status;
-          const rawTitle = decodeHtmlEntities(item.title);
-          const title = rawTitle.length > 40 ? rawTitle.slice(0, 37) + '...' : rawTitle;
-          return `  ${icon} ${escV2(cat)} — ${escV2(title)}`;
-        });
-        parts.push(`*${escV2(qDate)}:*\n${lines.join('\n')}`);
-      }
-      queueText = `\n\n*Очередь:*\n${parts.join('\n\n')}`;
-    } else {
-      queueText = '\n\nОчередь пуста\\.';
-    }
-
-    // Inline actions if there are approved videos
-    const { getApprovedVideo } = await import('./db');
-    const hasApproved = CATEGORIES.some(c => getApprovedVideo(date, c) !== null || getApprovedVideo(tomorrow, c) !== null);
-    const statusKb = hasApproved
-      ? new InlineKeyboard().text('Опубликовать', 'btn_publish').text('Сбросить выбор', 'btn_reset')
-      : undefined;
-
-    // Season info
+    // Season info + week queue
     let seasonLine = '';
+    let weekQueueText = '';
+    let statusKb: InlineKeyboard | undefined;
     try {
       const { ensureActiveSeason, getSeasonDay, getSeasonWeekNumber, getSeasonWeekStatus, initSeasonWeekSlots } = await import('./db');
       const { nextMondayMsk } = await import('./dates');
@@ -287,7 +251,26 @@ export function registerBotMenu(bot: Bot): void {
           initSeasonWeekSlots(season.id, wk);
           const slots = getSeasonWeekStatus(season.id, wk);
           const filled = slots.filter(s => s.status !== 'empty').length;
-          seasonLine = `Сезон ${season.number} | День ${sDay}/21 | ${emoji} ${catRu} | Очередь: ${filled}/7`;
+          seasonLine = `Сезон ${season.number} | День ${sDay}/21 | ${emoji} ${catRu} | Заполнено: ${filled}/7`;
+
+          // Week queue by day
+          const DAY_LABELS = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+          const lines = slots.map(slot => {
+            const d = ((slot.day_number - 1) % 7) + 1;
+            const jd = d === 7 ? 0 : d;
+            const slotCat = SEASON_DAY_MAP[jd];
+            const slotCatRu = slotCat ? CR[slotCat] : '?';
+            const slotEmoji = slotCat ? SEASON_EMOJI[slotCat] : '❓';
+            const dayLabel = DAY_LABELS[jd];
+            const isToday = slot.day_number === sDay;
+            const icon = slot.status === 'posted' ? '📤'
+              : slot.status === 'queued' ? '✅'
+              : '⬜';
+            const title = slot.title ? ` — ${decodeHtmlEntities(slot.title).slice(0, 30)}` : '';
+            const marker = isToday ? ' 👈' : '';
+            return `${icon} ${dayLabel} ${slotEmoji} ${slotCatRu}${title}${marker}`;
+          });
+          weekQueueText = `\n\n*Неделя ${wk}:*\n${lines.map(l => escV2(l)).join('\n')}`;
         }
       }
     } catch { /* no season yet */ }
@@ -304,7 +287,7 @@ export function registerBotMenu(bot: Bot): void {
         `Тренировки на модерации: ${escV2(String(pendingUgc))}`,
         escV2(strategistLine),
         `Аптайм: ${escV2(uptimeStr)}`,
-        queueText,
+        weekQueueText,
       ].join('\n'),
       { parse_mode: 'MarkdownV2', ...(statusKb ? { reply_markup: statusKb } : {}) }
     );

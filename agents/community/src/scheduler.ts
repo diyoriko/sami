@@ -52,10 +52,11 @@ export function startScheduler(bot: Bot): void {
         return;
       }
       if (slot.status !== 'queued' || !slot.video_id) {
+        // Unfilled day — normal when admin fills only 2-3 days per week. Silent skip.
         const dow = new Date(today + 'T00:00:00').getDay();
         const cat = SEASON_DAY_MAP[dow];
         const catRu = cat ? CATEGORY_RU[cat] : '?';
-        await notifyAdmin(bot, 'Season', `Нет видео на сегодня\\!\n\`День ${dayNumber}, ${catRu}\`\nНайди и добавь через «Неделя»`);
+        log.info(`season ${season.number} day ${dayNumber} (${catRu}): no video queued, skipping`);
         return;
       }
 
