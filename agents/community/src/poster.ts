@@ -100,7 +100,7 @@ export async function postVideoToChannel(
   bot: Bot,
   date: string,
   category: Category,
-  options?: { force?: boolean; correlationId?: string; seasonInfo?: SeasonInfo }
+  options?: { force?: boolean; correlationId?: string; seasonInfo?: SeasonInfo; video?: VideoRow }
 ): Promise<PostResult> {
   const postLog = options?.correlationId ? log.withCorrelation(options.correlationId) : log;
   const config = getConfig();
@@ -111,7 +111,7 @@ export async function postVideoToChannel(
     return 'skipped';
   }
 
-  const video = getApprovedVideo(date, category);
+  const video = options?.video ?? getApprovedVideo(date, category);
   if (!video) {
     postLog.warn(`no approved video for ${category} on ${date}`);
     return 'no_video';
@@ -241,6 +241,7 @@ export async function postSeasonVideo(
   const result = await postVideoToChannel(bot, date, category as Category, {
     force: true,
     seasonInfo: { seasonNumber: season.number, seasonDay: dayNumber, category: category as Category },
+    video,
   });
 
   if (result === 'posted') {
