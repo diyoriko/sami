@@ -61,9 +61,7 @@ function mainKeyboard(isAdmin = false): Keyboard {
     .text('💡 Предложить тренировку');
   if (isAdmin) {
     kb.row()
-      .text('📊 Статус').text('📅 Неделя').text('📈 Аналитика')
-      .row()
-      .text('🧹 Очистить канал');
+      .text('📊 Статус').text('📅 Неделя').text('📈 Аналитика');
   }
   return kb.resized().persistent();
 }
@@ -90,7 +88,7 @@ function buildCategoryKeyboard(subId: number): InlineKeyboard {
     if (i % 2 === 1) kb.row(); // 2 per row
   });
   if (CATEGORY_BUTTONS.length % 2 === 1) kb.row();
-  kb.text('Отмена', 'ugc_cancel');
+  kb.text('❌ Отмена', 'ugc_cancel');
   return kb;
 }
 
@@ -102,7 +100,7 @@ function buildDurationKeyboard(subId: number): InlineKeyboard {
     if (i % 2 === 1) kb.row();
   });
   if (DURATION_BUTTONS.length % 2 === 1) kb.row();
-  kb.text('← Назад', `ugc_back:${subId}:waiting_duration`).text('Отмена', 'ugc_cancel');
+  kb.text('← Назад', `ugc_back:${subId}:waiting_duration`).text('❌ Отмена', 'ugc_cancel');
   return kb;
 }
 
@@ -114,7 +112,7 @@ function buildEquipmentKeyboard(subId: number, skippedDuration: boolean = false)
     if (i % 2 === 1) kb.row();
   });
   if (EQUIPMENT_BUTTONS.length % 2 === 1) kb.row();
-  kb.text('← Назад', `ugc_back:${subId}:waiting_equipment`).text('Отмена', 'ugc_cancel');
+  kb.text('← Назад', `ugc_back:${subId}:waiting_equipment`).text('❌ Отмена', 'ugc_cancel');
   return kb;
 }
 
@@ -541,7 +539,7 @@ export function registerBotMenu(bot: Bot): void {
     if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
     const kb = new InlineKeyboard()
       .text('Да, удалить все посты', 'clear_channel_confirm')
-      .text('Отмена', 'clear_channel_cancel');
+      .text('❌ Отмена', 'clear_channel_cancel');
     await ctx.reply('Удалить все посты из канала @sami_workouts?\nЭто действие необратимо.', { reply_markup: kb });
   });
 
@@ -668,13 +666,13 @@ export function registerBotMenu(bot: Bot): void {
       const kb = new InlineKeyboard()
         .text('🔍 Поиск YouTube', 'ugc_yt_search')
         .row()
-        .text('Отмена', 'ugc_cancel');
+        .text('❌ Отмена', 'ugc_cancel');
       await ctx.reply(
         'Отправь ссылку на YouTube, загрузи видеофайл или найди через поиск.',
         { reply_markup: kb }
       );
     } else {
-      const cancelKb = new InlineKeyboard().text('Отмена', 'ugc_cancel');
+      const cancelKb = new InlineKeyboard().text('❌ Отмена', 'ugc_cancel');
       await ctx.reply(
         'Предложи тренировку:\n\n• Ссылку на YouTube-видео любимого автора\n• Или загрузи свой видеофайл напрямую',
         { reply_markup: cancelKb }
@@ -695,7 +693,7 @@ export function registerBotMenu(bot: Bot): void {
       if (i % 2 === 1) kb.row();
     });
     if (CATEGORY_BUTTONS.length % 2 === 1) kb.row();
-    kb.text('Отмена', 'ugc_cancel');
+    kb.text('❌ Отмена', 'ugc_cancel');
 
     try {
       await ctx.editMessageText('Какую категорию ищем?', { reply_markup: kb });
@@ -757,7 +755,7 @@ export function registerBotMenu(bot: Bot): void {
         if (i > 0) kb.row();
         kb.text(btn.label, `ugc_diff:${subId}:${btn.value}`);
       });
-      kb.row().text('← Назад', `ugc_back:${subId}:waiting_difficulty`).text('Отмена', 'ugc_cancel');
+      kb.row().text('← Назад', `ugc_back:${subId}:waiting_difficulty`).text('❌ Отмена', 'ugc_cancel');
       try { await ctx.editMessageText('Уровень сложности?', { reply_markup: kb }); } catch {}
     } else if (currentStep === 'waiting_equipment') {
       // Back to duration or difficulty (if duration was auto-detected)
@@ -769,7 +767,7 @@ export function registerBotMenu(bot: Bot): void {
           if (i > 0) kb.row();
           kb.text(btn.label, `ugc_diff:${subId}:${btn.value}`);
         });
-        kb.row().text('← Назад', `ugc_back:${subId}:waiting_difficulty`).text('Отмена', 'ugc_cancel');
+        kb.row().text('← Назад', `ugc_back:${subId}:waiting_difficulty`).text('❌ Отмена', 'ugc_cancel');
         try { await ctx.editMessageText('Уровень сложности?', { reply_markup: kb }); } catch {}
       } else {
         saveUgcState(userId, 'waiting_duration', subId);
@@ -792,7 +790,7 @@ export function registerBotMenu(bot: Bot): void {
           .text('✏️ Своя рубрика', `ugc_rubric:${subId}:custom`)
           .row()
           .text('← Назад', `ugc_back:${subId}:waiting_rubric`)
-          .text('Отмена', 'ugc_cancel');
+          .text('❌ Отмена', 'ugc_cancel');
         try { await ctx.editMessageText('Рубрика поста:', { reply_markup: rubricKb }); } catch {}
       } else {
         // Regular user: back to equipment
@@ -924,7 +922,7 @@ export function registerBotMenu(bot: Bot): void {
 
       const titleKb = new InlineKeyboard()
         .text('← Назад', `ugc_back:${state.submission_id!}:waiting_title`)
-        .text('Отмена', 'ugc_cancel');
+        .text('❌ Отмена', 'ugc_cancel');
       await ctx.reply('Как назвать тренировку? Напиши короткое название.', { reply_markup: titleKb });
       return;
     }
@@ -986,7 +984,7 @@ export function registerBotMenu(bot: Bot): void {
       if (i > 0) kb.row();
       kb.text(btn.label, `ugc_diff:${subId}:${btn.value}`);
     });
-    kb.row().text('← Назад', `ugc_back:${subId}:waiting_difficulty`).text('Отмена', 'ugc_cancel');
+    kb.row().text('← Назад', `ugc_back:${subId}:waiting_difficulty`).text('❌ Отмена', 'ugc_cancel');
 
     try {
       await ctx.editMessageText('Уровень сложности?', { reply_markup: kb });
@@ -1078,7 +1076,7 @@ export function registerBotMenu(bot: Bot): void {
         .text('✏️ Своя рубрика', `ugc_rubric:${subId}:custom`)
         .row()
         .text('← Назад', `ugc_back:${subId}:waiting_rubric`)
-        .text('Отмена', 'ugc_cancel');
+        .text('❌ Отмена', 'ugc_cancel');
       try {
         await ctx.editMessageText('Рубрика поста:', { reply_markup: rubricKb });
       } catch {
@@ -1088,7 +1086,7 @@ export function registerBotMenu(bot: Bot): void {
       saveUgcState(userId, 'waiting_title', subId);
       const titleKb = new InlineKeyboard()
         .text('← Назад', `ugc_back:${subId}:waiting_title`)
-        .text('Отмена', 'ugc_cancel');
+        .text('❌ Отмена', 'ugc_cancel');
       try {
         await ctx.editMessageText('Как назвать тренировку? Напиши короткое название.', { reply_markup: titleKb });
       } catch {
@@ -1114,7 +1112,7 @@ export function registerBotMenu(bot: Bot): void {
       saveUgcState(userId, 'waiting_rubric', subId);
       const backKb = new InlineKeyboard()
         .text('← Назад', `ugc_back:${subId}:waiting_rubric`)
-        .text('Отмена', 'ugc_cancel');
+        .text('❌ Отмена', 'ugc_cancel');
       try {
         await ctx.editMessageText('Напиши название рубрики (будет первой строкой поста):', { reply_markup: backKb });
       } catch {
@@ -1130,7 +1128,7 @@ export function registerBotMenu(bot: Bot): void {
 
     const titleKb = new InlineKeyboard()
       .text('← Назад', `ugc_back:${subId}:waiting_title`)
-      .text('Отмена', 'ugc_cancel');
+      .text('❌ Отмена', 'ugc_cancel');
     try {
       await ctx.editMessageText('Как назвать тренировку? Напиши короткое название.', { reply_markup: titleKb });
     } catch {

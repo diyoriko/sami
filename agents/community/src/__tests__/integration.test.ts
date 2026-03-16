@@ -275,23 +275,23 @@ describe('"Я сделаль" callback', () => {
     expect(findCalls('answerCallbackQuery').length).toBeGreaterThan(0);
   });
 
-  it('prevents duplicate completion from same user', async () => {
+  it('second click undoes completion (toggle)', async () => {
     const { videoId, postId } = setupDoneTest('dedup');
     const uid = USER_ID + 200;
 
-    // First completion
+    // First click — records completion
     await bot.handleUpdate(callbackUpdate(`done:${videoId}`, { user_id: uid }));
     expect(db.getCompletionCount(postId)).toBe(1);
 
-    // Second attempt — same user, same post
+    // Second click — removes completion (undo)
     apiCalls = [];
     await bot.handleUpdate(callbackUpdate(`done:${videoId}`, { user_id: uid }));
-    expect(db.getCompletionCount(postId)).toBe(1); // Still 1
+    expect(db.getCompletionCount(postId)).toBe(0);
 
-    // answerCallbackQuery called with dedup message
+    // answerCallbackQuery called with undo message
     const answers = findCalls('answerCallbackQuery');
     const answerText = JSON.stringify(answers);
-    expect(answerText).toContain('уже');
+    expect(answerText).toContain('снята');
   });
 
   it('allows different users to complete same post', async () => {

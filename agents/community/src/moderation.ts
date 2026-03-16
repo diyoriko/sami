@@ -9,7 +9,7 @@ import { incrementNewMembers } from './scheduler';
 const log = createLogger('moderation');
 import {
   upsertMember, setMemberGoal, addWarning, muteMember,
-  recordCompletion, getCompletionCount, hasUserCompleted,
+  recordCompletion, removeCompletion, getCompletionCount, hasUserCompleted,
   getPostByMessageId, getLatestPostByVideoId, getPostByGroupCommentId, setGroupCommentId, updateVideoRating, getLastCompletionTime,
   getUserStreak,
   saveCaptcha, getCaptcha, deleteCaptcha, getExpiredCaptchas,
@@ -665,8 +665,19 @@ export function registerModeration(bot: Bot): void {
     if (post) {
       // Found it — delegate to the regular done: flow by recording completion
       if (hasUserCompleted(post.id, userId)) {
+        removeCompletion(post.id, userId);
         const count = getCompletionCount(post.id);
-        await ctx.answerCallbackQuery(`Ты уже отметил(а) эту тренировку · ${count}`);
+        const undoKeyboard = new InlineKeyboard()
+          .text(count > 0 ? `Я сделаль · ${count}` : 'Я сделаль', `done:${post.video_id}`);
+        try {
+          const msgText = ctx.callbackQuery.message?.text;
+          if (msgText) {
+            await ctx.editMessageText('Сделал(а) тренировку? Нажми кнопку:', { reply_markup: undoKeyboard });
+          } else {
+            await ctx.editMessageReplyMarkup({ reply_markup: undoKeyboard });
+          }
+        } catch { /* message too old */ }
+        await ctx.answerCallbackQuery('Отметка снята');
         return;
       }
 
@@ -759,8 +770,19 @@ export function registerModeration(bot: Bot): void {
     }
 
     if (hasUserCompleted(post.id, userId)) {
+      removeCompletion(post.id, userId);
       const count = getCompletionCount(post.id);
-      await ctx.answerCallbackQuery(`Ты уже отметил(а) эту тренировку · ${count}`);
+      const keyboard = new InlineKeyboard()
+        .text(count > 0 ? `Я сделаль · ${count}` : 'Я сделаль', `done:${videoId}`);
+      try {
+        const msgText = ctx.callbackQuery.message?.text;
+        if (msgText) {
+          await ctx.editMessageText('Сделал(а) тренировку? Нажми кнопку:', { reply_markup: keyboard });
+        } else {
+          await ctx.editMessageReplyMarkup({ reply_markup: keyboard });
+        }
+      } catch { /* message too old */ }
+      await ctx.answerCallbackQuery('Отметка снята');
       return;
     }
 

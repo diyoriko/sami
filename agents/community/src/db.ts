@@ -1069,6 +1069,28 @@ export function recordCompletion(postId: number, videoId: number, userId: number
   }
 }
 
+export function removeCompletion(postId: number, userId: number): boolean {
+  const db = getDb();
+  try {
+    const result = db.prepare(
+      `DELETE FROM completions WHERE post_id = ? AND telegram_user_id = ?`
+    ).run(postId, userId);
+
+    if (result.changes > 0) {
+      db.prepare(`
+        UPDATE members SET
+          completions_total = MAX(COALESCE(completions_total, 0) - 1, 0)
+        WHERE telegram_user_id = ?
+      `).run(userId);
+    }
+
+    return result.changes > 0;
+  } catch (err) {
+    log.error('failed to remove completion', { userId, error: String(err) });
+    return false;
+  }
+}
+
 export function getCompletionCount(postId: number): number {
   const row = getDb().prepare(
     `SELECT COUNT(*) as cnt FROM completions WHERE post_id = ?`
