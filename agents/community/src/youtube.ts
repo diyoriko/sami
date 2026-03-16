@@ -11,7 +11,7 @@
  */
 
 import { getConfig } from './config';
-import { wasPostedRecently, isVideoRejected, VideoRow } from './db';
+import { wasPostedEver, isVideoRejected, VideoRow } from './db';
 import { createLogger } from './logger';
 import {
   type Category, type Difficulty,
@@ -362,7 +362,7 @@ export async function searchVideos(
 
   for (const item of items) {
     const videoId = item.id.videoId;
-    if (wasPostedRecently(videoId, config.VIDEO_RECENCY_DAYS)) continue;
+    if (wasPostedEver(videoId)) continue;
     if (isVideoRejected(videoId)) continue;
 
     const detail = detailMap.get(videoId);

@@ -619,13 +619,13 @@ export function upsertVideo(v: Omit<VideoRow, 'id'> & { search_query?: string })
   return row.id;
 }
 
-export function wasPostedRecently(youtubeId: string, withinDays = 30): boolean {
+export function wasPostedEver(youtubeId: string): boolean {
   const db = getDb();
   const row = db.prepare(`
     SELECT COUNT(*) as cnt FROM posts p
     JOIN videos v ON v.id = p.video_id
-    WHERE v.youtube_id = ? AND p.posted_at > datetime('now', ?)
-  `).get(youtubeId, `-${withinDays} days`) as { cnt: number };
+    WHERE v.youtube_id = ?
+  `).get(youtubeId) as { cnt: number };
   return row.cnt > 0;
 }
 
