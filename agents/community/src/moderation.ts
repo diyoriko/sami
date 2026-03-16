@@ -630,10 +630,9 @@ export function registerModeration(bot: Bot): void {
       keyboard = new InlineKeyboard()
         .text(`Я сделаль${count > 0 ? ` · ${count}` : ''}`, `done:${post.video_id}`);
     } else {
-      // Post not tracked in DB (e.g. manual publish) — still show button with channel msg ID
-      log.warn('auto-forward: no post in DB, using channel msg ID as fallback', { channelMsgId });
-      keyboard = new InlineKeyboard()
-        .text('Я сделаль', `done_msg:${channelMsgId}`);
+      // Post not tracked in DB (e.g. manual publish) — skip autocomment
+      log.info('auto-forward: no post in DB, skipping autocomment', { channelMsgId });
+      return next();
     }
 
     try {

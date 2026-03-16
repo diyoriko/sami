@@ -639,13 +639,11 @@ describe('completion + rating full flow', () => {
     expect(answers[0].payload.text).toContain('35%');
   });
 
-  it('fallback autocomment for unknown post still has buttons', async () => {
+  it('skips autocomment for unknown post (manual publish)', async () => {
     await bot.handleUpdate(autoForwardUpdate(99998));
 
     const sends = findCalls('sendMessage');
-    expect(sends.length).toBeGreaterThan(0);
-    const payload = JSON.stringify(sends[0].payload);
-    expect(payload).toContain('done_msg:');
+    expect(sends.length).toBe(0);
   });
 });
 

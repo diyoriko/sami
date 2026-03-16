@@ -223,15 +223,13 @@ describe('auto-forward → autocomment', () => {
     expect(buttons).toContain('Я сделаль');
   });
 
-  it('fallback autocomment has "Я сделаль" when post NOT in DB', async () => {
+  it('skips autocomment when post NOT in DB (manual publish)', async () => {
     const unknownChannelMsgId = 99999;
 
     await bot.handleUpdate(autoForwardUpdate(unknownChannelMsgId));
 
     const sends = findCalls('sendMessage');
-    expect(sends.length).toBeGreaterThan(0);
-    const buttons = JSON.stringify(sends[0].payload);
-    expect(buttons).toContain('done_msg:');
+    expect(sends.length).toBe(0);
   });
 
   it('does not pin autocomment in group', async () => {
