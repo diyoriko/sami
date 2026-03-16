@@ -105,13 +105,12 @@ async function sendDeployReport(
     const posted = slots.filter(s => s.status === 'posted').length;
 
     lines.push('');
-    lines.push(`🏆 *Сезон ${e(String(season.number))}:*`);
-    lines.push(`  День ${e(String(dayNum))}/21 · Неделя ${weekNum}`);
+    lines.push(`📅 *Неделя:*`);
     lines.push(`  Сегодня: ${e(catLabel)}`);
     lines.push(`  Очередь: ${e(String(filled))}/7 заполнено, ${e(String(posted))} опубликовано`);
   } else {
     lines.push('');
-    lines.push(`🏆 *Сезон:* нет активного`);
+    lines.push(`📅 *Неделя:* нет активной`);
   }
 
   // ── Community metrics ──

@@ -249,7 +249,7 @@ export function registerBotMenu(bot: Bot): void {
           initSeasonWeekSlots(season.id, wk);
           const slots = getSeasonWeekStatus(season.id, wk);
           const filled = slots.filter(s => s.status !== 'empty').length;
-          seasonLine = `Сезон ${season.number} | День ${sDay}/21 | ${emoji} ${catRu} | Заполнено: ${filled}/7`;
+          seasonLine = `${emoji} ${catRu} | Заполнено: ${filled}/7`;
 
           // Week queue by day
           const DAY_LABELS = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
@@ -268,7 +268,7 @@ export function registerBotMenu(bot: Bot): void {
             const marker = isToday ? ' 👈' : '';
             return `${icon} ${dayLabel} ${slotEmoji} ${slotCatRu}${title}${marker}`;
           });
-          weekQueueText = `\n\n*Неделя ${wk}:*\n${lines.map(l => escV2(l)).join('\n')}`;
+          weekQueueText = `\n\n*Расписание:*\n${lines.map(l => escV2(l)).join('\n')}`;
 
           // Show publish button if today's slot is queued but not yet posted
           const todaySlot = slots.find(s => s.day_number === sDay);
@@ -358,7 +358,7 @@ export function registerBotMenu(bot: Bot): void {
     const season = ensureActiveSeason(today, nextMondayMsk());
 
     if (season.status === 'completed') {
-      await ctx.reply(`Сезон ${season.number} завершён. Новый сезон стартует в понедельник.`);
+      await ctx.reply(`Неделя завершена. Новый цикл стартует в понедельник.`);
       return;
     }
 
@@ -373,7 +373,7 @@ export function registerBotMenu(bot: Bot): void {
     } else {
       seasonDay = getSeasonDay(season.start_date, today);
       if (seasonDay > SEASON_DURATION) {
-        await ctx.reply(`Сезон ${season.number} завершён. Новый сезон стартует в понедельник.`);
+        await ctx.reply(`Неделя завершена. Новый цикл стартует в понедельник.`);
         return;
       }
       weekNum = getSeasonWeekNumber(seasonDay);
@@ -400,7 +400,7 @@ export function registerBotMenu(bot: Bot): void {
 
     const planTag = season.status === 'upcoming' ? ` · стартует ${escV2(season.start_date)}` : '';
     const msg = [
-      `📅 *Неделя ${weekNum} Сезона ${season.number}*${planTag}`,
+      `📅 *Расписание недели*${planTag}`,
       ``,
       ...lines.map(l => escV2(l)),
       ``,
@@ -481,7 +481,7 @@ export function registerBotMenu(bot: Bot): void {
 
     const season = getActiveSeason();
     if (!season || season.id !== seasonId) {
-      try { await ctx.editMessageText('Сезон не найден или неактивен.'); } catch {}
+      try { await ctx.editMessageText('Нет активного расписания.'); } catch {}
       return;
     }
 
