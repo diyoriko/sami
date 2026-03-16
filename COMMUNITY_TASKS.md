@@ -115,6 +115,16 @@
 - [x] Архитектура: канал + группа зафиксирована до 50 подписчиков
 - [x] 57 тестов, tsc clean
 
+**v0.14.0 (16.03) — Code Quality + Season Fixes:**
+- [x] Manual season publish button (Статус + Неделя) — регрессия после рефакторинга
+- [x] Startup catch-up: автопубликация при рестарте если слот queued
+- [x] Season video passthrough — видео передаётся напрямую, минуя approval_sessions
+- [x] YouTube channel subscribers — `channels.list` API, реальные данные подписчиков
+- [x] Rating weights configurable — 4 RATING_*_WEIGHT в config.ts
+- [x] Code Quality Audit (10/10): safe migrations, named timeouts, TG limits, logging
+- [x] Fun celebration messages — 10 фраз, milestones, streak, crowd
+- [x] 260 тестов, tsc clean
+
 ---
 
 ## Завершённые спринты
