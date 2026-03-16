@@ -168,7 +168,8 @@ export function getLatestPacket(): StrategistPacket {
       search_keywords: JSON.parse(row.search_keywords ?? '{}'),
       community_priority: row.community_priority ?? DEFAULT_PACKET.community_priority,
     };
-  } catch {
+  } catch (err) {
+    log.warn('failed to load community packet, using defaults', { error: String(err) });
     return DEFAULT_PACKET;
   }
 }

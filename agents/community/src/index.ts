@@ -608,7 +608,8 @@ async function main(): Promise<void> {
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ status: 'ok' }));
-        } catch {
+        } catch (err) {
+          log.warn('invalid JSON in /task endpoint', { error: String(err) });
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'invalid JSON' }));
         }
@@ -642,7 +643,8 @@ async function main(): Promise<void> {
           const taskId = createImplTask(payload.title, payload.spec, 'manual', payload.priority ?? 'P2');
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ status: 'ok', id: taskId }));
-        } catch {
+        } catch (err) {
+          log.warn('invalid JSON in /impl/create endpoint', { error: String(err) });
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'invalid JSON' }));
         }

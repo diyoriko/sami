@@ -825,7 +825,8 @@ export function recordCheckin(date: string, userId: number, result: 'did' | 'par
       ON CONFLICT(date, telegram_user_id) DO UPDATE SET result = excluded.result
     `).run(date, userId, result);
     return true;
-  } catch {
+  } catch (err) {
+    log.error('failed to record checkin', { date, userId, result, error: String(err) });
     return false;
   }
 }
@@ -1059,7 +1060,8 @@ export function recordCompletion(postId: number, videoId: number, userId: number
     }
 
     return true;
-  } catch {
+  } catch (err) {
+    log.error('failed to record completion', { userId, error: String(err) });
     return false;
   }
 }
@@ -1403,7 +1405,8 @@ export function getLastStrategistTimestamp(): string | null {
       `SELECT created_at FROM strategist_packets ORDER BY created_at DESC LIMIT 1`
     ).get() as { created_at: string } | undefined;
     return row?.created_at ?? null;
-  } catch {
+  } catch (err) {
+    log.warn('failed to get last strategist timestamp', { error: String(err) });
     return null;
   }
 }
