@@ -213,7 +213,7 @@ describe('UX smoke: rating formula', () => {
     expect(dbSource).toContain('normalizeCompletions');
     expect(dbSource).toContain('getVideoCompletionCount');
     expect(dbSource).toContain('completionScore');
-    expect(dbSource).toContain('0.15 * completionScore');
+    expect(dbSource).toContain('RATING_COMPLETION_WEIGHT');
   });
 
   it('DB migration for new categories', () => {

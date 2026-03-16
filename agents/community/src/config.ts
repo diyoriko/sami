@@ -28,6 +28,11 @@ const ConfigSchema = z.object({
   SCORE_BRAND_WEIGHT: z.string().transform(Number).default('0.50'),
   SCORE_VIEW_WEIGHT: z.string().transform(Number).default('0.35'),
   SCORE_DURATION_WEIGHT: z.string().transform(Number).default('0.15'),
+  // Post rating weights (0-1, must sum to 1) — displayed in channel posts
+  RATING_VIEW_WEIGHT: z.string().transform(Number).default('0.35'),
+  RATING_LIKE_WEIGHT: z.string().transform(Number).default('0.30'),
+  RATING_CHANNEL_WEIGHT: z.string().transform(Number).default('0.20'),
+  RATING_COMPLETION_WEIGHT: z.string().transform(Number).default('0.15'),
   // Video duration range (seconds)
   VIDEO_MIN_DURATION: z.string().transform(Number).default('240'),   // 4 min
   VIDEO_MAX_DURATION: z.string().transform(Number).default('1800'),  // 30 min

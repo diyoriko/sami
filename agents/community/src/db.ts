@@ -1243,18 +1243,19 @@ export function computeRating(video: VideoRow): number {
     return Math.round(Math.min(5 + completionScore * 3, 8) * 10) / 10;
   }
 
+  const config = getConfig();
   const viewScore = normalizeViews(video.view_count);
   const likeScore = normalizeLikeRatio(video.like_ratio ?? 0);
   const channelScore = video.channel_subscribers > 0
     ? Math.min(Math.log10(video.channel_subscribers) / 6, 1) // 1M subs = 1.0
-    : 0.4;
+    : 0.3; // unknown channel — conservative estimate
   const completionScore = normalizeCompletions(getVideoCompletionCount(video.id));
 
   const raw =
-    0.35 * viewScore +
-    0.30 * likeScore +
-    0.20 * channelScore +
-    0.15 * completionScore;
+    config.RATING_VIEW_WEIGHT * viewScore +
+    config.RATING_LIKE_WEIGHT * likeScore +
+    config.RATING_CHANNEL_WEIGHT * channelScore +
+    config.RATING_COMPLETION_WEIGHT * completionScore;
   return Math.round(Math.min(raw * 10, 10) * 10) / 10; // 0.0 .. 10.0
 }
 

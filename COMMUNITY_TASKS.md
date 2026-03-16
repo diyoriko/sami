@@ -365,6 +365,19 @@
 - [x] **DM после первого «Я сделаль»** — персональное поздравление + до 3 видео из той же категории со ссылками. Функция `sendFirstCompletionDM` в обоих хендлерах (done: и done_msg:)
 - ~~Контент-план на неделю в /status~~ → уже реализовано: кнопка «📅 Неделя» + /status показывает сезон
 
+### P1: Code Quality Audit (16.03) — в работе
+
+- [x] **channel_subscribers: 0 хардкод** — добавлен `channels.list` API call в youtube.ts, подписчики канала теперь запрашиваются batch-запросом при поиске видео
+- [x] **Рейтинг: хардкод весов в db.ts** — вынесены в config.ts (`RATING_VIEW_WEIGHT`, `RATING_LIKE_WEIGHT`, `RATING_CHANNEL_WEIGHT`, `RATING_COMPLETION_WEIGHT`)
+- [x] **channel_subscribers fallback 0.4 → 0.3** — более консервативная оценка для неизвестных каналов
+- [ ] **Silent schema migrations** — db.ts: 20+ ALTER TABLE в пустых catch. Логировать ошибки, не только "already exists"
+- [ ] **Inconsistent scoring weights** — `computeTotalScore` (youtube.ts) использует config, но `scoreDuration` хардкодит 300с offset
+- [ ] **Magic numbers** — MAX_PENALTY=60, string truncation lengths (.slice(0, 50)), HTTP status codes. Вынести в constants.ts
+- [ ] **Empty catch blocks** — 40+ мест. Разделить intentional (schema exists) от unintentional (network). Логировать все реальные ошибки
+- [ ] **Hardcoded timeouts** — yt-dlp: 120s, approval delay: 300ms, poster retry: 3s. Вынести в config
+- [ ] **Celebration emojis дубликат** — moderation.ts:649 и :774 один и тот же массив. Вынести в shared.ts
+- [ ] **Telegram API limits** — .slice(0, 255), .slice(0, 512), .slice(0, 120) без именованных констант
+
 ### P2: Growth (ручная работа, не код)
 
 - [ ] **Зарегистрировать канал на tgstat.ru** — 15 мин, органический трафик по ключевым словам

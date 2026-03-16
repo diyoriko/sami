@@ -219,6 +219,7 @@ interface YouTubeSearchItem {
   id: { videoId: string };
   snippet: {
     title: string;
+    channelId: string;
     channelTitle: string;
     description: string;
     thumbnails: { high?: { url: string }; default?: { url: string } };
@@ -229,6 +230,11 @@ interface YouTubeVideoDetail {
   id: string;
   contentDetails: { duration: string };
   statistics: { viewCount?: string; likeCount?: string };
+}
+
+interface YouTubeChannelDetail {
+  id: string;
+  statistics: { subscriberCount?: string };
 }
 
 const FETCH_TIMEOUT_MS = 15_000;
@@ -318,6 +324,24 @@ export async function searchVideos(
   const detailData = await fetchJson<{ items: YouTubeVideoDetail[] }>(detailUrl.toString());
   const detailMap = new Map(detailData.items.map(d => [d.id, d]));
 
+  // Fetch channel subscriber counts (batch by unique channelId)
+  const channelIds = [...new Set(items.map(i => i.snippet.channelId).filter(Boolean))];
+  const subscriberMap = new Map<string, number>();
+  if (channelIds.length > 0) {
+    try {
+      const channelUrl = new URL('https://www.googleapis.com/youtube/v3/channels');
+      channelUrl.searchParams.set('part', 'statistics');
+      channelUrl.searchParams.set('id', channelIds.join(','));
+      channelUrl.searchParams.set('key', config.YOUTUBE_API_KEY);
+      const channelData = await fetchJson<{ items: YouTubeChannelDetail[] }>(channelUrl.toString());
+      for (const ch of channelData.items) {
+        subscriberMap.set(ch.id, parseInt(ch.statistics.subscriberCount ?? '0', 10));
+      }
+    } catch (err) {
+      log.warn('failed to fetch channel subscribers, using 0', { error: String(err) });
+    }
+  }
+
   const candidates: ScoredVideo[] = [];
 
   for (const item of items) {
@@ -361,7 +385,7 @@ export async function searchVideos(
       search_query: query,
       view_count: viewCount,
       like_ratio: likeRatio,
-      channel_subscribers: 0, // would require separate channels API call
+      channel_subscribers: subscriberMap.get(item.snippet.channelId) ?? 0,
       rating: 0,
       brand_score: brandScore,
       total_score: totalScore,
