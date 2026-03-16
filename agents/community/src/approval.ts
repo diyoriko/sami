@@ -15,7 +15,7 @@ import {
 import { searchAllCategories, searchVideos, detectEquipment, Category, ScoredVideo } from './youtube';
 import { rewriteTitle, formatChannelName } from './translate';
 import { createLogger, generateCorrelationId } from './logger';
-import { CATEGORIES, CATEGORY_RU, DIFFICULTY_RU, CATEGORY_EMOJI, escV2 } from './shared';
+import { CATEGORIES, CATEGORY_RU, DIFFICULTY_RU, CATEGORY_EMOJI, escV2, parseMuscles } from './shared';
 
 const log = createLogger('approval');
 
@@ -42,13 +42,7 @@ async function formatApprovalMessage(video: ScoredVideo, category: Category): Pr
   const emoji = CATEGORY_EMOJI[category];
   const rawCategoryRu = CATEGORY_RU[category] ?? category;
   const categoryRu = rawCategoryRu.charAt(0).toUpperCase() + rawCategoryRu.slice(1);
-  let muscles = '';
-  try {
-    const arr = JSON.parse(video.muscles ?? '[]') as string[];
-    muscles = arr.join(', ');
-  } catch {
-    muscles = video.muscles ?? '';
-  }
+  const muscles = parseMuscles(video.muscles);
 
   const equipmentLine = video.equipment.length > 0
     ? `Нужна экипировка: ${escV2(video.equipment.join(', '))}`

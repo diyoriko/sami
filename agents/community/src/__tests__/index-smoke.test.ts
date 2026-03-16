@@ -83,7 +83,6 @@ describe('index.ts module smoke tests', () => {
     expect(shared.DIFFICULTY_RU).toBeDefined();
     expect(typeof shared.escV2).toBe('function');
     expect(typeof shared.seasonHeader).toBe('function');
-    expect(typeof shared.buildSeasonHashtags).toBe('function');
   });
 
   it('scheduler module loads without side effects', async () => {

@@ -230,6 +230,9 @@ function migrate(db: Database.Database): void {
       UNIQUE(post_id, telegram_user_id)
     );
 
+    CREATE INDEX IF NOT EXISTS idx_completions_video_id ON completions(video_id);
+    CREATE INDEX IF NOT EXISTS idx_completions_user_date ON completions(telegram_user_id, completed_at);
+
     CREATE TABLE IF NOT EXISTS approval_sessions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       date TEXT NOT NULL,  -- YYYY-MM-DD

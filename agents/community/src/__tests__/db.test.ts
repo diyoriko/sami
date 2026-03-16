@@ -575,54 +575,6 @@ describe('shared constants', () => {
     expect(h).toContain('Мобильность');
   });
 
-  it('buildSeasonHashtags includes category + season + day', async () => {
-    const { buildSeasonHashtags } = await import('../shared');
-    const tags = buildSeasonHashtags({
-      category: 'stretching',
-      difficulty: 'beginner',
-      seasonNumber: 2,
-      seasonDay: 5,
-    });
-    expect(tags).toContain('#стретчинг');
-    expect(tags).toContain('#начинающий');
-    expect(tags).toContain('#сезон2');
-    expect(tags).toContain('#день5');
-  });
-
-  it('buildSeasonHashtags adds muscle hashtags for specific muscles', async () => {
-    const { buildSeasonHashtags } = await import('../shared');
-    const tags = buildSeasonHashtags({
-      category: 'strength',
-      seasonNumber: 1,
-      seasonDay: 2,
-      muscles: 'спина, ноги',
-    });
-    expect(tags).toContain('#спина');
-    expect(tags).toContain('#ноги');
-  });
-
-  it('buildSeasonHashtags skips generic muscle labels', async () => {
-    const { buildSeasonHashtags } = await import('../shared');
-    const tags = buildSeasonHashtags({
-      category: 'yoga',
-      seasonNumber: 1,
-      seasonDay: 4,
-      muscles: 'всё тело',
-    });
-    expect(tags).not.toContain('#всё_тело');
-  });
-
-  it('buildUgcHashtags omits season and day tags', async () => {
-    const { buildUgcHashtags } = await import('../shared');
-    const tags = buildUgcHashtags({
-      category: 'cardio',
-      difficulty: 'advanced',
-    });
-    expect(tags).toContain('#кардио');
-    expect(tags).toContain('#продвинутый');
-    expect(tags).not.toMatch(/#сезон/);
-    expect(tags).not.toMatch(/#день/);
-  });
 });
 
 describe('getPostByMessageId', () => {

@@ -3,7 +3,7 @@ import { InputFile } from 'grammy';
 import { getConfig } from './config';
 import {
   getApprovedVideo, recordPost, wasPostedToday, VideoRow,
-  updateVideoRating, markApprovalPosted, withTransaction,
+  markApprovalPosted, withTransaction,
   getSeasonQueueForDay, markSeasonQueuePosted, getVideoById,
   type SeasonRow,
 } from './db';
@@ -14,7 +14,7 @@ import { createLogger, type Logger } from './logger';
 import {
   type Category, type Difficulty,
   CATEGORY_RU, DIFFICULTY_RU, CATEGORY_EMOJI, EQUIPMENT_NO_GEAR,
-  escV2, seasonHeader,
+  escV2, seasonHeader, parseMuscles,
 } from './shared';
 
 const log = createLogger('poster');
@@ -36,13 +36,7 @@ async function formatCaption(video: VideoRow, seasonInfo?: SeasonInfo): Promise<
   const categoryRu = CATEGORY_RU[video.category] ?? video.category;
   const difficultyRu = DIFFICULTY_RU[video.difficulty] ?? video.difficulty;
 
-  let muscles = '';
-  try {
-    const arr = JSON.parse(video.muscles ?? '[]') as string[];
-    muscles = arr.join(', ');
-  } catch {
-    muscles = video.muscles ?? '';
-  }
+  const muscles = parseMuscles(video.muscles);
 
   const equipment = detectEquipment(video.title, '');
   const equipmentTag = equipment.length > 0 ? equipment.join(', ') : EQUIPMENT_NO_GEAR;
@@ -50,8 +44,7 @@ async function formatCaption(video: VideoRow, seasonInfo?: SeasonInfo): Promise<
   const title = await rewriteTitle(video.title);
   const channelName = await formatChannelName(video.channel_name);
 
-  const rating = updateVideoRating(video.id);
-  const ratingStr = formatRating(rating);
+  const ratingStr = formatRating(video.rating ?? 0);
 
   const catEmoji = CATEGORY_EMOJI[video.category] ?? '🏷';
 

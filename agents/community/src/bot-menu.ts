@@ -550,8 +550,7 @@ export function registerBotMenu(bot: Bot): void {
     await ctx.answerCallbackQuery('Удаляю...');
 
     const channelId = config.TELEGRAM_CHANNEL_ID;
-    // Get all post message IDs from DB
-    const { getDb } = await import('./db');
+    const { getDb, withTransaction } = await import('./db');
     const posts = getDb().prepare(
       `SELECT channel_message_id FROM posts WHERE channel_message_id IS NOT NULL ORDER BY channel_message_id DESC`
     ).all() as { channel_message_id: number }[];
@@ -564,8 +563,9 @@ export function registerBotMenu(bot: Bot): void {
       } catch { /* already deleted or too old */ }
     }
 
-    // Clear posts from DB
-    getDb().prepare(`DELETE FROM posts`).run();
+    withTransaction(() => {
+      getDb().prepare(`DELETE FROM posts`).run();
+    });
 
     try {
       await ctx.editMessageText(`🧹 Удалено ${deleted} постов из канала. БД постов очищена.`);
