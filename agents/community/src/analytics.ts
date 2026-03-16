@@ -111,10 +111,9 @@ export async function runDailyAnalytics(bot: Bot, date: string): Promise<void> {
     `  ${escV2(CATEGORY_RU[c.category as Category] ?? c.category)}: ${escV2(String(c.completions))} \\(${escV2(String(c.users))} чел\\.\\)`
   );
 
-  const topLines = topVideos.slice(0, 3).map((v, i) => {
-    const title = v.title.length > 35 ? v.title.slice(0, 32) + '...' : v.title;
-    return `  ${escV2(String(i + 1))}\\. ${escV2(title)} — ${escV2(String(v.completions))}`;
-  });
+  const topLines = topVideos.slice(0, 3).map((v, i) =>
+    `  ${escV2(String(i + 1))}\\. ${escV2(v.title)} — ${escV2(String(v.completions))}`
+  );
 
   const lines = [
     `*Аналитика за ${escV2(date)}*`,

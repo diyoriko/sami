@@ -393,7 +393,7 @@ export function registerBotMenu(bot: Bot): void {
       const catRu = cat ? CATEGORY_RU[cat] : '?';
       const emoji = cat ? SEASON_EMOJI[cat] : '❓';
       const dayLabel = DAY_LABELS[jsDow];
-      const icon = slot.status === 'posted' ? '📤' : slot.status === 'queued' ? '✅' : '⬜';
+      const icon = slot.status === 'posted' ? '✅' : slot.status === 'queued' ? '📋' : '⬜';
       const title = slot.title ? ` — ${slot.title.slice(0, 35)}` : '';
       return `${icon} ${dayLabel} ${emoji} ${catRu}${title}`;
     });

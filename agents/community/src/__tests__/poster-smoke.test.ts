@@ -99,7 +99,6 @@ describe('poster caption structure', () => {
       'utf8',
     );
     expect(posterSource).toContain('seasonHeader(');
-    expect(posterSource).toContain('buildSeasonHashtags(');
   });
 });
 

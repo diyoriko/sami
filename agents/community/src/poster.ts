@@ -14,7 +14,7 @@ import { createLogger, type Logger } from './logger';
 import {
   type Category, type Difficulty,
   CATEGORY_RU, DIFFICULTY_RU, CATEGORY_EMOJI, EQUIPMENT_NO_GEAR,
-  escV2, seasonHeader, buildSeasonHashtags,
+  escV2, seasonHeader,
 } from './shared';
 
 const log = createLogger('poster');
@@ -71,24 +71,12 @@ async function formatCaption(video: VideoRow, seasonInfo?: SeasonInfo): Promise<
     ? `*${escV2(seasonHeader(seasonInfo.seasonNumber, seasonInfo.seasonDay, seasonInfo.category))}*`
     : null;
 
-  // Hashtags at the bottom
-  const hashtags = seasonInfo
-    ? buildSeasonHashtags({
-        category: video.category as Category,
-        difficulty: video.difficulty as Difficulty | undefined,
-        muscles,
-        seasonNumber: seasonInfo.seasonNumber,
-        seasonDay: seasonInfo.seasonDay,
-      })
-    : '';
-
   const lines = [
     ...(header ? [header, ''] : []),
     `*${title}*`,
     '',
     ...tagLines,
     ...(ratingStr ? [`\`⭐ ${ratingStr}/10\`  _просмотры · лайки · канал · ваши тренировки_`] : []),
-    ...(hashtags ? ['', escV2(hashtags)] : []),
     '',
     `Автор: ${channelName}, 📎 [YouTube](${safeUrl})`,
   ];

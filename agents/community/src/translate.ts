@@ -139,5 +139,9 @@ export async function formatChannelName(name: string): Promise<string> {
     result = await googleTranslate(result);
     result = cleanTitle(result);
   }
+  // Capitalize first letter
+  if (result.length > 0) {
+    result = result[0].toUpperCase() + result.slice(1);
+  }
   return escV2(result);
 }
