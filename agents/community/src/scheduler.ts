@@ -51,7 +51,7 @@ export function startScheduler(bot: Bot): void {
         log.info(`season ${season.number} day ${dayNumber}: already posted or no slot`);
         return;
       }
-      if (slot.status === 'empty' || !slot.video_id) {
+      if (slot.status !== 'queued' || !slot.video_id) {
         const dow = new Date(today + 'T00:00:00').getDay();
         const cat = SEASON_DAY_MAP[dow];
         const catRu = cat ? CATEGORY_RU[cat] : '?';
