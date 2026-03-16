@@ -273,7 +273,21 @@ async function fetchJson<T>(url: string): Promise<T> {
   }
 }
 
-// ─── EXPORTS ─────────────────────────────────────────────────────────────────
+/** Fetch basic info for a single YouTube video by ID (channel name, title) */
+export async function fetchYouTubeVideoInfo(videoId: string): Promise<{ channelTitle: string; title: string } | null> {
+  const config = getConfig();
+  try {
+    const url = new URL('https://www.googleapis.com/youtube/v3/videos');
+    url.searchParams.set('part', 'snippet');
+    url.searchParams.set('id', videoId);
+    url.searchParams.set('key', config.YOUTUBE_API_KEY);
+    const data = await fetchJson<{ items: Array<{ snippet: { channelTitle: string; title: string } }> }>(url.toString());
+    if (data.items.length === 0) return null;
+    return { channelTitle: data.items[0].snippet.channelTitle, title: data.items[0].snippet.title };
+  } catch {
+    return null;
+  }
+}
 
 // ─── EQUIPMENT DETECTION ─────────────────────────────────────────────────────
 

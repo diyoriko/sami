@@ -1157,7 +1157,7 @@ export function registerBotMenu(bot: Bot): void {
       await ctx.answerCallbackQuery('Одобрено');
 
       const author = sub.username ? `@${sub.username}` : (sub.telegram_user_id ? `id:${sub.telegram_user_id}` : '');
-      const authorDisplay = sub.username ? `@${sub.username}` : 'участник';
+      const submitterDisplay = sub.username ? `@${sub.username}` : 'участник';
 
       // --- Publish to channel ---
       let published = false;
@@ -1178,6 +1178,22 @@ export function registerBotMenu(bot: Bot): void {
           `\`🎾 ${equipmentTag}\``,
         ];
 
+        const isTgFileId = sub.video_url.startsWith('tg:');
+        const isYouTubeUrl = /youtube\.com|youtu\.be/.test(sub.video_url);
+
+        // For YouTube UGC: fetch real channel name and show YouTube link
+        let authorLine: string;
+        if (isYouTubeUrl && sub.youtube_id) {
+          const { fetchYouTubeVideoInfo } = await import('./youtube');
+          const { formatChannelName } = await import('./translate');
+          const info = await fetchYouTubeVideoInfo(sub.youtube_id);
+          const channelName = info ? await formatChannelName(info.channelTitle) : escV2(submitterDisplay);
+          const safeUrl = sub.video_url.replace(/[)\\]/g, '\\$&');
+          authorLine = `Автор: ${channelName}, 📎 [YouTube](${safeUrl})\nПредложиль: ${escV2(submitterDisplay)}`;
+        } else {
+          authorLine = `Автор: ${escV2(submitterDisplay)}`;
+        }
+
         // Rubric: custom text, default "Тренировка от участника", or omit for season
         const rubricLine = sub.rubric ? `*${escV2(sub.rubric)}*` : null;
         const caption = [
@@ -1186,11 +1202,8 @@ export function registerBotMenu(bot: Bot): void {
           '',
           ...tagLines,
           '',
-          `Автор: ${escV2(authorDisplay)}`,
+          authorLine,
         ].join('\n');
-
-        const isTgFileId = sub.video_url.startsWith('tg:');
-        const isYouTubeUrl = /youtube\.com|youtu\.be/.test(sub.video_url);
 
         // Create a video record in DB for tracking (completions, favorites)
         const syntheticYoutubeId = isTgFileId
@@ -1200,7 +1213,7 @@ export function registerBotMenu(bot: Bot): void {
         const videoId = upsertVideo({
           youtube_id: syntheticYoutubeId,
           title: sub.title ?? 'Тренировка',
-          channel_name: authorDisplay,
+          channel_name: submitterDisplay,
           channel_url: null,
           duration_seconds: sub.duration_seconds ?? null,
           duration_label: sub.duration_label ?? null,
