@@ -19,6 +19,8 @@ import { CATEGORIES, CATEGORY_RU, DIFFICULTY_RU, CATEGORY_EMOJI, escV2 } from '.
 
 const log = createLogger('approval');
 
+const APPROVAL_SEND_DELAY_MS = 300; // Telegram rate-limit safety
+
 // In-memory map: approval session ID → season context
 const seasonContextMap = new Map<number, { seasonId: number; dayNumber: number }>();
 
@@ -182,7 +184,7 @@ export async function runApprovalFlow(
       flowLog.error(`failed to send for ${category}`, { error: String(err) });
     }
 
-    await new Promise(r => setTimeout(r, 300));
+    await new Promise(r => setTimeout(r, APPROVAL_SEND_DELAY_MS));
   }
 
   if (singleCategory) {
@@ -430,7 +432,7 @@ export function registerApprovalCallbacks(bot: Bot): void {
       const dow = ((s.day_number - 1) % 7 + 1) % 7; // day_number to JS day of week
       const cat = SEASON_DAY_MAP[dow];
       const catLabel = cat ? `${CATEGORY_EMOJI[cat] ?? ''} ${CATEGORY_RU[cat] ?? cat}` : `День ${s.day_number}`;
-      const emoji = s.status === 'posted' ? '✅' : s.status === 'queued' ? '📦' : '⬜';
+      const emoji = s.status === 'posted' ? '✅' : s.status === 'queued' ? '📋' : '⬜';
       return `${emoji} ${catLabel}${(s as any).title ? ` — ${(s as any).title}` : ''}`;
     });
     try { await ctx.editMessageText(`Сезон ${season.number}, Неделя ${weekNum}:\n\n${lines.join('\n')}`); } catch {}

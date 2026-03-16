@@ -19,6 +19,8 @@ import {
 
 const log = createLogger('poster');
 
+const POST_RETRY_DELAY_MS = 3000; // delay between video upload retries
+
 function formatRating(rating: number): string {
   if (rating <= 0) return '';
   return `${rating.toFixed(1)}`;
@@ -174,7 +176,7 @@ export async function postVideoToChannel(
 
       // Wait before retry
       if (attempt < MAX_VIDEO_ATTEMPTS) {
-        await new Promise(r => setTimeout(r, 3000));
+        await new Promise(r => setTimeout(r, POST_RETRY_DELAY_MS));
       }
     }
     // All attempts exhausted — fall through to link fallback

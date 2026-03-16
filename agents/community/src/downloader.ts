@@ -11,6 +11,14 @@ const log = createLogger('downloader');
 const MAX_SIZE_BYTES = 45 * 1024 * 1024; // 45MB — Telegram Bot API limit is 50MB
 const COOKIES_PATH = process.env.YT_COOKIES_PATH || '/data/cookies.txt';
 
+// Timeouts for external processes (ms)
+const PIP_UPGRADE_TIMEOUT = 60_000;     // pip install --upgrade
+const VERSION_CHECK_TIMEOUT = 30_000;   // yt-dlp --version
+const METADATA_TIMEOUT = 15_000;        // yt-dlp --dump-json (metadata only)
+const COOKIES_EXTRACT_TIMEOUT = 10_000; // yt-dlp --cookies-from-browser
+const DOWNLOAD_TIMEOUT = 300_000;       // full video download (5 min max)
+const DOWNLOAD_SINGLE_TIMEOUT = 120_000; // single download attempt (2 min)
+
 let consecutiveFailures = 0;
 let adminNotified = false;
 let notifyAdmin: ((msg: string) => void) | null = null;
@@ -102,7 +110,7 @@ export async function upgradeYtDlp(): Promise<void> {
   try {
     const { stdout } = await execFileAsync(
       'pip', ['install', '--break-system-packages', '--upgrade', 'yt-dlp'],
-      { timeout: 60_000 }
+      { timeout: PIP_UPGRADE_TIMEOUT }
     );
     resetYtDlpCache();
     const lastLine = stdout.trim().split('\n').pop() ?? '';
@@ -164,7 +172,7 @@ export async function runDiagnostic(): Promise<string> {
       ? [...testArgs, '--extractor-args', `youtube:player_client=${client}`]
       : [...testArgs];
     try {
-      const { stderr } = await execFileAsync(bin, args, { timeout: 30_000 });
+      const { stderr } = await execFileAsync(bin, args, { timeout: VERSION_CHECK_TIMEOUT });
       log(`OK with client=${client || 'default'}`);
       // Cleanup
       try {
@@ -190,7 +198,7 @@ async function probeVideoMeta(filePath: string): Promise<VideoMeta> {
       '-show_streams',
       '-show_format',
       filePath,
-    ], { timeout: 15_000 });
+    ], { timeout: METADATA_TIMEOUT });
     const info = JSON.parse(stdout);
     const videoStream = info.streams?.find((s: any) => s.codec_type === 'video');
     return {
@@ -211,7 +219,7 @@ async function ensureH264(filePath: string): Promise<string> {
       '-v', 'quiet', '-select_streams', 'v:0',
       '-show_entries', 'stream=codec_name',
       '-print_format', 'json', filePath,
-    ], { timeout: 10_000 });
+    ], { timeout: COOKIES_EXTRACT_TIMEOUT });
     const codec = JSON.parse(stdout).streams?.[0]?.codec_name;
     if (codec === 'h264') return filePath;
 
@@ -220,7 +228,7 @@ async function ensureH264(filePath: string): Promise<string> {
     await execFileAsync('ffmpeg', [
       '-i', filePath, '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
       '-c:a', 'aac', '-movflags', '+faststart', '-y', outPath,
-    ], { timeout: 300_000 }); // 5 min max
+    ], { timeout: DOWNLOAD_TIMEOUT });
     // Replace original
     fs.unlinkSync(filePath);
     fs.renameSync(outPath, filePath);
@@ -279,7 +287,7 @@ export async function downloadVideo(youtubeUrl: string, youtubeId: string): Prom
   let succeeded = false;
   for (const args of attempts) {
     try {
-      await execFileAsync(ytDlp, args, { timeout: 120_000 });
+      await execFileAsync(ytDlp, args, { timeout: DOWNLOAD_SINGLE_TIMEOUT });
       succeeded = true;
       break;
     } catch (err: any) {
