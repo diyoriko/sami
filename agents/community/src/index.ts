@@ -6,7 +6,6 @@ import { getConfig } from './config';
 import { createLogger } from './logger';
 
 const log = createLogger('sami-community');
-import { TG_DESCRIPTION_LIMIT, TG_BOT_DESCRIPTION_LIMIT, TG_SHORT_DESCRIPTION_LIMIT } from './shared';
 import { getDb, closeDb } from './db';
 import { registerBotMenu } from './bot-menu';
 import { registerModeration } from './moderation';
@@ -18,105 +17,6 @@ import { registerRubricHandlers } from './rubrics';
 import { recordDeploy, getLatestDeploy, getLatestPost, listImplTasks, getNextImplTask, getImplTask, updateImplTaskStatus, createImplTask } from './db';
 import { isYtDlpAvailable as isYtDlpAvailableCheck } from './downloader';
 import type { ImplTaskStatus, ImplTaskSource } from './db';
-
-/**
- * Audit channel/group/bot descriptions: add cross-links if missing.
- * Reads current text, appends footer with links + search keywords.
- * Idempotent — skips if cross-links already present.
- */
-async function auditDescriptions(bot: Bot, config: ReturnType<typeof getConfig>): Promise<void> {
-  const auditLog = createLogger('audit-desc');
-  const BOT_HANDLE = '@sami_workout_bot';
-  const CHANNEL_HANDLE = '@sami_workouts';
-  const changes: string[] = [];
-
-  // --- Channel description ---
-  try {
-    const chat = await bot.api.getChat(config.TELEGRAM_CHANNEL_ID);
-    const current = ('description' in chat ? chat.description : '') ?? '';
-    if (!current.includes(BOT_HANDLE)) {
-      const footer = [
-        '',
-        'Обсуждение → «Сами Daily»',
-        `Бот: ${BOT_HANDLE}`,
-        '',
-        'тренировки дома · стретчинг · йога · силовая · мобильность · без инвентаря',
-      ].join('\n');
-      const updated = (current + '\n' + footer).slice(0, TG_DESCRIPTION_LIMIT);
-      await bot.api.setChatDescription(config.TELEGRAM_CHANNEL_ID, updated);
-      changes.push('Канал: + ссылки на группу и бота, ключевые слова');
-    }
-  } catch (err) {
-    auditLog.warn('channel description update failed', { error: String(err) });
-  }
-
-  // --- Group description ---
-  try {
-    const chat = await bot.api.getChat(config.TELEGRAM_GROUP_ID);
-    const current = ('description' in chat ? chat.description : '') ?? '';
-    if (!current.includes(BOT_HANDLE)) {
-      const footer = [
-        '',
-        `Канал: ${CHANNEL_HANDLE}`,
-        `Бот: ${BOT_HANDLE}`,
-        '',
-        'Нажми «Я сделаль» под видео, когда закончишь.',
-      ].join('\n');
-      const updated = (current + '\n' + footer).slice(0, TG_DESCRIPTION_LIMIT);
-      await bot.api.setChatDescription(config.TELEGRAM_GROUP_ID, updated);
-      changes.push('Группа: + ссылки на канал и бота, CTA');
-    }
-  } catch (err) {
-    auditLog.warn('group description update failed', { error: String(err) });
-  }
-
-  // --- Bot description (shown in bot profile, max 512 chars) ---
-  try {
-    const { description: current } = await bot.api.getMyDescription();
-    if (!current?.includes(CHANNEL_HANDLE)) {
-      const newDesc = [
-        'Помощник сообщества Сами — ежедневные тренировки на коврике.',
-        '',
-        'Что умею:',
-        '• Профиль — статистика и уровень',
-        '• Фильтры — по категории, уровню, длительности',
-        '• 💡 Предложить тренировку — поделись находкой',
-        '• 🏋️ Мои тренировки — загруженные тобой видео',
-        '',
-        `Канал: ${CHANNEL_HANDLE}`,
-        'Группа: «Сами Daily»',
-      ].join('\n');
-      await bot.api.setMyDescription(newDesc.slice(0, TG_BOT_DESCRIPTION_LIMIT));
-      changes.push('Бот (описание): полное обновление с возможностями и ссылками');
-    }
-  } catch (err) {
-    auditLog.warn('bot description update failed', { error: String(err) });
-  }
-
-  // --- Bot short description (shown in chat list, max 120 chars) ---
-  try {
-    const { short_description: current } = await bot.api.getMyShortDescription();
-    if (!current?.includes(CHANNEL_HANDLE)) {
-      const newShort = `Помощник сообщества Сами. Профиль, фильтры, тренировки. ${CHANNEL_HANDLE}`;
-      await bot.api.setMyShortDescription(newShort.slice(0, TG_SHORT_DESCRIPTION_LIMIT));
-      changes.push('Бот (краткое): + ссылка на канал');
-    }
-  } catch (err) {
-    auditLog.warn('bot short description update failed', { error: String(err) });
-  }
-
-  if (changes.length > 0) {
-    auditLog.info('descriptions updated', { changes });
-    const { escV2 } = await import('./shared');
-    await bot.api.sendMessage(
-      config.TELEGRAM_ADMIN_USER_ID,
-      `*Описания обновлены:*\n${changes.map(c => `• ${escV2(c)}`).join('\n')}`,
-      { parse_mode: 'MarkdownV2' },
-    ).catch(() => {});
-  } else {
-    auditLog.info('descriptions already up to date');
-  }
-}
 
 async function sendDeployReport(
   bot: Bot,
@@ -707,10 +607,7 @@ async function main(): Promise<void> {
         log.error('deploy report failed', { error: String(err) });
       });
 
-      // One-time: audit channel/group/bot descriptions — add cross-links if missing
-      auditDescriptions(bot, config).catch(err => {
-        log.error('description audit failed', { error: String(err) });
-      });
+      // Description audit removed — owner manages descriptions manually
 
       // Run download diagnostic — only notify if something is wrong
       runDiagnostic().then((report) => {
