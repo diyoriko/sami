@@ -101,7 +101,7 @@ const SAMI_CONTENT_PATTERNS = [
 
 // ─── SCORING ─────────────────────────────────────────────────────────────────
 
-const MAX_PENALTY = 60; // Cap: total penalties can't exceed this (prevents stackable annihilation)
+// MAX_PENALTY loaded from config.VIDEO_PENALTY_CAP
 
 function scoreBrandAlignment(title: string, description: string): number {
   const text = (title + ' ' + description).toLowerCase();
@@ -120,7 +120,8 @@ function scoreBrandAlignment(title: string, description: string): number {
   if (upperRatio > 0.6) penalty += 20;
 
   // Apply capped penalty
-  let score = 50 - Math.min(penalty, MAX_PENALTY);
+  const config = getConfig();
+  let score = 50 - Math.min(penalty, config.VIDEO_PENALTY_CAP);
 
   // Bonuses (pro-SAMI values)
   for (const p of BODYWEIGHT_PATTERNS) if (p.test(text)) score += 12;
@@ -142,12 +143,11 @@ function scoreViewCount(viewCount: number): number {
 
 function scoreDuration(seconds: number): number {
   const config = getConfig();
-  const idealMin = config.VIDEO_IDEAL_MIN;
-  const idealMax = config.VIDEO_IDEAL_MAX;
+  const { VIDEO_MIN_DURATION: minDur, VIDEO_IDEAL_MIN: idealMin, VIDEO_IDEAL_MAX: idealMax, VIDEO_MAX_DURATION: maxDur } = config;
   if (seconds >= idealMin && seconds <= idealMax) return 100;
-  if (seconds >= 300 && seconds < idealMin) return 65;
-  if (seconds > idealMax && seconds <= idealMax + 300) return 70;
-  if (seconds > idealMax + 300 && seconds <= config.VIDEO_MAX_DURATION) return 40;
+  if (seconds >= minDur && seconds < idealMin) return 65;
+  if (seconds > idealMax && seconds <= idealMax + (maxDur - idealMax) / 2) return 70;
+  if (seconds > idealMax + (maxDur - idealMax) / 2 && seconds <= maxDur) return 40;
   return 15;
 }
 

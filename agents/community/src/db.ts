@@ -2,7 +2,22 @@ import Database from 'better-sqlite3';
 import * as path from 'path';
 import * as fs from 'fs';
 import { getConfig } from './config';
+import { createLogger } from './logger';
 import { type Category, type Difficulty, CATEGORIES_SQL, DIFFICULTIES_SQL } from './shared';
+
+const log = createLogger('db');
+
+/** Safe ALTER TABLE ADD COLUMN — silences "duplicate column" only, logs real errors */
+function addColumn(db: Database.Database, table: string, column: string, type: string): void {
+  try {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!msg.includes('duplicate column')) {
+      log.error(`migration failed: ALTER TABLE ${table} ADD COLUMN ${column}`, { error: msg });
+    }
+  }
+}
 
 let _db: Database.Database | null = null;
 
@@ -179,12 +194,11 @@ function migrateUgcPublishedStatus(db: Database.Database): void {
 
 function migrate(db: Database.Database): void {
   // Migrations for older schemas
-  try { db.exec('ALTER TABLE videos ADD COLUMN view_count INTEGER DEFAULT 0'); } catch { /* already exists */ }
-  try { db.exec('ALTER TABLE videos ADD COLUMN rating REAL DEFAULT 0'); } catch { /* already exists */ }
-  try { db.exec('ALTER TABLE videos ADD COLUMN like_ratio REAL DEFAULT 0'); } catch { /* already exists */ }
-  try { db.exec('ALTER TABLE videos ADD COLUMN channel_subscribers INTEGER DEFAULT 0'); } catch { /* already exists */ }
-  // Add post_type to posts table (video|link)
-  try { db.exec(`ALTER TABLE posts ADD COLUMN post_type TEXT DEFAULT 'video'`); } catch { /* already exists */ }
+  addColumn(db, 'videos', 'view_count', 'INTEGER DEFAULT 0');
+  addColumn(db, 'videos', 'rating', 'REAL DEFAULT 0');
+  addColumn(db, 'videos', 'like_ratio', 'REAL DEFAULT 0');
+  addColumn(db, 'videos', 'channel_subscribers', 'INTEGER DEFAULT 0');
+  addColumn(db, 'posts', 'post_type', "TEXT DEFAULT 'video'");
   db.exec(`
     CREATE TABLE IF NOT EXISTS videos (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -330,25 +344,19 @@ function migrate(db: Database.Database): void {
   `);
 
   // Post-create migrations for existing DBs (columns added in CREATE TABLE for new DBs)
-  try { db.exec('ALTER TABLE members ADD COLUMN last_activity_at TEXT'); } catch { /* already exists */ }
-  try { db.exec('ALTER TABLE members ADD COLUMN completions_total INTEGER DEFAULT 0'); } catch { /* already exists */ }
-  try { db.exec('ALTER TABLE members ADD COLUMN buddy_invite_sent INTEGER DEFAULT 0'); } catch { /* already exists */ }
-  try { db.exec('ALTER TABLE members ADD COLUMN reminder_sent_at TEXT'); } catch { /* already exists */ }
-
-  // Discussion comment message ID (bot's reply in group thread)
-  try { db.exec('ALTER TABLE posts ADD COLUMN group_comment_id INTEGER'); } catch { /* already exists */ }
-
-  // Soft delete columns
-  try { db.exec('ALTER TABLE ugc_submissions ADD COLUMN deleted_at TEXT'); } catch { /* already exists */ }
-  try { db.exec('ALTER TABLE approval_sessions ADD COLUMN deleted_at TEXT'); } catch { /* already exists */ }
-  // UGC publish tracking
-  try { db.exec('ALTER TABLE ugc_submissions ADD COLUMN published_at TEXT'); } catch { /* already exists */ }
-  // UGC extended metadata (v0.6.1)
-  try { db.exec('ALTER TABLE ugc_submissions ADD COLUMN duration_seconds INTEGER'); } catch { /* already exists */ }
-  try { db.exec('ALTER TABLE ugc_submissions ADD COLUMN duration_label TEXT'); } catch { /* already exists */ }
-  try { db.exec('ALTER TABLE ugc_submissions ADD COLUMN muscles TEXT'); } catch { /* already exists */ }
-  try { db.exec('ALTER TABLE ugc_submissions ADD COLUMN equipment TEXT'); } catch { /* already exists */ }
-  try { db.exec('ALTER TABLE ugc_submissions ADD COLUMN rubric TEXT'); } catch { /* already exists */ }
+  addColumn(db, 'members', 'last_activity_at', 'TEXT');
+  addColumn(db, 'members', 'completions_total', 'INTEGER DEFAULT 0');
+  addColumn(db, 'members', 'buddy_invite_sent', 'INTEGER DEFAULT 0');
+  addColumn(db, 'members', 'reminder_sent_at', 'TEXT');
+  addColumn(db, 'posts', 'group_comment_id', 'INTEGER');
+  addColumn(db, 'ugc_submissions', 'deleted_at', 'TEXT');
+  addColumn(db, 'approval_sessions', 'deleted_at', 'TEXT');
+  addColumn(db, 'ugc_submissions', 'published_at', 'TEXT');
+  addColumn(db, 'ugc_submissions', 'duration_seconds', 'INTEGER');
+  addColumn(db, 'ugc_submissions', 'duration_label', 'TEXT');
+  addColumn(db, 'ugc_submissions', 'muscles', 'TEXT');
+  addColumn(db, 'ugc_submissions', 'equipment', 'TEXT');
+  addColumn(db, 'ugc_submissions', 'rubric', 'TEXT');
 
   // Migration: rebuild tables with updated CHECK constraints (added yoga, breathing, recovery, cardio)
   migrateCheckConstraints(db);
@@ -459,8 +467,8 @@ function migrate(db: Database.Database): void {
   `);
 
   // Season columns on posts
-  try { db.exec('ALTER TABLE posts ADD COLUMN season_id INTEGER REFERENCES seasons(id)'); } catch { /* exists */ }
-  try { db.exec('ALTER TABLE posts ADD COLUMN season_day INTEGER'); } catch { /* exists */ }
+  addColumn(db, 'posts', 'season_id', 'INTEGER REFERENCES seasons(id)');
+  addColumn(db, 'posts', 'season_day', 'INTEGER');
 
   // Rubrics: weekly ritual challenges, mechanics breakdowns, progress digests
   db.exec(`

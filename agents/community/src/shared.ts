@@ -335,6 +335,15 @@ export function seasonHeader(seasonNumber: number, seasonDay: number, category: 
   return `Сезон ${seasonNumber}, День ${seasonDay} — ${emoji} ${name.charAt(0).toUpperCase() + name.slice(1)}`;
 }
 
+// ─── TELEGRAM API LIMITS ─────────────────────────────────────────────────────
+
+/** Max length for chat/channel description (Telegram API) */
+export const TG_DESCRIPTION_LIMIT = 255;
+/** Max length for bot "About" / description (Telegram API) */
+export const TG_BOT_DESCRIPTION_LIMIT = 512;
+/** Max length for bot short description (Telegram API) */
+export const TG_SHORT_DESCRIPTION_LIMIT = 120;
+
 // ─── SQL helpers ─────────────────────────────────────────────────────────────
 
 /** For DB CHECK constraints — comma-separated quoted values */

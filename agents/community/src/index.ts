@@ -6,6 +6,7 @@ import { getConfig } from './config';
 import { createLogger } from './logger';
 
 const log = createLogger('sami-community');
+import { TG_DESCRIPTION_LIMIT, TG_BOT_DESCRIPTION_LIMIT, TG_SHORT_DESCRIPTION_LIMIT } from './shared';
 import { getDb, closeDb } from './db';
 import { registerBotMenu } from './bot-menu';
 import { registerModeration } from './moderation';
@@ -41,7 +42,7 @@ async function auditDescriptions(bot: Bot, config: ReturnType<typeof getConfig>)
         '',
         'тренировки дома · стретчинг · йога · силовая · мобильность · без инвентаря',
       ].join('\n');
-      const updated = (current + '\n' + footer).slice(0, 255);
+      const updated = (current + '\n' + footer).slice(0, TG_DESCRIPTION_LIMIT);
       await bot.api.setChatDescription(config.TELEGRAM_CHANNEL_ID, updated);
       changes.push('Канал: + ссылки на группу и бота, ключевые слова');
     }
@@ -61,7 +62,7 @@ async function auditDescriptions(bot: Bot, config: ReturnType<typeof getConfig>)
         '',
         'Нажми «Я сделаль» под видео, когда закончишь.',
       ].join('\n');
-      const updated = (current + '\n' + footer).slice(0, 255);
+      const updated = (current + '\n' + footer).slice(0, TG_DESCRIPTION_LIMIT);
       await bot.api.setChatDescription(config.TELEGRAM_GROUP_ID, updated);
       changes.push('Группа: + ссылки на канал и бота, CTA');
     }
@@ -85,7 +86,7 @@ async function auditDescriptions(bot: Bot, config: ReturnType<typeof getConfig>)
         `Канал: ${CHANNEL_HANDLE}`,
         'Группа: «Сами Daily»',
       ].join('\n');
-      await bot.api.setMyDescription(newDesc.slice(0, 512));
+      await bot.api.setMyDescription(newDesc.slice(0, TG_BOT_DESCRIPTION_LIMIT));
       changes.push('Бот (описание): полное обновление с возможностями и ссылками');
     }
   } catch (err) {
@@ -97,7 +98,7 @@ async function auditDescriptions(bot: Bot, config: ReturnType<typeof getConfig>)
     const { short_description: current } = await bot.api.getMyShortDescription();
     if (!current?.includes(CHANNEL_HANDLE)) {
       const newShort = `Помощник сообщества Сами. Профиль, фильтры, тренировки. ${CHANNEL_HANDLE}`;
-      await bot.api.setMyShortDescription(newShort.slice(0, 120));
+      await bot.api.setMyShortDescription(newShort.slice(0, TG_SHORT_DESCRIPTION_LIMIT));
       changes.push('Бот (краткое): + ссылка на канал');
     }
   } catch (err) {

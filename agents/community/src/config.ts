@@ -40,6 +40,8 @@ const ConfigSchema = z.object({
   VIDEO_IDEAL_MAX: z.string().default('1200').transform(Number),     // 20 min (sweet spot end)
   // Recency window — skip videos posted within last N days
   VIDEO_RECENCY_DAYS: z.string().default('30').transform(Number),
+  // Brand alignment penalty cap (0-100)
+  VIDEO_PENALTY_CAP: z.string().default('60').transform(Number),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
