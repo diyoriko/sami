@@ -25,21 +25,21 @@ const ConfigSchema = z.object({
   // Season auto-publish
   CRON_SEASON_PUBLISH: z.string().default('0 8 * * *'),   // 08:00 MSK (timezone: Europe/Moscow)
   // Video search scoring weights (0-1, must sum to 1)
-  SCORE_BRAND_WEIGHT: z.string().transform(Number).default('0.50'),
-  SCORE_VIEW_WEIGHT: z.string().transform(Number).default('0.35'),
-  SCORE_DURATION_WEIGHT: z.string().transform(Number).default('0.15'),
+  SCORE_BRAND_WEIGHT: z.string().default('0.50').transform(Number),
+  SCORE_VIEW_WEIGHT: z.string().default('0.35').transform(Number),
+  SCORE_DURATION_WEIGHT: z.string().default('0.15').transform(Number),
   // Post rating weights (0-1, must sum to 1) — displayed in channel posts
-  RATING_VIEW_WEIGHT: z.string().transform(Number).default('0.35'),
-  RATING_LIKE_WEIGHT: z.string().transform(Number).default('0.30'),
-  RATING_CHANNEL_WEIGHT: z.string().transform(Number).default('0.20'),
-  RATING_COMPLETION_WEIGHT: z.string().transform(Number).default('0.15'),
+  RATING_VIEW_WEIGHT: z.string().default('0.35').transform(Number),
+  RATING_LIKE_WEIGHT: z.string().default('0.30').transform(Number),
+  RATING_CHANNEL_WEIGHT: z.string().default('0.20').transform(Number),
+  RATING_COMPLETION_WEIGHT: z.string().default('0.15').transform(Number),
   // Video duration range (seconds)
-  VIDEO_MIN_DURATION: z.string().transform(Number).default('240'),   // 4 min
-  VIDEO_MAX_DURATION: z.string().transform(Number).default('1800'),  // 30 min
-  VIDEO_IDEAL_MIN: z.string().transform(Number).default('480'),      // 8 min (sweet spot start)
-  VIDEO_IDEAL_MAX: z.string().transform(Number).default('1200'),     // 20 min (sweet spot end)
+  VIDEO_MIN_DURATION: z.string().default('240').transform(Number),   // 4 min
+  VIDEO_MAX_DURATION: z.string().default('1800').transform(Number),  // 30 min
+  VIDEO_IDEAL_MIN: z.string().default('480').transform(Number),      // 8 min (sweet spot start)
+  VIDEO_IDEAL_MAX: z.string().default('1200').transform(Number),     // 20 min (sweet spot end)
   // Recency window — skip videos posted within last N days
-  VIDEO_RECENCY_DAYS: z.string().transform(Number).default('30'),
+  VIDEO_RECENCY_DAYS: z.string().default('30').transform(Number),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
