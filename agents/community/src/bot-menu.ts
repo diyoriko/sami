@@ -350,7 +350,7 @@ export function registerBotMenu(bot: Bot): void {
     const { todayMsk, nextMondayMsk } = await import('./dates');
     const {
       ensureActiveSeason, getSeasonDay, getSeasonWeekNumber,
-      initSeasonWeekSlots, getSeasonWeekStatus, getNextEmptySlot,
+      initSeasonWeekSlots, getSeasonWeekStatus,
     } = await import('./db');
     const { SEASON_DAY_MAP, CATEGORY_RU, SEASON_EMOJI, SEASON_DURATION } = await import('./shared');
 
@@ -407,7 +407,6 @@ export function registerBotMenu(bot: Bot): void {
       `Заполнено: ${filledCount}/7`,
     ].join('\n');
 
-    const nextSlot = getNextEmptySlot(season.id, weekNum);
     const kb = new InlineKeyboard();
 
     // Publish button if today's slot is queued
@@ -415,44 +414,59 @@ export function registerBotMenu(bot: Bot): void {
       const todaySlot = slots.find(s => s.day_number === seasonDay);
       if (todaySlot && todaySlot.status === 'queued') {
         kb.text('📤 Опубликовать сегодня', `season_pub:${season.id}:${seasonDay}`);
+        kb.row();
       }
     }
 
-    if (nextSlot) {
-      if (kb.inline_keyboard && kb.inline_keyboard.length > 0) kb.row();
-      kb.text('Заполнить следующий', `fill_next:${season.id}:${weekNum}`);
+    // Per-day buttons: fill empty / replace queued
+    const DAY_LABELS_SHORT = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+    let buttonsInRow = 0;
+    for (const slot of slots) {
+      const dow = ((slot.day_number - 1) % 7) + 1;
+      const jsDow = dow === 7 ? 0 : dow;
+      const dl = DAY_LABELS_SHORT[jsDow];
+      if (slot.status === 'empty') {
+        kb.text(`＋ ${dl}`, `fill_day:${season.id}:${slot.day_number}`);
+        buttonsInRow++;
+      } else if (slot.status === 'queued') {
+        kb.text(`↻ ${dl}`, `fill_day:${season.id}:${slot.day_number}`);
+        buttonsInRow++;
+      }
+      // posted — no button, already published
+      if (buttonsInRow === 4) { kb.row(); buttonsInRow = 0; }
     }
 
     await ctx.reply(msg, { parse_mode: 'MarkdownV2', reply_markup: kb });
   });
 
-  // Fill next empty slot in season week
-  bot.callbackQuery(/^fill_next:(\d+):(\d+)$/, async (ctx) => {
+  // Fill or replace a specific day slot
+  bot.callbackQuery(/^fill_day:(\d+):(\d+)$/, async (ctx) => {
     if (ctx.from!.id !== config.TELEGRAM_ADMIN_USER_ID) return;
     await ctx.answerCallbackQuery();
 
     const seasonId = Number(ctx.match![1]);
-    const weekNum = Number(ctx.match![2]) as 1 | 2 | 3;
-    const { getNextEmptySlot } = await import('./db');
+    const dayNumber = Number(ctx.match![2]);
+    const { getSeasonQueueForDay, clearSeasonSlot } = await import('./db');
     const { SEASON_DAY_MAP } = await import('./shared');
     const { runApprovalFlow } = await import('./approval');
     const { tomorrowMsk } = await import('./dates');
 
-    const slot = getNextEmptySlot(seasonId, weekNum);
-    if (!slot) {
-      try { await ctx.editMessageText('Все слоты на неделе заполнены! ✅'); } catch {}
-      return;
+    const slot = getSeasonQueueForDay(seasonId, dayNumber);
+    if (!slot) return;
+
+    // If slot is queued, clear it first (replace)
+    if (slot.status === 'queued') {
+      clearSeasonSlot(seasonId, dayNumber);
     }
 
-    // Determine category for this slot
-    const dow = ((slot.day_number - 1) % 7) + 1;
+    // Determine category for this day
+    const dow = ((dayNumber - 1) % 7) + 1;
     const jsDow = dow === 7 ? 0 : dow;
     const category = SEASON_DAY_MAP[jsDow];
     if (!category) return;
 
-    // Run approval flow for single category
-    const date = tomorrowMsk(); // date doesn't matter much, used for session tracking
-    await runApprovalFlow(bot, date, category, { seasonId, dayNumber: slot.day_number });
+    const date = tomorrowMsk();
+    await runApprovalFlow(bot, date, category, { seasonId, dayNumber });
   });
 
   // Manual season publish for today

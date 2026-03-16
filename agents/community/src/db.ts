@@ -2048,6 +2048,14 @@ export function markSeasonQueuePosted(seasonId: number, dayNumber: number): void
   `).run(seasonId, dayNumber);
 }
 
+/** Reset a slot to empty (for replacing a queued video) */
+export function clearSeasonSlot(seasonId: number, dayNumber: number): void {
+  getDb().prepare(`
+    UPDATE season_queue SET video_id = NULL, status = 'empty', queued_at = NULL
+    WHERE season_id = ? AND day_number = ? AND status = 'queued'
+  `).run(seasonId, dayNumber);
+}
+
 /** Find first empty slot in a week */
 export function getNextEmptySlot(seasonId: number, weekNumber: 1 | 2 | 3): SeasonQueueRow | null {
   const startDay = (weekNumber - 1) * 7 + 1;
