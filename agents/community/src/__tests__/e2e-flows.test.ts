@@ -635,8 +635,8 @@ describe('completion + rating full flow', () => {
     const answers = findCalls('answerCallbackQuery');
     expect(answers.length).toBeGreaterThan(0);
     expect(answers[0].payload.show_alert).toBe(true);
-    expect(answers[0].payload.text).toContain('Рейтинг');
-    expect(answers[0].payload.text).toContain('35%');
+    expect(answers[0].payload.text).toContain('Sami Score:');
+    expect(answers[0].payload.text).toContain('Как считается');
   });
 
   it('skips autocomment for unknown post (manual publish)', async () => {

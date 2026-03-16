@@ -26,9 +26,9 @@ describe('post format vision compliance', () => {
     expect(posterSource).toMatch(/🎾/);
   });
 
-  it('has rating display with star emoji', () => {
-    expect(posterSource).toContain('⭐');
-    expect(posterSource).toContain('ratingStr');
+  it('has Sami Score display', () => {
+    expect(posterSource).toContain('Sami Score:');
+    expect(posterSource).toContain('scorePercent');
   });
 
   it('button text is "Я сделаль" (in discussion comment, not in channel post)', () => {

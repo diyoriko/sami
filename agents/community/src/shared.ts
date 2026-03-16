@@ -174,10 +174,13 @@ export const CATEGORY_QUERIES: Record<Category, string[]> = {
     'тренировка с весом тела для начинающих',
     'функциональная тренировка дома без оборудования',
     'бодивейт тренировка 20 минут дома',
-    'силовая тренировка без гантелей',
+    'силовая тренировка дома с гантелями',
+    'тренировка с резинкой дома для начинающих',
     'bodyweight workout at home no equipment',
     'mat only strength training beginner',
     'full body workout no equipment 15 min',
+    'resistance band workout at home',
+    'light dumbbell workout at home beginner',
   ],
   mobility: [
     'мобильность суставов тренировка дома',
@@ -224,10 +227,11 @@ export const CATEGORY_QUERIES: Record<Category, string[]> = {
     'кардио на коврике без прыжков',
     'интервальная тренировка дома для начинающих',
     'HIIT тренировка без инвентаря 15 минут',
+    'кардио со скакалкой дома',
     'cardio workout at home no equipment',
     'low impact cardio no jumping',
     'HIIT no equipment mat only',
-    'bodyweight cardio 20 min',
+    'jump rope workout beginner',
   ],
 };
 

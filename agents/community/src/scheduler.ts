@@ -107,23 +107,19 @@ export function startScheduler(bot: Bot): void {
   cron.schedule('0 9 * * 0', async () => {
     log.info('posting weekly progress poll');
     try {
-      const { ensureActiveSeason, getSeasonDay, getSeasonWeekNumber } = require('./db') as typeof import('./db');
+      const { ensureActiveSeason } = require('./db') as typeof import('./db');
       const { nextMondayMsk } = require('./dates') as typeof import('./dates');
 
       const today = todayMsk();
       const season = ensureActiveSeason(today, nextMondayMsk());
       if (season.status !== 'active') return;
 
-      const dayNum = getSeasonDay(season.start_date, today);
-      const weekNum = getSeasonWeekNumber(dayNum);
-
-      const weekLabel = weekNum === 1 ? 'Первая' : weekNum === 2 ? 'Вторая' : 'Третья';
-      const question = `${weekLabel} неделя Сезона ${season.number} позади! На каком вы дне?`;
+      const question = `Неделя позади! Сколько тренировок удалось сделать?`;
 
       await bot.api.sendPoll(config.TELEGRAM_CHANNEL_ID, question, [
-        { text: `День 1–7` },
-        { text: `День 8–14` },
-        { text: `День 15–21` },
+        { text: `Все 7` },
+        { text: `4–6` },
+        { text: `1–3` },
         { text: `Пропустил(а) неделю` },
       ], { is_anonymous: true });
 
@@ -137,7 +133,7 @@ export function startScheduler(bot: Bot): void {
   cron.schedule('0 16 * * 5', async () => {
     log.info('posting stability wall');
     try {
-      const { getWeeklyConsistentUsers, ensureActiveSeason, getSeasonDay } = require('./db') as typeof import('./db');
+      const { getWeeklyConsistentUsers, ensureActiveSeason } = require('./db') as typeof import('./db');
       const { nextMondayMsk } = require('./dates') as typeof import('./dates');
 
       const today = todayMsk();
@@ -156,16 +152,12 @@ export function startScheduler(bot: Bot): void {
       }
 
       const names = users.map(u => u.first_name).join('\n• ');
-      const dayNum = getSeasonDay(season.start_date, today);
       const text = [
         `🧱 *Стена стабильности*`,
         ``,
         `Эти люди не пропустили ни дня за последнюю неделю:`,
         ``,
         `• ${names}`,
-        ``,
-        `Сезон ${season.number}, день ${dayNum}/21`,
-        `#прогресс`,
       ].join('\n');
 
       await bot.api.sendMessage(config.TELEGRAM_CHANNEL_ID, text, { parse_mode: 'Markdown' });

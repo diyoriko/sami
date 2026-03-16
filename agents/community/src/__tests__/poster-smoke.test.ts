@@ -93,12 +93,12 @@ describe('poster caption structure', () => {
     expect(posterSource).toContain("parse_mode: 'MarkdownV2'");
   });
 
-  it('season header uses seasonHeader from shared', () => {
+  it('uses Sami Score in caption', () => {
     const posterSource = fs.readFileSync(
       path.join(__dirname, '..', 'poster.ts'),
       'utf8',
     );
-    expect(posterSource).toContain('seasonHeader(');
+    expect(posterSource).toContain('Sami Score:');
   });
 });
 

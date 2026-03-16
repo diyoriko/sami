@@ -14,7 +14,7 @@ import { createLogger, type Logger } from './logger';
 import {
   type Category, type Difficulty,
   CATEGORY_RU, DIFFICULTY_RU, CATEGORY_EMOJI, EQUIPMENT_NO_GEAR,
-  escV2, seasonHeader, parseMuscles,
+  escV2, parseMuscles,
 } from './shared';
 
 const log = createLogger('poster');
@@ -25,6 +25,7 @@ function formatRating(rating: number): string {
   if (rating <= 0) return '';
   return `${rating.toFixed(1)}`;
 }
+
 
 export interface SeasonInfo {
   seasonNumber: number;
@@ -59,17 +60,17 @@ async function formatCaption(video: VideoRow, seasonInfo?: SeasonInfo): Promise<
   // URL: escape only ) and \ which break MarkdownV2 link syntax
   const safeUrl = video.video_url.replace(/[)\\]/g, '\\$&');
 
-  // Season header: «Сезон 1, День 3 — 🤸 Мобильность»
-  const header = seasonInfo
-    ? `*${escV2(seasonHeader(seasonInfo.seasonNumber, seasonInfo.seasonDay, seasonInfo.category))}*`
+  // Sami Score line: Sami Score: 84% (тон, формат, просмотры, лайки, длительность)
+  const scorePercent = video.rating > 0 ? Math.round(video.rating * 10) : 0;
+  const samiScoreLine = scorePercent > 0
+    ? `\`Sami Score: ${scorePercent}% (тон, формат, просмотры, лайки, длительность)\``
     : null;
 
   const lines = [
-    ...(header ? [header, ''] : []),
     `*${title}*`,
     '',
     ...tagLines,
-    ...(ratingStr ? [`\`⭐ ${ratingStr}/10\`  _просмотры · лайки · канал · ваши тренировки_`] : []),
+    ...(samiScoreLine ? [samiScoreLine] : []),
     '',
     `Автор: ${channelName}, 📎 [YouTube](${safeUrl})`,
   ];

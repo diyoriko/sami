@@ -867,8 +867,9 @@ export function registerModeration(bot: Bot): void {
     const videoId = parseInt(ctx.match[1]);
     const rating = updateVideoRating(videoId);
     const ratingStr = rating.toFixed(1);
+    const scorePercent = Math.round(rating * 10);
     await ctx.answerCallbackQuery({
-      text: `⭐ Рейтинг: ${ratingStr} из 10\n\nФормула:\n• 35% — просмотры на YouTube\n• 30% — соотношение лайков\n• 20% — авторитет канала\n• 15% — выполнения в Sami\n\nЧем больше людей делает тренировку, тем выше рейтинг.`,
+      text: `Sami Score: ${scorePercent}%\n\nКак считается:\n• Тон — спокойный, без хайпа\n• Формат — дома, без тяжёлого инвентаря\n• Просмотры — проверено зрителями\n• Лайки — одобрено аудиторией\n• Длительность — оптимальная для дома\n\nАлгоритм проверяет 20+ видео и выбирает лучшие.`,
       show_alert: true,
     });
   });

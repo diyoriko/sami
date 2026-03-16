@@ -59,15 +59,17 @@ const HYPE_PATTERNS = [
   /🔥{2,}|💪{3,}/,
 ];
 
-// Anti-value 4: "только коврик" — equipment required
-const EQUIPMENT_PATTERNS = [
-  /гантели|со штангой|тренажёр|kettlebell|dumbbell|barbell/i,
+// Heavy gym equipment — strong penalty
+const HEAVY_EQUIPMENT_PATTERNS = [
+  /со штангой|тренажёр|barbell|smith machine/i,
   /в зале|в спортзале|gym workout(?! alternative)/i,
+  /турник|pull.?up bar/i,
 ];
 
 // Wrong audience
 const WRONG_AUDIENCE_PATTERNS = [
   /детей|kids|беременн|pregnancy|пожилых|senior for/i,
+  /для мужчин|для женщин|for men|for women|мужская|женская/i,
 ];
 
 // ─── BONUS PATTERNS ──────────────────────────────────────────────────────────
@@ -112,7 +114,7 @@ function scoreBrandAlignment(title: string, description: string): number {
   for (const p of FIX_BODY_PATTERNS) if (p.test(text)) penalty += 20;
   for (const p of COMPETITION_PATTERNS) if (p.test(text)) penalty += 15;
   for (const p of HYPE_PATTERNS) if (p.test(text)) penalty += 15;
-  for (const p of EQUIPMENT_PATTERNS) if (p.test(text)) penalty += 20;
+  for (const p of HEAVY_EQUIPMENT_PATTERNS) if (p.test(text)) penalty += 20;
   for (const p of WRONG_AUDIENCE_PATTERNS) if (p.test(text)) penalty += 50;
 
   // ALL CAPS title = hype / anti-calm
@@ -409,13 +411,9 @@ export async function searchVideos(
 
   const sorted = candidates.sort((a, b) => b.total_score - a.total_score);
 
-  // Prefer mat-only videos. Fall back to best overall if none found.
-  const matOnly = sorted.filter(v => v.equipment.length === 0);
-  const pool = matOnly.length > 0 ? matOnly : sorted;
-
   // Dedup by channel: max 1 video per YouTube channel
   const seen = new Set<string>();
-  const deduped = pool.filter(v => {
+  const deduped = sorted.filter(v => {
     const key = v.channel_name.toLowerCase();
     if (seen.has(key)) return false;
     seen.add(key);

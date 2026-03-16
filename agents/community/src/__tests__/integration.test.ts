@@ -315,7 +315,7 @@ describe('"Я сделаль" callback', () => {
     const payload = answers[0].payload;
     // show_alert: true + text with formula
     expect(payload.show_alert).toBe(true);
-    expect(payload.text).toContain('35%');
+    expect(payload.text).toContain('Sami Score:');
   });
 });
 
