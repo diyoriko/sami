@@ -1,6 +1,6 @@
 # COMMUNITY_TASKS.md — Бэклог Sami Community
 
-Последнее обновление: 14 марта 2026
+Последнее обновление: 16 марта 2026
 
 ---
 
@@ -365,18 +365,22 @@
 - [x] **DM после первого «Я сделаль»** — персональное поздравление + до 3 видео из той же категории со ссылками. Функция `sendFirstCompletionDM` в обоих хендлерах (done: и done_msg:)
 - ~~Контент-план на неделю в /status~~ → уже реализовано: кнопка «📅 Неделя» + /status показывает сезон
 
+### P1: UX — статусы недели (16.03) — DONE
+
+- [x] **Единые иконки статуса в расписании** — ⬜ не выбрано, 📋 выбрано (ждёт публикации), ✅ опубликовано. Исправлена рассинхронизация между approval.ts и bot-menu.ts (были разные эмодзи для одних состояний)
+
 ### P1: Code Quality Audit (16.03) — в работе
 
 - [x] **channel_subscribers: 0 хардкод** — добавлен `channels.list` API call в youtube.ts, подписчики канала теперь запрашиваются batch-запросом при поиске видео
 - [x] **Рейтинг: хардкод весов в db.ts** — вынесены в config.ts (`RATING_VIEW_WEIGHT`, `RATING_LIKE_WEIGHT`, `RATING_CHANNEL_WEIGHT`, `RATING_COMPLETION_WEIGHT`)
 - [x] **channel_subscribers fallback 0.4 → 0.3** — более консервативная оценка для неизвестных каналов
-- [ ] **Silent schema migrations** — db.ts: 20+ ALTER TABLE в пустых catch. Логировать ошибки, не только "already exists"
-- [ ] **Inconsistent scoring weights** — `computeTotalScore` (youtube.ts) использует config, но `scoreDuration` хардкодит 300с offset
-- [ ] **Magic numbers** — MAX_PENALTY=60, string truncation lengths (.slice(0, 50)), HTTP status codes. Вынести в constants.ts
-- [ ] **Empty catch blocks** — 40+ мест. Разделить intentional (schema exists) от unintentional (network). Логировать все реальные ошибки
+- [x] **Silent schema migrations** — `addColumn()` хелпер, ловит только "duplicate column", логирует реальные ошибки. Заменены все 20 silent try/catch
+- [x] **Inconsistent scoring weights** — `scoreDuration` использует config вместо хардкода 300с
+- [x] **Magic numbers** — `MAX_PENALTY` → `config.VIDEO_PENALTY_CAP`, TG API limits → именованные константы
+- [ ] **Empty catch blocks** — 40+ мест. Разделить intentional от unintentional. Логировать реальные ошибки
 - [ ] **Hardcoded timeouts** — yt-dlp: 120s, approval delay: 300ms, poster retry: 3s. Вынести в config
-- [ ] **Celebration emojis дубликат** — moderation.ts:649 и :774 один и тот же массив. Вынести в shared.ts
-- [ ] **Telegram API limits** — .slice(0, 255), .slice(0, 512), .slice(0, 120) без именованных констант
+- [x] **Celebration emojis дубликат** — `buildCelebrationComment()` хелпер, 10 фраз + milestones + streak + crowd
+- [x] **Telegram API limits** — `TG_DESCRIPTION_LIMIT` и т.д. в shared.ts
 
 ### P2: Growth (ручная работа, не код)
 
