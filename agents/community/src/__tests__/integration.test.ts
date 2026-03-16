@@ -305,18 +305,6 @@ describe('"Я сделаль" callback', () => {
     expect(db.getCompletionCount(postId)).toBe(2);
   });
 
-  it('rating popup shows formula on click', async () => {
-    const { videoId } = setupDoneTest('rating');
-
-    await bot.handleUpdate(callbackUpdate(`rating:${videoId}`, { user_id: USER_ID + 400 }));
-
-    const answers = findCalls('answerCallbackQuery');
-    expect(answers.length).toBeGreaterThan(0);
-    const payload = answers[0].payload;
-    // show_alert: true + text with formula
-    expect(payload.show_alert).toBe(true);
-    expect(payload.text).toContain('Sami Score:');
-  });
 });
 
 

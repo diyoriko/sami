@@ -592,11 +592,11 @@ describe('"Мои тренировки" display', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 6. COMPLETION + RATING (auto-forward → "Я сделаль" → rating popup)
+// 6. COMPLETION FLOW (auto-forward → "Я сделаль" → count updates)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('completion + rating full flow', () => {
-  it('auto-forward → completion button → click → count updates → rating popup', async () => {
+describe('completion full flow', () => {
+  it('auto-forward → completion button → click → count updates', async () => {
     // Setup: video + post in DB
     const vid = db.upsertVideo({
       youtube_id: 'e2e_comp_1', title: 'Completion E2E', channel_name: 'TestCh',
@@ -628,15 +628,6 @@ describe('completion + rating full flow', () => {
     const uid2 = USER_ID + 301;
     await bot.handleUpdate(callbackUpdate(`done:${vid}`, { user_id: uid2, chat_id: GROUP_ID }));
     expect(db.getCompletionCount(post.id)).toBe(2);
-
-    // 4. Rating popup
-    apiCalls = [];
-    await bot.handleUpdate(callbackUpdate(`rating:${vid}`, { user_id: uid1, chat_id: GROUP_ID }));
-    const answers = findCalls('answerCallbackQuery');
-    expect(answers.length).toBeGreaterThan(0);
-    expect(answers[0].payload.show_alert).toBe(true);
-    expect(answers[0].payload.text).toContain('Sami Score:');
-    expect(answers[0].payload.text).toContain('Как считается');
   });
 
   it('skips autocomment for unknown post (manual publish)', async () => {

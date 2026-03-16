@@ -10,7 +10,7 @@ const log = createLogger('moderation');
 import {
   upsertMember, setMemberGoal, addWarning, muteMember,
   recordCompletion, removeCompletion, getCompletionCount, hasUserCompleted,
-  getPostByMessageId, getLatestPostByVideoId, getPostByGroupCommentId, setGroupCommentId, updateVideoRating, getLastCompletionTime,
+  getPostByMessageId, getLatestPostByVideoId, getPostByGroupCommentId, setGroupCommentId, getLastCompletionTime,
   getUserStreak,
   saveCaptcha, getCaptcha, deleteCaptcha, getExpiredCaptchas,
   getLatestPostForDate,
@@ -862,37 +862,6 @@ export function registerModeration(bot: Bot): void {
     await ctx.answerCallbackQuery('Тренировка записана.');
   });
 
-  // --- Rating popup ---
-  bot.callbackQuery(/^rating:(\d+)$/, async (ctx) => {
-    const videoId = parseInt(ctx.match[1]);
-    const rating = updateVideoRating(videoId);
-    const ratingStr = rating.toFixed(1);
-    const scorePercent = Math.round(rating * 10);
-    await ctx.answerCallbackQuery({
-      text: `Sami Score: ${scorePercent}%\n\nКак считается:\n• Тон — спокойный, без хайпа\n• Формат — дома, без тяжёлого инвентаря\n• Просмотры — проверено зрителями\n• Лайки — одобрено аудиторией\n• Длительность — оптимальная для дома\n\nАлгоритм проверяет 20+ видео и выбирает лучшие.`,
-      show_alert: true,
-    });
-  });
-
-  // --- Rating popup fallback (for posts not in DB, uses channel msg ID) ---
-  bot.callbackQuery(/^rating_msg:(\d+)$/, async (ctx) => {
-    const channelMsgId = parseInt(ctx.match[1]);
-    // Try to find the post now (it may have been recorded since the autocomment was posted)
-    const post = getPostByMessageId(channelMsgId);
-    if (post) {
-      const rating = updateVideoRating(post.video_id);
-      const ratingStr = rating.toFixed(1);
-      await ctx.answerCallbackQuery({
-        text: `⭐ Рейтинг: ${ratingStr} из 10\n\nФормула:\n• 35% — просмотры на YouTube\n• 30% — соотношение лайков\n• 20% — авторитет канала\n• 15% — выполнения в Sami\n\nЧем больше людей делает тренировку, тем выше рейтинг.`,
-        show_alert: true,
-      });
-    } else {
-      await ctx.answerCallbackQuery({
-        text: '⭐ Рейтинг пока не рассчитан — видео ещё не в базе.',
-        show_alert: true,
-      });
-    }
-  });
 
   // ---- Poll results tracking (S5) ----
   bot.on('poll', (ctx) => {

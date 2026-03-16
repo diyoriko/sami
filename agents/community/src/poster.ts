@@ -21,10 +21,6 @@ const log = createLogger('poster');
 
 const POST_RETRY_DELAY_MS = 3000; // delay between video upload retries
 
-function formatRating(rating: number): string {
-  if (rating <= 0) return '';
-  return `${rating.toFixed(1)}`;
-}
 
 
 export interface SeasonInfo {
@@ -44,8 +40,6 @@ async function formatCaption(video: VideoRow, seasonInfo?: SeasonInfo): Promise<
 
   const title = await rewriteTitle(video.title);
   const channelName = await formatChannelName(video.channel_name);
-
-  const ratingStr = formatRating(video.rating ?? 0);
 
   const catEmoji = CATEGORY_EMOJI[video.category] ?? '🏷';
 

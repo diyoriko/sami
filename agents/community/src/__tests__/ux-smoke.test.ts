@@ -78,13 +78,9 @@ describe('UX smoke: moderation handlers', () => {
     expect(modSource).toContain('COOLDOWN_MS');
   });
 
-  it('rating popup shows formula', () => {
-    expect(modSource).toContain('rating:');
-    expect(modSource).toContain('35%');
-    expect(modSource).toContain('30%');
-    expect(modSource).toContain('20%');
-    expect(modSource).toContain('15%');
-    expect(modSource).toContain('выполнения в Sami');
+  it('completion undo (toggle) is supported', () => {
+    expect(modSource).toContain('removeCompletion');
+    expect(modSource).toContain('Отметка снята');
   });
 
   it('buddy invite after 3rd completion', () => {

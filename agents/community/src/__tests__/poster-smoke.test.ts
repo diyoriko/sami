@@ -76,13 +76,12 @@ describe('poster caption structure', () => {
     expect(posterSource).toContain('YouTube');
   });
 
-  it('formatRating returns empty string for zero/negative', () => {
-    // formatRating is private, but we can verify via source
+  it('Sami Score skips zero rating', () => {
     const posterSource = fs.readFileSync(
       path.join(__dirname, '..', 'poster.ts'),
       'utf8',
     );
-    expect(posterSource).toContain("if (rating <= 0) return '';");
+    expect(posterSource).toContain('video.rating > 0');
   });
 
   it('uses MarkdownV2 parse mode', () => {
