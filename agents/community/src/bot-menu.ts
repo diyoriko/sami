@@ -229,36 +229,36 @@ export function registerBotMenu(bot: Bot): void {
     // Uptime
     const uptimeStr = formatUptime(process.uptime());
 
-    // Season info + week queue
-    let seasonLine = '';
+    // Challenge info + week queue
+    let challengeLine = '';
     let weekQueueText = '';
     let statusKb: InlineKeyboard | undefined;
     try {
-      const { ensureActiveSeason, getSeasonDay, getSeasonWeekNumber, getSeasonWeekStatus, initSeasonWeekSlots } = await import('./db');
+      const { ensureActiveChallenge, getChallengeDay, getChallengeWeekNumber, getWeekStatus, initWeekSlots } = await import('./db');
       const { nextMondayMsk } = await import('./dates');
-      const { SEASON_DAY_MAP, SEASON_EMOJI, CATEGORY_RU: CR, SEASON_DURATION } = await import('./shared');
-      const season = ensureActiveSeason(date, nextMondayMsk());
-      if (season.status === 'active') {
-        const sDay = getSeasonDay(season.start_date, date);
-        if (sDay >= 1 && sDay <= SEASON_DURATION) {
+      const { DAY_CATEGORY_MAP, CATEGORY_EMOJI_MAP, CATEGORY_RU: CR, CHALLENGE_DURATION } = await import('./shared');
+      const challenge = ensureActiveChallenge(date, nextMondayMsk());
+      if (challenge.status === 'active') {
+        const sDay = getChallengeDay(challenge.start_date, date);
+        if (sDay >= 1 && sDay <= CHALLENGE_DURATION) {
           const dow = new Date(date + 'T00:00:00').getDay();
-          const cat = SEASON_DAY_MAP[dow];
+          const cat = DAY_CATEGORY_MAP[dow];
           const catRu = cat ? CR[cat] : '?';
-          const emoji = cat ? SEASON_EMOJI[cat] : '❓';
-          const wk = getSeasonWeekNumber(sDay);
-          initSeasonWeekSlots(season.id, wk);
-          const slots = getSeasonWeekStatus(season.id, wk);
+          const emoji = cat ? CATEGORY_EMOJI_MAP[cat] : '❓';
+          const wk = getChallengeWeekNumber(sDay);
+          initWeekSlots(challenge.id, wk);
+          const slots = getWeekStatus(challenge.id, wk);
           const filled = slots.filter(s => s.status !== 'empty').length;
-          seasonLine = `${emoji} ${catRu} | Заполнено: ${filled}/7`;
+          challengeLine = `${emoji} ${catRu} | Заполнено: ${filled}/7`;
 
           // Week queue by day
           const DAY_LABELS = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
           const lines = slots.map(slot => {
             const d = ((slot.day_number - 1) % 7) + 1;
             const jd = d === 7 ? 0 : d;
-            const slotCat = SEASON_DAY_MAP[jd];
+            const slotCat = DAY_CATEGORY_MAP[jd];
             const slotCatRu = slotCat ? CR[slotCat] : '?';
-            const slotEmoji = slotCat ? SEASON_EMOJI[slotCat] : '❓';
+            const slotEmoji = slotCat ? CATEGORY_EMOJI_MAP[slotCat] : '❓';
             const dayLabel = DAY_LABELS[jd];
             const isToday = slot.day_number === sDay;
             const icon = slot.status === 'posted' ? '✅'
@@ -273,17 +273,17 @@ export function registerBotMenu(bot: Bot): void {
           // Show publish button if today's slot is queued but not yet posted
           const todaySlot = slots.find(s => s.day_number === sDay);
           if (todaySlot && todaySlot.status === 'queued') {
-            statusKb = new InlineKeyboard().text('📤 Опубликовать сегодня', `season_pub:${season.id}:${sDay}`);
+            statusKb = new InlineKeyboard().text('📤 Опубликовать сегодня', `challenge_pub:${challenge.id}:${sDay}`);
           }
         }
       }
-    } catch { /* no season yet */ }
+    } catch { /* no challenge yet */ }
 
     await ctx.reply(
       [
         `*Sami — статус*`,
         ``,
-        ...(seasonLine ? [escV2(seasonLine), ``] : []),
+        ...(challengeLine ? [escV2(challengeLine), ``] : []),
         `Дата: ${escV2(date)}`,
         `Подписчиков: ${escV2(subscriberCount)} \\| Группа: ${escV2(groupMemberCount)}`,
         `Постов: ${escV2(String(posts))}`,
@@ -349,37 +349,37 @@ export function registerBotMenu(bot: Bot): void {
     if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
     const { todayMsk, nextMondayMsk } = await import('./dates');
     const {
-      ensureActiveSeason, getSeasonDay, getSeasonWeekNumber,
-      initSeasonWeekSlots, getSeasonWeekStatus,
+      ensureActiveChallenge, getChallengeDay, getChallengeWeekNumber,
+      initWeekSlots, getWeekStatus,
     } = await import('./db');
-    const { SEASON_DAY_MAP, CATEGORY_RU, SEASON_EMOJI, SEASON_DURATION } = await import('./shared');
+    const { DAY_CATEGORY_MAP, CATEGORY_RU, CATEGORY_EMOJI_MAP, CHALLENGE_DURATION } = await import('./shared');
 
     const today = todayMsk();
-    const season = ensureActiveSeason(today, nextMondayMsk());
+    const challenge = ensureActiveChallenge(today, nextMondayMsk());
 
-    if (season.status === 'completed') {
+    if (challenge.status === 'completed') {
       await ctx.reply(`Неделя завершена. Новый цикл стартует в понедельник.`);
       return;
     }
 
-    // Allow filling queue even for upcoming seasons (plan ahead)
-    let seasonDay: number;
+    // Allow filling queue even for upcoming challenges (plan ahead)
+    let challengeDay: number;
     let weekNum: 1 | 2 | 3;
 
-    if (season.status === 'upcoming') {
-      // Season hasn't started yet — show week 1 for planning
-      seasonDay = 0;
+    if (challenge.status === 'upcoming') {
+      // Challenge hasn't started yet — show week 1 for planning
+      challengeDay = 0;
       weekNum = 1;
     } else {
-      seasonDay = getSeasonDay(season.start_date, today);
-      if (seasonDay > SEASON_DURATION) {
+      challengeDay = getChallengeDay(challenge.start_date, today);
+      if (challengeDay > CHALLENGE_DURATION) {
         await ctx.reply(`Неделя завершена. Новый цикл стартует в понедельник.`);
         return;
       }
-      weekNum = getSeasonWeekNumber(seasonDay);
+      weekNum = getChallengeWeekNumber(challengeDay);
     }
-    initSeasonWeekSlots(season.id, weekNum);
-    const slots = getSeasonWeekStatus(season.id, weekNum);
+    initWeekSlots(challenge.id, weekNum);
+    const slots = getWeekStatus(challenge.id, weekNum);
 
     // Day-of-week labels: Пн, Вт, Ср...
     const DAY_LABELS = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
@@ -387,9 +387,9 @@ export function registerBotMenu(bot: Bot): void {
       // Map day_number to day-of-week: day 1 = Mon, day 2 = Tue, etc.
       const dow = ((slot.day_number - 1) % 7) + 1; // 1=Mon...7=Sun
       const jsDow = dow === 7 ? 0 : dow; // JS: 0=Sun
-      const cat = SEASON_DAY_MAP[jsDow];
+      const cat = DAY_CATEGORY_MAP[jsDow];
       const catRu = cat ? CATEGORY_RU[cat] : '?';
-      const emoji = cat ? SEASON_EMOJI[cat] : '❓';
+      const emoji = cat ? CATEGORY_EMOJI_MAP[cat] : '❓';
       const dayLabel = DAY_LABELS[jsDow];
       const icon = slot.status === 'posted' ? '✅' : slot.status === 'queued' ? '📋' : '⬜';
       const title = slot.title ? ` — ${slot.title.slice(0, 35)}` : '';
@@ -398,7 +398,7 @@ export function registerBotMenu(bot: Bot): void {
 
     const filledCount = slots.filter(s => s.status !== 'empty').length;
 
-    const planTag = season.status === 'upcoming' ? ` · стартует ${escV2(season.start_date)}` : '';
+    const planTag = challenge.status === 'upcoming' ? ` · стартует ${escV2(challenge.start_date)}` : '';
     const msg = [
       `📅 *Расписание недели*${planTag}`,
       ``,
@@ -410,10 +410,10 @@ export function registerBotMenu(bot: Bot): void {
     const kb = new InlineKeyboard();
 
     // Publish button if today's slot is queued
-    if (season.status === 'active' && seasonDay >= 1) {
-      const todaySlot = slots.find(s => s.day_number === seasonDay);
+    if (challenge.status === 'active' && challengeDay >= 1) {
+      const todaySlot = slots.find(s => s.day_number === challengeDay);
       if (todaySlot && todaySlot.status === 'queued') {
-        kb.text('📤 Опубликовать сегодня', `season_pub:${season.id}:${seasonDay}`);
+        kb.text('📤 Опубликовать сегодня', `challenge_pub:${challenge.id}:${challengeDay}`);
         kb.row();
       }
     }
@@ -426,10 +426,10 @@ export function registerBotMenu(bot: Bot): void {
       const jsDow = dow === 7 ? 0 : dow;
       const dl = DAY_LABELS_SHORT[jsDow];
       if (slot.status === 'empty') {
-        kb.text(`＋ ${dl}`, `fill_day:${season.id}:${slot.day_number}`);
+        kb.text(`＋ ${dl}`, `fill_day:${challenge.id}:${slot.day_number}`);
         buttonsInRow++;
       } else if (slot.status === 'queued') {
-        kb.text(`↻ ${dl}`, `fill_day:${season.id}:${slot.day_number}`);
+        kb.text(`↻ ${dl}`, `fill_day:${challenge.id}:${slot.day_number}`);
         buttonsInRow++;
       }
       // posted — no button, already published
@@ -444,48 +444,48 @@ export function registerBotMenu(bot: Bot): void {
     if (ctx.from!.id !== config.TELEGRAM_ADMIN_USER_ID) return;
     await ctx.answerCallbackQuery();
 
-    const seasonId = Number(ctx.match![1]);
+    const challengeId = Number(ctx.match![1]);
     const dayNumber = Number(ctx.match![2]);
-    const { getSeasonQueueForDay, clearSeasonSlot } = await import('./db');
-    const { SEASON_DAY_MAP } = await import('./shared');
+    const { getWeekSlotForDay, clearWeekSlot } = await import('./db');
+    const { DAY_CATEGORY_MAP } = await import('./shared');
     const { runApprovalFlow } = await import('./approval');
     const { tomorrowMsk } = await import('./dates');
 
-    const slot = getSeasonQueueForDay(seasonId, dayNumber);
+    const slot = getWeekSlotForDay(challengeId, dayNumber);
     if (!slot) return;
 
     // If slot is queued, clear it first (replace)
     if (slot.status === 'queued') {
-      clearSeasonSlot(seasonId, dayNumber);
+      clearWeekSlot(challengeId, dayNumber);
     }
 
     // Determine category for this day
     const dow = ((dayNumber - 1) % 7) + 1;
     const jsDow = dow === 7 ? 0 : dow;
-    const category = SEASON_DAY_MAP[jsDow];
+    const category = DAY_CATEGORY_MAP[jsDow];
     if (!category) return;
 
     const date = tomorrowMsk();
-    await runApprovalFlow(bot, date, category, { seasonId, dayNumber });
+    await runApprovalFlow(bot, date, category, { challengeId, dayNumber });
   });
 
-  // Manual season publish for today
-  bot.callbackQuery(/^season_pub:(\d+):(\d+)$/, async (ctx) => {
+  // Manual challenge publish for today
+  bot.callbackQuery(/^challenge_pub:(\d+):(\d+)$/, async (ctx) => {
     if (ctx.from!.id !== config.TELEGRAM_ADMIN_USER_ID) return;
     await ctx.answerCallbackQuery('Публикую...');
 
-    const seasonId = Number(ctx.match![1]);
+    const challengeId = Number(ctx.match![1]);
     const dayNumber = Number(ctx.match![2]);
-    const { getActiveSeason } = await import('./db');
-    const { postSeasonVideo } = await import('./poster');
+    const { getActiveChallenge } = await import('./db');
+    const { postChallengeVideo } = await import('./poster');
 
-    const season = getActiveSeason();
-    if (!season || season.id !== seasonId) {
+    const challenge = getActiveChallenge();
+    if (!challenge || challenge.id !== challengeId) {
       try { await ctx.editMessageText('Нет активного расписания.'); } catch {}
       return;
     }
 
-    const result = await postSeasonVideo(bot, season, dayNumber);
+    const result = await postChallengeVideo(bot, challenge, dayNumber);
     if (result === 'posted') {
       try { await ctx.editMessageText('✅ Опубликовано!'); } catch {}
     } else {
@@ -716,7 +716,7 @@ export function registerBotMenu(bot: Bot): void {
     }
   });
 
-  // Admin: run search for selected category (standalone, not season)
+  // Admin: run search for selected category (standalone, not challenge)
   const ugcSearchCatPattern = new RegExp(`^ugc_search_cat:(${CATEGORIES.join('|')})$`);
   bot.callbackQuery(ugcSearchCatPattern, async (ctx) => {
     if (!isAdmin(ctx.from!.id)) return;
@@ -798,7 +798,7 @@ export function registerBotMenu(bot: Bot): void {
         // Admin: back to rubric
         saveUgcState(userId, 'waiting_rubric', subId);
         const rubricKb = new InlineKeyboard()
-          .text('📅 Сезон', `ugc_rubric:${subId}:season`)
+          .text('📅 Челлендж', `ugc_rubric:${subId}:challenge`)
           .text('👤 От участника', `ugc_rubric:${subId}:ugc`)
           .row()
           .text('✏️ Своя рубрика', `ugc_rubric:${subId}:custom`)
@@ -1084,7 +1084,7 @@ export function registerBotMenu(bot: Bot): void {
       // Admin: rubric selection before title
       saveUgcState(userId, 'waiting_rubric', subId);
       const rubricKb = new InlineKeyboard()
-        .text('📅 Сезон', `ugc_rubric:${subId}:season`)
+        .text('📅 Челлендж', `ugc_rubric:${subId}:challenge`)
         .text('👤 От участника', `ugc_rubric:${subId}:ugc`)
         .row()
         .text('✏️ Своя рубрика', `ugc_rubric:${subId}:custom`)
@@ -1110,7 +1110,7 @@ export function registerBotMenu(bot: Bot): void {
   });
 
   // --- UGC rubric callback (admin only) ---
-  bot.callbackQuery(/^ugc_rubric:(\d+):(season|ugc|custom)$/, async (ctx) => {
+  bot.callbackQuery(/^ugc_rubric:(\d+):(challenge|ugc|custom)$/, async (ctx) => {
     const subId = parseInt(ctx.match[1]);
     const rubricType = ctx.match[2];
     const userId = ctx.from!.id;
@@ -1136,7 +1136,7 @@ export function registerBotMenu(bot: Bot): void {
     }
 
     // Predefined rubrics
-    const rubricLabel = rubricType === 'season' ? null : 'Тренировка от участника';
+    const rubricLabel = rubricType === 'challenge' ? null : 'Тренировка от участника';
     updateUgcSubmission(subId, { rubric: rubricLabel });
     saveUgcState(userId, 'waiting_title', subId);
 
@@ -1245,7 +1245,7 @@ export function registerBotMenu(bot: Bot): void {
           }
         }
 
-        // Rubric: custom text, default "Тренировка от участника", or omit for season
+        // Rubric: custom text, default "Тренировка от участника", or omit for challenge
         const rubricLine = sub.rubric ? `*${escV2(sub.rubric)}*` : null;
         const caption = [
           ...(rubricLine ? [rubricLine, ''] : []),

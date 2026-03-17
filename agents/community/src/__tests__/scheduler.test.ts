@@ -109,7 +109,7 @@ describe('scheduler: startScheduler registers cron jobs', () => {
     startScheduler(bot);
 
     // The scheduler registers:
-    // 1. Season auto-publish (config.CRON_SEASON_PUBLISH)
+    // 1. Challenge auto-publish (config.CRON_CHALLENGE_PUBLISH)
     // 2. Daily report (55 23 * * *)
     // 3. Daily analytics (config.CRON_ANALYTICS_DAILY)
     // 4. Weekly analytics (config.CRON_ANALYTICS_WEEKLY)
@@ -340,7 +340,7 @@ describe('scheduler: startup timeouts', () => {
     // scheduler.ts registers 3 setTimeout calls:
     // 1. cleanupOldApprovalSessions (1000ms)
     // 2. catch-up analytics (3000ms)
-    // 3. catch-up season publish (5000ms)
+    // 3. catch-up challenge publish (5000ms)
     const newTimeouts = afterCount - beforeCount;
     expect(newTimeouts).toBeGreaterThanOrEqual(3);
   });

@@ -82,7 +82,6 @@ describe('index.ts module smoke tests', () => {
     expect(shared.CATEGORY_EMOJI).toBeDefined();
     expect(shared.DIFFICULTY_RU).toBeDefined();
     expect(typeof shared.escV2).toBe('function');
-    expect(typeof shared.seasonHeader).toBe('function');
   });
 
   it('scheduler module loads without side effects', async () => {
@@ -93,7 +92,7 @@ describe('index.ts module smoke tests', () => {
   it('poster module loads without throwing', async () => {
     const poster = await import('../poster');
     expect(typeof poster.postVideoToChannel).toBe('function');
-    expect(typeof poster.postSeasonVideo).toBe('function');
+    expect(typeof poster.postChallengeVideo).toBe('function');
   });
 
   it('approval module loads without throwing', async () => {

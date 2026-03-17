@@ -22,8 +22,8 @@ const ConfigSchema = z.object({
   CRON_STRATEGIST: z.string().default('30 12 * * *'),           // 12:30 MSK — daily strategist run
   STRATEGIST_API_KEY: z.string().optional(),                     // separate key for /packet endpoint
   GITHUB_TOKEN: z.string().optional(),                            // GitHub PAT for backlog updates
-  // Season auto-publish
-  CRON_SEASON_PUBLISH: z.string().default('0 8 * * *'),   // 08:00 MSK (timezone: Europe/Moscow)
+  // Challenge auto-publish
+  CRON_CHALLENGE_PUBLISH: z.string().default('0 8 * * *'),   // 08:00 MSK (timezone: Europe/Moscow)
   // Video search scoring weights (0-1, must sum to 1)
   SCORE_BRAND_WEIGHT: z.string().default('0.50').transform(Number),
   SCORE_VIEW_WEIGHT: z.string().default('0.35').transform(Number),

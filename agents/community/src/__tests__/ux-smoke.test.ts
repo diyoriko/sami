@@ -158,7 +158,7 @@ describe('UX smoke: admin rubric selection', () => {
 
   it('rubric picker with 3 options', () => {
     expect(botMenuSource).toContain('ugc_rubric:');
-    expect(botMenuSource).toContain('Сезон');
+    expect(botMenuSource).toContain('Челлендж');
     expect(botMenuSource).toContain('От участника');
     expect(botMenuSource).toContain('Своя рубрика');
   });

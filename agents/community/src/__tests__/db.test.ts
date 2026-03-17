@@ -197,7 +197,7 @@ describe('poll results', () => {
     expect(results[0].total_voters).toBe(15);
   });
 
-  it('getPollResults without season returns recent polls', async () => {
+  it('getPollResults without challenge returns recent polls', async () => {
     const db = await import('../db');
 
     db.upsertPollResult('poll-2', 'Вторая неделя Сезона 1', 8, [
@@ -227,7 +227,7 @@ describe('UGC rubric field', () => {
     sub = db.getUgcSubmission(subId);
     expect(sub!.rubric).toBe('Утренний ритуал');
 
-    // Update to null (season rubric)
+    // Update to null (challenge rubric)
     db.updateUgcSubmission(subId, { rubric: null });
     sub = db.getUgcSubmission(subId);
     expect(sub!.rubric).toBeNull();
@@ -554,25 +554,16 @@ describe('shared constants', () => {
     expect(escapeMarkdown('*bold*')).toBe('\\*bold\\*');
   });
 
-  it('SEASON_DAY_MAP covers all 7 days of the week', async () => {
-    const { SEASON_DAY_MAP, CATEGORIES } = await import('../shared');
+  it('DAY_CATEGORY_MAP covers all 7 days of the week', async () => {
+    const { DAY_CATEGORY_MAP, CATEGORIES } = await import('../shared');
     const days = [0, 1, 2, 3, 4, 5, 6];
     for (const d of days) {
-      expect(SEASON_DAY_MAP[d]).toBeDefined();
-      expect(CATEGORIES).toContain(SEASON_DAY_MAP[d]);
+      expect(DAY_CATEGORY_MAP[d]).toBeDefined();
+      expect(CATEGORIES).toContain(DAY_CATEGORY_MAP[d]);
     }
     // All 7 categories used (no duplicates)
-    const cats = new Set(days.map(d => SEASON_DAY_MAP[d]));
+    const cats = new Set(days.map(d => DAY_CATEGORY_MAP[d]));
     expect(cats.size).toBe(7);
-  });
-
-  it('seasonHeader formats correctly', async () => {
-    const { seasonHeader } = await import('../shared');
-    const h = seasonHeader(1, 3, 'mobility');
-    expect(h).toContain('Сезон 1');
-    expect(h).toContain('День 3');
-    expect(h).toContain('🤸');
-    expect(h).toContain('Мобильность');
   });
 
 });
@@ -592,130 +583,130 @@ describe('getPostByMessageId', () => {
   });
 });
 
-// ─── SEASON TESTS ───────────────────────────────────────────────────────────
+// ─── CHALLENGE TESTS ────────────────────────────────────────────────────────
 
-describe('seasons: createSeason + getters', () => {
-  it('creates a season and retrieves it', async () => {
+describe('challenges: createChallenge + getters', () => {
+  it('creates a challenge and retrieves it', async () => {
     const db = await import('../db');
-    const id = db.createSeason(100, '2026-04-06', '2026-04-26');
+    const id = db.createChallenge(100, '2026-04-06', '2026-04-26');
     expect(id).toBeGreaterThan(0);
 
-    const latest = db.getLatestSeason();
+    const latest = db.getLatestChallenge();
     expect(latest).not.toBeNull();
     expect(latest!.number).toBe(100);
     expect(latest!.status).toBe('upcoming');
   });
 
-  it('activateSeason changes status to active', async () => {
+  it('activateChallenge changes status to active', async () => {
     const db = await import('../db');
-    const id = db.createSeason(101, '2026-05-04', '2026-05-24');
-    db.activateSeason(id);
-    const season = db.getActiveSeason();
-    expect(season).not.toBeNull();
-    expect(season!.id).toBe(id);
-    expect(season!.status).toBe('active');
+    const id = db.createChallenge(101, '2026-05-04', '2026-05-24');
+    db.activateChallenge(id);
+    const challenge = db.getActiveChallenge();
+    expect(challenge).not.toBeNull();
+    expect(challenge!.id).toBe(id);
+    expect(challenge!.status).toBe('active');
     // cleanup: complete it so it doesn't interfere with other tests
-    db.completeSeason(id);
+    db.completeChallenge(id);
   });
 
-  it('completeSeason changes status to completed', async () => {
+  it('completeChallenge changes status to completed', async () => {
     const db = await import('../db');
-    const id = db.createSeason(102, '2026-06-01', '2026-06-21');
-    db.activateSeason(id);
-    db.completeSeason(id);
-    const active = db.getActiveSeason();
+    const id = db.createChallenge(102, '2026-06-01', '2026-06-21');
+    db.activateChallenge(id);
+    db.completeChallenge(id);
+    const active = db.getActiveChallenge();
     // Should not be active anymore (unless another test left one active)
     if (active) expect(active.id).not.toBe(id);
   });
 });
 
-describe('seasons: ensureActiveSeason', () => {
-  it('creates season 1 when no seasons exist', async () => {
+describe('challenges: ensureActiveChallenge', () => {
+  it('creates challenge 1 when no challenges exist', async () => {
     const db = await import('../db');
-    // Clean up all test seasons to test from-scratch creation
-    db.getDb().prepare(`DELETE FROM season_queue`).run();
-    db.getDb().prepare(`DELETE FROM seasons`).run();
+    // Clean up all test challenges to test from-scratch creation
+    db.getDb().prepare(`DELETE FROM weekly_schedule`).run();
+    db.getDb().prepare(`DELETE FROM challenges`).run();
 
-    const season = db.ensureActiveSeason('2026-04-06', '2026-04-06');
-    expect(season).not.toBeNull();
-    expect(season.number).toBe(1);
+    const challenge = db.ensureActiveChallenge('2026-04-06', '2026-04-06');
+    expect(challenge).not.toBeNull();
+    expect(challenge.number).toBe(1);
     // nextMonday = today = 2026-04-06, so it should activate immediately
-    expect(season.status).toBe('active');
-    expect(season.start_date).toBe('2026-04-06');
+    expect(challenge.status).toBe('active');
+    expect(challenge.start_date).toBe('2026-04-06');
   });
 
-  it('is idempotent — returns same season on second call', async () => {
+  it('is idempotent — returns same challenge on second call', async () => {
     const db = await import('../db');
-    const s1 = db.ensureActiveSeason('2026-04-06', '2026-04-13');
-    const s2 = db.ensureActiveSeason('2026-04-06', '2026-04-13');
+    const s1 = db.ensureActiveChallenge('2026-04-06', '2026-04-13');
+    const s2 = db.ensureActiveChallenge('2026-04-06', '2026-04-13');
     expect(s1.id).toBe(s2.id);
     expect(s1.number).toBe(s2.number);
   });
 
-  it('creates upcoming season when nextMonday is in the future', async () => {
+  it('creates upcoming challenge when nextMonday is in the future', async () => {
     const db = await import('../db');
-    db.getDb().prepare(`DELETE FROM season_queue`).run();
-    db.getDb().prepare(`DELETE FROM seasons`).run();
+    db.getDb().prepare(`DELETE FROM weekly_schedule`).run();
+    db.getDb().prepare(`DELETE FROM challenges`).run();
 
     // today=Wed, nextMonday=next week
-    const season = db.ensureActiveSeason('2026-04-08', '2026-04-13');
-    expect(season.number).toBe(1);
-    expect(season.start_date).toBe('2026-04-13');
-    expect(season.status).toBe('upcoming');
+    const challenge = db.ensureActiveChallenge('2026-04-08', '2026-04-13');
+    expect(challenge.number).toBe(1);
+    expect(challenge.start_date).toBe('2026-04-13');
+    expect(challenge.status).toBe('upcoming');
   });
 });
 
-describe('seasons: getSeasonDay + getSeasonWeekNumber', () => {
+describe('challenges: getChallengeDay + getChallengeWeekNumber', () => {
   it('day 1 on start date', async () => {
-    const { getSeasonDay } = await import('../db');
-    expect(getSeasonDay('2026-04-06', '2026-04-06')).toBe(1);
+    const { getChallengeDay } = await import('../db');
+    expect(getChallengeDay('2026-04-06', '2026-04-06')).toBe(1);
   });
 
   it('day 7 on day+6', async () => {
-    const { getSeasonDay } = await import('../db');
-    expect(getSeasonDay('2026-04-06', '2026-04-12')).toBe(7);
+    const { getChallengeDay } = await import('../db');
+    expect(getChallengeDay('2026-04-06', '2026-04-12')).toBe(7);
   });
 
-  it('day 21 on last day of season', async () => {
-    const { getSeasonDay } = await import('../db');
-    expect(getSeasonDay('2026-04-06', '2026-04-26')).toBe(21);
+  it('day 21 on last day of challenge', async () => {
+    const { getChallengeDay } = await import('../db');
+    expect(getChallengeDay('2026-04-06', '2026-04-26')).toBe(21);
   });
 
   it('week 1 for days 1-7', async () => {
-    const { getSeasonWeekNumber } = await import('../db');
-    expect(getSeasonWeekNumber(1)).toBe(1);
-    expect(getSeasonWeekNumber(7)).toBe(1);
+    const { getChallengeWeekNumber } = await import('../db');
+    expect(getChallengeWeekNumber(1)).toBe(1);
+    expect(getChallengeWeekNumber(7)).toBe(1);
   });
 
   it('week 2 for days 8-14', async () => {
-    const { getSeasonWeekNumber } = await import('../db');
-    expect(getSeasonWeekNumber(8)).toBe(2);
-    expect(getSeasonWeekNumber(14)).toBe(2);
+    const { getChallengeWeekNumber } = await import('../db');
+    expect(getChallengeWeekNumber(8)).toBe(2);
+    expect(getChallengeWeekNumber(14)).toBe(2);
   });
 
   it('week 3 for days 15-21', async () => {
-    const { getSeasonWeekNumber } = await import('../db');
-    expect(getSeasonWeekNumber(15)).toBe(3);
-    expect(getSeasonWeekNumber(21)).toBe(3);
+    const { getChallengeWeekNumber } = await import('../db');
+    expect(getChallengeWeekNumber(15)).toBe(3);
+    expect(getChallengeWeekNumber(21)).toBe(3);
   });
 });
 
-describe('seasons: queue management', () => {
-  let testSeasonId: number;
+describe('challenges: weekly schedule management', () => {
+  let testChallengeId: number;
   let testVideoId: number;
 
   beforeAll(async () => {
     const db = await import('../db');
     // Clean slate
-    db.getDb().prepare(`DELETE FROM season_queue`).run();
-    db.getDb().prepare(`DELETE FROM seasons`).run();
+    db.getDb().prepare(`DELETE FROM weekly_schedule`).run();
+    db.getDb().prepare(`DELETE FROM challenges`).run();
 
-    testSeasonId = db.createSeason(10, '2026-05-04', '2026-05-24');
-    db.activateSeason(testSeasonId);
+    testChallengeId = db.createChallenge(10, '2026-05-04', '2026-05-24');
+    db.activateChallenge(testChallengeId);
 
     testVideoId = db.upsertVideo({
-      youtube_id: 'season-queue-test',
-      title: 'Season Queue Test',
+      youtube_id: 'schedule-test',
+      title: 'Weekly Schedule Test',
       channel_name: 'Test',
       channel_url: null,
       duration_seconds: 900,
@@ -733,10 +724,10 @@ describe('seasons: queue management', () => {
     });
   });
 
-  it('initSeasonWeekSlots creates 7 empty slots', async () => {
+  it('initWeekSlots creates 7 empty slots', async () => {
     const db = await import('../db');
-    db.initSeasonWeekSlots(testSeasonId, 1);
-    const slots = db.getSeasonWeekStatus(testSeasonId, 1);
+    db.initWeekSlots(testChallengeId, 1);
+    const slots = db.getWeekStatus(testChallengeId, 1);
     expect(slots.length).toBe(7);
     for (const s of slots) {
       expect(s.status).toBe('empty');
@@ -746,27 +737,27 @@ describe('seasons: queue management', () => {
     expect(slots.map(s => s.day_number)).toEqual([1, 2, 3, 4, 5, 6, 7]);
   });
 
-  it('initSeasonWeekSlots is idempotent', async () => {
+  it('initWeekSlots is idempotent', async () => {
     const db = await import('../db');
-    db.initSeasonWeekSlots(testSeasonId, 1);
-    db.initSeasonWeekSlots(testSeasonId, 1); // second call
-    const slots = db.getSeasonWeekStatus(testSeasonId, 1);
+    db.initWeekSlots(testChallengeId, 1);
+    db.initWeekSlots(testChallengeId, 1); // second call
+    const slots = db.getWeekStatus(testChallengeId, 1);
     expect(slots.length).toBe(7); // still 7, not 14
   });
 
   it('week 2 slots start at day 8', async () => {
     const db = await import('../db');
-    db.initSeasonWeekSlots(testSeasonId, 2);
-    const slots = db.getSeasonWeekStatus(testSeasonId, 2);
+    db.initWeekSlots(testChallengeId, 2);
+    const slots = db.getWeekStatus(testChallengeId, 2);
     expect(slots.length).toBe(7);
     expect(slots[0].day_number).toBe(8);
     expect(slots[6].day_number).toBe(14);
   });
 
-  it('setSeasonQueueVideo fills a slot', async () => {
+  it('setWeekSlotVideo fills a slot', async () => {
     const db = await import('../db');
-    db.setSeasonQueueVideo(testSeasonId, 1, testVideoId);
-    const slot = db.getSeasonQueueForDay(testSeasonId, 1);
+    db.setWeekSlotVideo(testChallengeId, 1, testVideoId);
+    const slot = db.getWeekSlotForDay(testChallengeId, 1);
     expect(slot).not.toBeNull();
     expect(slot!.video_id).toBe(testVideoId);
     expect(slot!.status).toBe('queued');
@@ -775,40 +766,40 @@ describe('seasons: queue management', () => {
   it('getNextEmptySlot skips filled slots', async () => {
     const db = await import('../db');
     // Day 1 is already queued from previous test
-    const next = db.getNextEmptySlot(testSeasonId, 1);
+    const next = db.getNextEmptySlot(testChallengeId, 1);
     expect(next).not.toBeNull();
     expect(next!.day_number).toBe(2); // first empty after day 1
   });
 
-  it('markSeasonQueuePosted changes status', async () => {
+  it('markWeekSlotPosted changes status', async () => {
     const db = await import('../db');
-    db.markSeasonQueuePosted(testSeasonId, 1);
-    const slot = db.getSeasonQueueForDay(testSeasonId, 1);
+    db.markWeekSlotPosted(testChallengeId, 1);
+    const slot = db.getWeekSlotForDay(testChallengeId, 1);
     expect(slot).not.toBeNull();
     expect(slot!.status).toBe('posted');
   });
 
-  it('getSeasonQueueForDay returns falsy for non-existent day', async () => {
+  it('getWeekSlotForDay returns falsy for non-existent day', async () => {
     const db = await import('../db');
-    const slot = db.getSeasonQueueForDay(testSeasonId, 99);
+    const slot = db.getWeekSlotForDay(testChallengeId, 99);
     expect(slot).toBeFalsy();
   });
 
-  it('getSeasonWeekStatus joins video title', async () => {
+  it('getWeekStatus joins video title', async () => {
     const db = await import('../db');
-    const slots = db.getSeasonWeekStatus(testSeasonId, 1);
+    const slots = db.getWeekStatus(testChallengeId, 1);
     const filledSlot = slots.find(s => s.day_number === 1);
     expect(filledSlot).toBeDefined();
-    expect(filledSlot!.title).toBe('Season Queue Test');
+    expect(filledSlot!.title).toBe('Weekly Schedule Test');
   });
 
   it('getNextEmptySlot returns null when all filled', async () => {
     const db = await import('../db');
     // Fill all remaining slots in week 1
     for (let d = 2; d <= 7; d++) {
-      db.setSeasonQueueVideo(testSeasonId, d, testVideoId);
+      db.setWeekSlotVideo(testChallengeId, d, testVideoId);
     }
-    const next = db.getNextEmptySlot(testSeasonId, 1);
+    const next = db.getNextEmptySlot(testChallengeId, 1);
     expect(next).toBeFalsy();
   });
 });
