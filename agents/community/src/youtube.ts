@@ -291,6 +291,41 @@ export async function fetchYouTubeVideoInfo(videoId: string): Promise<{ channelT
   }
 }
 
+/** Fetch YouTube video stats (views, likes, subscribers) for Sami Score computation */
+export async function fetchYouTubeVideoStats(videoId: string): Promise<{
+  viewCount: number; likeRatio: number; channelSubscribers: number;
+} | null> {
+  const config = getConfig();
+  try {
+    const vUrl = new URL('https://www.googleapis.com/youtube/v3/videos');
+    vUrl.searchParams.set('part', 'snippet,statistics');
+    vUrl.searchParams.set('id', videoId);
+    vUrl.searchParams.set('key', config.YOUTUBE_API_KEY);
+    const vData = await fetchJson<{ items: Array<YouTubeSearchItem & YouTubeVideoDetail & { snippet: { channelId: string } }> }>(vUrl.toString());
+    if (vData.items.length === 0) return null;
+    const item = vData.items[0];
+    const viewCount = parseInt(item.statistics.viewCount ?? '0', 10);
+    const likeCount = parseInt(item.statistics.likeCount ?? '0', 10);
+    const likeRatio = viewCount > 0 ? Math.min(likeCount / viewCount, 1) : 0;
+
+    let channelSubscribers = 0;
+    const channelId = item.snippet.channelId;
+    if (channelId) {
+      const chUrl = new URL('https://www.googleapis.com/youtube/v3/channels');
+      chUrl.searchParams.set('part', 'statistics');
+      chUrl.searchParams.set('id', channelId);
+      chUrl.searchParams.set('key', config.YOUTUBE_API_KEY);
+      const chData = await fetchJson<{ items: YouTubeChannelDetail[] }>(chUrl.toString());
+      if (chData.items.length > 0) {
+        channelSubscribers = parseInt(chData.items[0].statistics.subscriberCount ?? '0', 10);
+      }
+    }
+    return { viewCount, likeRatio, channelSubscribers };
+  } catch {
+    return null;
+  }
+}
+
 // ─── EQUIPMENT DETECTION ─────────────────────────────────────────────────────
 
 export function detectEquipment(title: string, description: string): string[] {

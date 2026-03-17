@@ -1193,29 +1193,23 @@ export function registerBotMenu(bot: Bot): void {
         const isTgFileId = sub.video_url.startsWith('tg:');
         const isYouTubeUrl = /youtube\.com|youtu\.be/.test(sub.video_url);
 
-        // For YouTube UGC: fetch real channel name and show YouTube link
+        // For YouTube UGC: fetch real channel name, stats, and show YouTube link
         let authorLine: string;
+        let ytStats: { viewCount: number; likeRatio: number; channelSubscribers: number } | null = null;
         if (isYouTubeUrl && sub.youtube_id) {
-          const { fetchYouTubeVideoInfo } = await import('./youtube');
+          const { fetchYouTubeVideoInfo, fetchYouTubeVideoStats } = await import('./youtube');
           const { formatChannelName } = await import('./translate');
-          const info = await fetchYouTubeVideoInfo(sub.youtube_id);
+          const [info, stats] = await Promise.all([
+            fetchYouTubeVideoInfo(sub.youtube_id),
+            fetchYouTubeVideoStats(sub.youtube_id),
+          ]);
+          ytStats = stats;
           const channelName = info ? await formatChannelName(info.channelTitle) : escV2(submitterDisplay);
           const safeUrl = sub.video_url.replace(/[)\\]/g, '\\$&');
           authorLine = `Автор: ${channelName}, 📎 [YouTube](${safeUrl})\nПредложиль: ${escV2(submitterDisplay)}`;
         } else {
           authorLine = `Автор: ${escV2(submitterDisplay)}`;
         }
-
-        // Rubric: custom text, default "Тренировка от участника", or omit for season
-        const rubricLine = sub.rubric ? `*${escV2(sub.rubric)}*` : null;
-        const caption = [
-          ...(rubricLine ? [rubricLine, ''] : []),
-          `*${title}*`,
-          '',
-          ...tagLines,
-          '',
-          authorLine,
-        ].join('\n');
 
         // Create a video record in DB for tracking (completions, favorites)
         const syntheticYoutubeId = isTgFileId
@@ -1234,11 +1228,34 @@ export function registerBotMenu(bot: Bot): void {
           muscles: sub.muscles ?? null,
           thumbnail_url: null,
           video_url: sub.video_url,
-          view_count: 0,
+          view_count: ytStats?.viewCount ?? 0,
           rating: 0,
-          like_ratio: 0,
-          channel_subscribers: 0,
+          like_ratio: ytStats?.likeRatio ?? 0,
+          channel_subscribers: ytStats?.channelSubscribers ?? 0,
         });
+
+        // Compute Sami Score for YouTube UGC (has real metrics)
+        let samiScoreLine: string | null = null;
+        if (ytStats) {
+          const { updateVideoRating } = await import('./db');
+          const rating = updateVideoRating(videoId);
+          const scorePercent = rating > 0 ? Math.round(rating * 10) : 0;
+          if (scorePercent > 0) {
+            samiScoreLine = `\`Sami Score: ${scorePercent}% (тон, формат, просмотры, лайки, длительность)\``;
+          }
+        }
+
+        // Rubric: custom text, default "Тренировка от участника", or omit for season
+        const rubricLine = sub.rubric ? `*${escV2(sub.rubric)}*` : null;
+        const caption = [
+          ...(rubricLine ? [rubricLine, ''] : []),
+          `*${title}*`,
+          '',
+          ...tagLines,
+          ...(samiScoreLine ? [samiScoreLine] : []),
+          '',
+          authorLine,
+        ].join('\n');
 
         let channelMsg: { message_id: number };
 
