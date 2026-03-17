@@ -14,7 +14,7 @@ import { startScheduler } from './scheduler';
 import { upgradeYtDlp, logYtDlpStatus, initCookies, setAdminNotifier, runDiagnostic } from './downloader';
 import { migrateStrategist, savePacketFromExternal, registerStrategistCallbacks, sendActionToAdmin, getActionById } from './strategist';
 import { registerRubricHandlers } from './rubrics';
-import { recordDeploy, getLatestDeploy, getLatestPost, listImplTasks, getNextImplTask, getImplTask, updateImplTaskStatus, createImplTask } from './db';
+import { recordDeploy, getLatestDeploy, getLatestPost, listImplTasks, getNextImplTask, getImplTask, updateImplTaskStatus, createImplTask, saveProposal, getApprovedProposals, deleteProposals } from './db';
 import { isYtDlpAvailable as isYtDlpAvailableCheck } from './downloader';
 import type { ImplTaskStatus, ImplTaskSource } from './db';
 
@@ -551,6 +551,57 @@ async function main(): Promise<void> {
       return;
     }
 
+    // --- Proposal endpoints (strategist → admin approval → backlog) ---
+
+    if (parsedUrl.pathname === '/proposal' && req.method === 'POST') {
+      const authHeader = req.headers['x-admin-token'];
+      const expectedToken = config.STRATEGIST_API_KEY ?? config.TELEGRAM_BOT_TOKEN;
+      if (authHeader !== expectedToken) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'unauthorized' }));
+        return;
+      }
+
+      let body = '';
+      req.on('data', (chunk: string) => { body += chunk; });
+      req.on('end', () => {
+        try {
+          const payload = JSON.parse(body) as { task_text: string };
+          if (!payload.task_text) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'task_text is required' }));
+            return;
+          }
+          const id = saveProposal(payload.task_text);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: 'ok', id }));
+        } catch (err) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'invalid JSON' }));
+        }
+      });
+      return;
+    }
+
+    if (parsedUrl.pathname === '/proposals' && req.method === 'GET') {
+      const authHeader = req.headers['x-admin-token'];
+      const expectedToken = config.STRATEGIST_API_KEY ?? config.TELEGRAM_BOT_TOKEN;
+      if (authHeader !== expectedToken) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'unauthorized' }));
+        return;
+      }
+
+      const approved = getApprovedProposals();
+      // Delete fetched proposals so they are not re-applied
+      if (approved.length > 0) {
+        deleteProposals(approved.map(p => p.id));
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ proposals: approved.map(p => ({ id: p.id, taskText: p.task_text })) }));
+      return;
+    }
+
     const filePath = reportFiles[req.url ?? ''];
     if (filePath) {
       res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
@@ -565,7 +616,7 @@ async function main(): Promise<void> {
     }
   });
   httpServer.listen(port, () => {
-    createLogger('http').info(`report server on :${port} — /report/community /report/analytics /packet /health /impl/*`);
+    createLogger('http').info(`report server on :${port} — /report/community /report/analytics /packet /health /impl/* /proposal /proposals`);
   });
 
   // Graceful shutdown (Railway sends SIGTERM on redeploy)

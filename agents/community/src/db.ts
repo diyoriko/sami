@@ -513,6 +513,16 @@ function migrate(db: Database.Database): void {
     );
     CREATE INDEX IF NOT EXISTS idx_poll_season ON poll_results(season_number);
   `);
+
+  // Proposals — strategist backlog proposals with admin approval via Telegram buttons
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS proposals (
+      id INTEGER PRIMARY KEY,
+      task_text TEXT NOT NULL,
+      status TEXT DEFAULT 'pending',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
 }
 
 // --- Captcha state (persistent) ---
@@ -2067,6 +2077,22 @@ export function getNextEmptySlot(seasonId: number, weekNumber: 1 | 2 | 3): Seaso
   `).get(seasonId, startDay, endDay) as SeasonQueueRow | null;
 }
 
+// ─── PROPOSALS (strategist → admin approval → backlog) ──────────────────────
+
+export function saveProposal(taskText: string): number {
+  return Number(getDb().prepare(`INSERT INTO proposals (task_text, status) VALUES (?, 'pending')`).run(taskText).lastInsertRowid);
+}
+export function getApprovedProposals(): { id: number; task_text: string }[] {
+  return getDb().prepare(`SELECT id, task_text FROM proposals WHERE status = 'approved'`).all() as any[];
+}
+export function updateProposalStatus(id: number, status: 'approved' | 'rejected'): void {
+  getDb().prepare(`UPDATE proposals SET status = ? WHERE id = ?`).run(status, id);
+}
+export function deleteProposals(ids: number[]): void {
+  if (!ids.length) return;
+  getDb().prepare(`DELETE FROM proposals WHERE id IN (${ids.map(() => '?').join(',')})`).run(...ids);
+}
+
 // ─── WIPE ALL DATA ──────────────────────────────────────────────────────────
 
 /** Delete all user-generated data. Keeps schema, config, stop_phrases. */
@@ -2080,7 +2106,7 @@ export function wipeAllData(): { tables: string[]; deleted: Record<string, numbe
     'pending_captchas', 'moderation_log', 'video_rejections',
     'channel_stats', 'daily_stats', 'deploy_history',
     'strategist_packets', 'strategist_actions',
-    'impl_tasks', 'rubric_rituals', 'rubric_ritual_participants',
+    'impl_tasks', 'rubric_rituals', 'rubric_ritual_participants', 'proposals',
   ];
   const deleted: Record<string, number> = {};
   db.transaction(() => {
