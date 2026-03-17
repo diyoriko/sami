@@ -1234,12 +1234,12 @@ export function registerBotMenu(bot: Bot): void {
           channel_subscribers: ytStats?.channelSubscribers ?? 0,
         });
 
-        // Compute Sami Score for YouTube UGC (has real metrics)
+        // Sami Score for YouTube UGC (has real metrics, rating auto-computed by upsertVideo)
         let samiScoreLine: string | null = null;
         if (ytStats) {
-          const { updateVideoRating } = await import('./db');
-          const rating = updateVideoRating(videoId);
-          const scorePercent = rating > 0 ? Math.round(rating * 10) : 0;
+          const { getVideoById } = await import('./db');
+          const video = getVideoById(videoId);
+          const scorePercent = video && video.rating > 0 ? Math.round(video.rating * 10) : 0;
           if (scorePercent > 0) {
             samiScoreLine = `\`Sami Score: ${scorePercent}% (тон, формат, просмотры, лайки, длительность)\``;
           }

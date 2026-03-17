@@ -633,6 +633,8 @@ export function upsertVideo(v: Omit<VideoRow, 'id'> & { search_query?: string })
     RETURNING id
   `);
   const row = stmt.get({ search_query: null, ...v }) as { id: number };
+  // Auto-compute rating from YouTube metrics (views, likes, subscribers)
+  updateVideoRating(row.id);
   return row.id;
 }
 
