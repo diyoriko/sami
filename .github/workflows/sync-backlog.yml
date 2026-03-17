@@ -1,0 +1,33 @@
+name: Sync Backlog to Dashboard
+
+on:
+  push:
+    branches: [main]
+    paths: [COMMUNITY_TASKS.md]
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: diyoriko/architect
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Fetch latest backlog
+        run: |
+          curl -sf -H "Authorization: token ${{ secrets.GH_PAT }}" \
+            "https://raw.githubusercontent.com/diyoriko/sami/main/COMMUNITY_TASKS.md" \
+            -o sami-BACKLOG.md
+
+      - name: Commit and push
+        run: |
+          git config user.name "SAMI Bot"
+          git config user.email "noreply@sami.bot"
+          git add sami-BACKLOG.md
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "sync: sami backlog updated"
+            git push
+          fi
