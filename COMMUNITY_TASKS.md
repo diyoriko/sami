@@ -1,6 +1,6 @@
 # COMMUNITY_TASKS.md — Бэклог Sami Community
 
-Последнее обновление: 17 марта 2026
+Последнее обновление: 17 марта 2026, 21:40
 
 ---
 
@@ -474,13 +474,13 @@
 
 > Источник: 5 глубинных ревью (код, UX, тесты, архитектура, стратегия) от 17.03.2026
 
-### P0: Security (code review, 17.03) — блокирует деплой
+### P0: Security (code review, 17.03) — DONE
 
-- [ ] **Path traversal в `/upload-cookies`** — endpoint пишет body в `process.env.YT_COOKIES_PATH` без валидации. Fix: проверить что путь начинается с `/data/`. Файл: `index.ts:421-423`
-- [ ] **HTTP body size limit** — POST `/packet` и `/upload-cookies` не ограничивают размер body. DoS через большой payload. Fix: `if (body.length > 1MB) → 413`. Файл: `index.ts:382-386`
-- [ ] **Валидация payload в `/packet`** — `payload.packet` и `payload.report` не проверяются zod-схемой. Fix: добавить zod validation. Файл: `index.ts:386-387`
-- [ ] **Info disclosure: путь cookies в response** — `/upload-cookies` возвращает `path: cookiesPath`. Fix: убрать из response. Файл: `index.ts:427`
-- [ ] **Race condition: `newMembersToday`** — глобальный счётчик в памяти, не атомарный. Fix: перенести в `daily_stats` таблицу с `UPDATE SET new_members = new_members + 1`. Файл: `scheduler.ts:13-17`
+- [x] **Path traversal в `/upload-cookies`** — `path.resolve()` + guard: путь начинается с `/data/` или project dir. Файл: `index.ts`
+- [x] **HTTP body size limit** — все POST endpoints: `/packet` 5MB, `/upload-cookies` 1MB, `/impl/result` 1MB, `/impl/create` 1MB, `/proposal` 512KB. 413 при превышении. Файл: `index.ts`
+- [x] **Валидация payload в `/packet`** — проверяет `packet` и `report` как строки перед `savePacketFromExternal`. Файл: `index.ts`
+- [x] **Info disclosure: путь cookies в response** — убран `path` из response + generic error message. Файл: `index.ts`
+- [x] **Race condition: `newMembersToday`** — date-aware counter: auto-reset при смене дня (не зависит от cron 23:55). Файл: `scheduler.ts`
 
 ### P0: «Неделя = текущая» + «Дашборд» (готово к деплою)
 
@@ -491,6 +491,7 @@
 - [x] **scheduler.ts** — все `nextMondayMsk()` → `thisMondayMsk()` (4 места)
 - [x] **«📊 Статус» + «📈 Аналитика» → «📊 Дашборд»** — единое сообщение: подписчики+дельта, посты, выполнения, расписание, retention, cumulative, стратег+аптайм
 - [x] **Тесты обновлены** — 268/268 pass, typecheck clean
+- [x] **Deploy report footer** — обновлён: «📊 Статус · 📈 Аналитика» → «📊 Дашборд · 📅 Неделя»
 
 ### P1: Security (code review, 17.03)
 
