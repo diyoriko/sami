@@ -1948,27 +1948,37 @@ export function completeChallenge(challengeId: number): void {
 }
 
 /**
- * Ensure there is an active challenge for today.
- * - If active exists, return it.
- * - If upcoming exists and today >= start_date, activate it.
- * - If nothing exists, create Challenge 1 from next Monday.
+ * Ensure there is an active challenge covering today.
+ * - If active challenge covers today → return it.
+ * - If active challenge does NOT cover today → complete it, create new one.
+ * - If upcoming.start_date === weekStart → activate or return it.
+ * - Otherwise → create a new challenge for weekStart.
  */
-export function ensureActiveChallenge(today: string, nextMonday: string): ChallengeRow {
+export function ensureActiveChallenge(today: string, weekStart: string): ChallengeRow {
   const active = getActiveChallenge();
-  if (active) return active;
+  if (active) {
+    // Check if active challenge still covers today
+    if (active.start_date <= today && active.end_date >= today) {
+      return active;
+    }
+    // Active challenge no longer covers today — complete it
+    completeChallenge(active.id);
+  }
 
   const upcoming = getUpcomingChallenge();
-  if (upcoming && upcoming.start_date <= today) {
-    activateChallenge(upcoming.id);
-    return { ...upcoming, status: 'active' };
+  if (upcoming && upcoming.start_date === weekStart) {
+    if (upcoming.start_date <= today) {
+      activateChallenge(upcoming.id);
+      return { ...upcoming, status: 'active' };
+    }
+    return upcoming; // not yet started
   }
-  if (upcoming) return upcoming; // not yet started
 
-  // No challenge at all — create first one
+  // Create new challenge for this week
   const latest = getLatestChallenge();
   const num = latest ? latest.number + 1 : 1;
-  const start = nextMonday;
-  const end = addDaysStr(start, 20); // 21 days: day 0..20
+  const start = weekStart;
+  const end = addDaysStr(start, 6); // 7 days: day 0..6
   const id = createChallenge(num, start, end);
   const created: ChallengeRow = { id, number: num, start_date: start, end_date: end, status: 'upcoming', created_at: '' };
   if (start <= today) {
@@ -1992,9 +2002,9 @@ export function getChallengeDay(challengeStartDate: string, today: string): numb
   return Math.round((now.getTime() - start.getTime()) / 86_400_000) + 1;
 }
 
-/** Which week of the challenge (1, 2, or 3) */
-export function getChallengeWeekNumber(challengeDay: number): 1 | 2 | 3 {
-  return Math.ceil(challengeDay / 7) as 1 | 2 | 3;
+/** Which week of the challenge — always 1 now (7-day cycles) */
+export function getChallengeWeekNumber(_challengeDay: number): 1 | 2 | 3 {
+  return 1;
 }
 
 // --- Weekly schedule ---

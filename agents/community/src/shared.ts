@@ -237,7 +237,7 @@ export const CATEGORY_QUERIES: Record<Category, string[]> = {
 
 // ─── CHALLENGES ─────────────────────────────────────────────────────────────
 
-export const CHALLENGE_DURATION = 21; // days per challenge (3 weeks)
+export const CHALLENGE_DURATION = 7; // days per challenge (1 week)
 
 /**
  * Maps JS day-of-week (0=Sun … 6=Sat) to a Category.

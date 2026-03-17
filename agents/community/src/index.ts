@@ -139,7 +139,7 @@ async function sendDeployReport(
 
   // ── Quick actions reminder ──
   lines.push('');
-  lines.push(`_Кнопки: 📅 Неделя · 📊 Статус · 📈 Аналитика_`);
+  lines.push(`_Кнопки: 📊 Дашборд · 📅 Неделя_`);
 
   await bot.api.sendMessage(
     config.TELEGRAM_ADMIN_USER_ID,
@@ -379,11 +379,26 @@ async function main(): Promise<void> {
         return;
       }
 
+      const MAX_BODY = 5 * 1024 * 1024; // 5 MB
       let body = '';
-      req.on('data', (chunk) => { body += chunk; });
+      let tooBig = false;
+      req.on('data', (chunk) => {
+        body += chunk;
+        if (body.length > MAX_BODY) { tooBig = true; req.destroy(); }
+      });
       req.on('end', async () => {
+        if (tooBig) {
+          res.writeHead(413, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'payload too large' }));
+          return;
+        }
         try {
           const payload = JSON.parse(body);
+          if (typeof payload.packet !== 'string' || typeof payload.report !== 'string') {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'packet and report must be strings' }));
+            return;
+          }
           const { packetId, actionIds } = savePacketFromExternal(payload.packet, payload.report);
 
           // Send proposed actions to admin for approval
@@ -414,20 +429,36 @@ async function main(): Promise<void> {
         return;
       }
 
+      const MAX_COOKIES = 1 * 1024 * 1024; // 1 MB
       let body = '';
-      req.on('data', (chunk: string) => { body += chunk; });
+      let tooBig = false;
+      req.on('data', (chunk: string) => {
+        body += chunk;
+        if (body.length > MAX_COOKIES) { tooBig = true; req.destroy(); }
+      });
       req.on('end', () => {
+        if (tooBig) {
+          res.writeHead(413, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'payload too large' }));
+          return;
+        }
         try {
           const cookiesPath = process.env.YT_COOKIES_PATH || '/data/cookies.txt';
-          const fs = require('fs');
-          fs.writeFileSync(cookiesPath, body, 'utf8');
+          // Path traversal guard: must be within /data/ or project dir
+          const resolved = path.resolve(cookiesPath);
+          if (!resolved.startsWith('/data/') && !resolved.startsWith(path.resolve(__dirname, '..'))) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'invalid cookies path' }));
+            return;
+          }
+          fs.writeFileSync(resolved, body, 'utf8');
           const lines = body.split('\n').length;
-          createLogger('http').info(`cookies updated: ${lines} lines written to ${cookiesPath}`);
+          createLogger('http').info(`cookies updated: ${lines} lines`);
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ status: 'ok', lines, path: cookiesPath }));
+          res.end(JSON.stringify({ status: 'ok', lines }));
         } catch (err) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: String(err) }));
+          res.end(JSON.stringify({ error: 'write failed' }));
         }
       });
       return;
@@ -461,9 +492,19 @@ async function main(): Promise<void> {
         return;
       }
 
+      const MAX_BODY = 1 * 1024 * 1024; // 1 MB
       let body = '';
-      req.on('data', (chunk: string) => { body += chunk; });
+      let tooBig = false;
+      req.on('data', (chunk: string) => {
+        body += chunk;
+        if (body.length > MAX_BODY) { tooBig = true; req.destroy(); }
+      });
       req.on('end', async () => {
+        if (tooBig) {
+          res.writeHead(413, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'payload too large' }));
+          return;
+        }
         try {
           const payload = JSON.parse(body) as {
             id: number;
@@ -525,9 +566,19 @@ async function main(): Promise<void> {
         return;
       }
 
+      const MAX_BODY = 1 * 1024 * 1024;
       let body = '';
-      req.on('data', (chunk: string) => { body += chunk; });
+      let tooBig = false;
+      req.on('data', (chunk: string) => {
+        body += chunk;
+        if (body.length > MAX_BODY) { tooBig = true; req.destroy(); }
+      });
       req.on('end', () => {
+        if (tooBig) {
+          res.writeHead(413, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'payload too large' }));
+          return;
+        }
         try {
           const payload = JSON.parse(body) as {
             title: string;
@@ -562,9 +613,19 @@ async function main(): Promise<void> {
         return;
       }
 
+      const MAX_BODY = 512 * 1024;
       let body = '';
-      req.on('data', (chunk: string) => { body += chunk; });
+      let tooBig = false;
+      req.on('data', (chunk: string) => {
+        body += chunk;
+        if (body.length > MAX_BODY) { tooBig = true; req.destroy(); }
+      });
       req.on('end', () => {
+        if (tooBig) {
+          res.writeHead(413, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'payload too large' }));
+          return;
+        }
         try {
           const payload = JSON.parse(body) as { task_text: string };
           if (!payload.task_text) {

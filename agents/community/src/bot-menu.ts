@@ -15,7 +15,7 @@ import { Bot, Keyboard, InlineKeyboard, InputFile } from 'grammy';
 import { getConfig } from './config';
 import { createLogger } from './logger';
 import { downloadVideo, isYtDlpAvailable } from './downloader';
-import { todayMsk } from './dates';
+import { todayMsk, yesterdayMsk } from './dates';
 
 const log = createLogger('bot-menu');
 import {
@@ -30,6 +30,12 @@ import {
   deleteUgcState,
   getPendingUgcCount,
   getLastStrategistTimestamp,
+  getChannelStats,
+  getRetention,
+  getCumulativeStats,
+  getPostCountForDate,
+  getCompletionCountForDate,
+  getUniqueCompletionUsersForDate,
   getMemberProfile,
   getMemberLevel,
   filterVideos,
@@ -61,7 +67,7 @@ function mainKeyboard(isAdmin = false): Keyboard {
     .text('💡 Предложить тренировку');
   if (isAdmin) {
     kb.row()
-      .text('📊 Статус').text('📅 Неделя').text('📈 Аналитика');
+      .text('📊 Дашборд').text('📅 Неделя');
   }
   return kb.resized().persistent();
 }
@@ -198,60 +204,55 @@ export function registerBotMenu(bot: Bot): void {
   });
 
   // --- Admin buttons ---
-  bot.hears('📊 Статус', async (ctx) => {
+  bot.hears('📊 Дашборд', async (ctx) => {
     if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
-    const { todayMsk } = await import('./dates');
-    const { getPostCountForDate, getCompletionCountForDate, getUniqueCompletionUsersForDate } = await import('./db');
+    const { todayMsk, yesterdayMsk, thisMondayMsk } = await import('./dates');
+    const {
+      ensureActiveChallenge, getChallengeDay, initWeekSlots, getWeekStatus,
+    } = await import('./db');
+    const { DAY_CATEGORY_MAP, CATEGORY_EMOJI_MAP, CATEGORY_RU: CR, CHALLENGE_DURATION } = await import('./shared');
+
     const date = todayMsk();
+    const yesterday = yesterdayMsk();
     const posts = getPostCountForDate(date);
     const completions = getCompletionCountForDate(date);
     const users = getUniqueCompletionUsersForDate(date);
 
-    // Subscriber & group member counts
-    let subscriberCount = '?';
-    let groupMemberCount = '?';
+    // Subscriber & group member counts + delta
+    let subscriberCount = 0;
+    let groupMemberCount = 0;
     try {
-      subscriberCount = String(await ctx.api.getChatMemberCount(config.TELEGRAM_CHANNEL_ID));
-    } catch { /* API error — show ? */ }
+      subscriberCount = await ctx.api.getChatMemberCount(config.TELEGRAM_CHANNEL_ID);
+    } catch { /* API error */ }
     try {
-      groupMemberCount = String(await ctx.api.getChatMemberCount(config.TELEGRAM_GROUP_ID));
-    } catch { /* API error — show ? */ }
+      groupMemberCount = await ctx.api.getChatMemberCount(config.TELEGRAM_GROUP_ID);
+    } catch { /* API error */ }
+
+    const yesterdayStats = getChannelStats(yesterday);
+    const subDelta = yesterdayStats ? subscriberCount - yesterdayStats.subscriber_count : 0;
+    const subDeltaStr = subDelta > 0 ? ` (+${subDelta})` : subDelta < 0 ? ` (${subDelta})` : '';
 
     // Pending UGC
     const pendingUgc = getPendingUgcCount();
 
-    // Last strategist report
-    const lastStrategist = getLastStrategistTimestamp();
-    const strategistLine = lastStrategist
-      ? `Последний отчёт стратега: ${lastStrategist.replace('T', ' ').slice(0, 16)}`
-      : 'Стратег: нет данных';
+    // Date display: "17 марта 2026, среда"
+    const MONTHS_RU = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+    const DAYS_RU = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
+    const dateObj = new Date(date + 'T00:00:00');
+    const dateDisplay = `${dateObj.getDate()} ${MONTHS_RU[dateObj.getMonth()]} ${dateObj.getFullYear()}, ${DAYS_RU[dateObj.getDay()]}`;
 
-    // Uptime
-    const uptimeStr = formatUptime(process.uptime());
-
-    // Challenge info + week queue
-    let challengeLine = '';
+    // Week schedule
     let weekQueueText = '';
-    let statusKb: InlineKeyboard | undefined;
+    let dashKb: InlineKeyboard | undefined;
     try {
-      const { ensureActiveChallenge, getChallengeDay, getChallengeWeekNumber, getWeekStatus, initWeekSlots } = await import('./db');
-      const { nextMondayMsk } = await import('./dates');
-      const { DAY_CATEGORY_MAP, CATEGORY_EMOJI_MAP, CATEGORY_RU: CR, CHALLENGE_DURATION } = await import('./shared');
-      const challenge = ensureActiveChallenge(date, nextMondayMsk());
+      const challenge = ensureActiveChallenge(date, thisMondayMsk());
       if (challenge.status === 'active') {
         const sDay = getChallengeDay(challenge.start_date, date);
         if (sDay >= 1 && sDay <= CHALLENGE_DURATION) {
-          const dow = new Date(date + 'T00:00:00').getDay();
-          const cat = DAY_CATEGORY_MAP[dow];
-          const catRu = cat ? CR[cat] : '?';
-          const emoji = cat ? CATEGORY_EMOJI_MAP[cat] : '❓';
-          const wk = getChallengeWeekNumber(sDay);
+          const wk = 1 as 1 | 2 | 3;
           initWeekSlots(challenge.id, wk);
           const slots = getWeekStatus(challenge.id, wk);
-          const filled = slots.filter(s => s.status !== 'empty').length;
-          challengeLine = `${emoji} ${catRu} | Заполнено: ${filled}/7`;
 
-          // Week queue by day
           const DAY_LABELS = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
           const lines = slots.map(slot => {
             const d = ((slot.day_number - 1) % 7) + 1;
@@ -268,32 +269,49 @@ export function registerBotMenu(bot: Bot): void {
             const marker = isToday ? ' 👈' : '';
             return `${icon} ${dayLabel} ${slotEmoji} ${slotCatRu}${title}${marker}`;
           });
-          weekQueueText = `\n\n*Расписание:*\n${lines.map(l => escV2(l)).join('\n')}`;
+          weekQueueText = `\n*Расписание:*\n${lines.map(l => escV2(l)).join('\n')}`;
 
-          // Show publish button if today's slot is queued but not yet posted
+          // Show publish button if today's slot is queued
           const todaySlot = slots.find(s => s.day_number === sDay);
           if (todaySlot && todaySlot.status === 'queued') {
-            statusKb = new InlineKeyboard().text('📤 Опубликовать сегодня', `challenge_pub:${challenge.id}:${sDay}`);
+            dashKb = new InlineKeyboard().text('📤 Опубликовать сегодня', `challenge_pub:${challenge.id}:${sDay}`);
           }
         }
       }
     } catch { /* no challenge yet */ }
 
+    // Retention
+    const retention = getRetention(date, yesterday);
+    const retPct = retention.yesterday_active > 0
+      ? Math.round(retention.returned_today / retention.yesterday_active * 100) : 0;
+
+    // Cumulative
+    const cumulative = getCumulativeStats();
+
+    // Strategist + uptime
+    const lastStrategist = getLastStrategistTimestamp();
+    const stratLine = lastStrategist
+      ? `Стратег: ${lastStrategist.replace('T', ' ').slice(0, 16).slice(5)}`
+      : 'Стратег: нет данных';
+    const uptimeStr = formatUptime(process.uptime());
+
     await ctx.reply(
       [
-        `*Sami — статус*`,
+        `*Sami — дашборд*`,
         ``,
-        ...(challengeLine ? [escV2(challengeLine), ``] : []),
-        `Дата: ${escV2(date)}`,
-        `Подписчиков: ${escV2(subscriberCount)} \\| Группа: ${escV2(groupMemberCount)}`,
-        `Постов: ${escV2(String(posts))}`,
-        `Выполнений: ${escV2(String(completions))} \\(${escV2(String(users))} чел\\.\\)`,
-        `Тренировки на модерации: ${escV2(String(pendingUgc))}`,
-        escV2(strategistLine),
-        `Аптайм: ${escV2(uptimeStr)}`,
+        `📅 ${escV2(dateDisplay)}`,
+        ``,
+        `👥 Подписчики: ${escV2(String(subscriberCount))}${escV2(subDeltaStr)}  ·  Группа: ${escV2(String(groupMemberCount))}`,
+        `📝 Постов: ${escV2(String(posts))}  ·  Выполнений: ${escV2(String(completions))} \\(${escV2(String(users))} чел\\.\\)`,
+        `📋 На модерации: ${escV2(String(pendingUgc))}`,
         weekQueueText,
+        ``,
+        `Retention: ${escV2(String(retention.returned_today))}/${escV2(String(retention.yesterday_active))} \\(${escV2(String(retPct))}%\\)`,
+        `Всего: ${escV2(String(cumulative.total_completions))} выполнений · ${escV2(String(cumulative.total_active_users))} активных`,
+        ``,
+        `${escV2(stratLine)}  ·  Аптайм: ${escV2(uptimeStr)}`,
       ].join('\n'),
-      { parse_mode: 'MarkdownV2', ...(statusKb ? { reply_markup: statusKb } : {}) }
+      { parse_mode: 'MarkdownV2', ...(dashKb ? { reply_markup: dashKb } : {}) }
     );
   });
 
@@ -347,53 +365,50 @@ export function registerBotMenu(bot: Bot): void {
 
   bot.hears('📅 Неделя', async (ctx) => {
     if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
-    const { todayMsk, nextMondayMsk } = await import('./dates');
+    const { todayMsk, thisMondayMsk } = await import('./dates');
     const {
-      ensureActiveChallenge, getChallengeDay, getChallengeWeekNumber,
+      ensureActiveChallenge, getChallengeDay,
       initWeekSlots, getWeekStatus,
     } = await import('./db');
     const { DAY_CATEGORY_MAP, CATEGORY_RU, CATEGORY_EMOJI_MAP, CHALLENGE_DURATION } = await import('./shared');
 
     const today = todayMsk();
-    const challenge = ensureActiveChallenge(today, nextMondayMsk());
+    const challenge = ensureActiveChallenge(today, thisMondayMsk());
 
     if (challenge.status === 'completed') {
       await ctx.reply(`Неделя завершена. Новый цикл стартует в понедельник.`);
       return;
     }
 
-    // Allow filling queue even for upcoming challenges (plan ahead)
+    // Always week 1 (7-day cycles)
     let challengeDay: number;
-    let weekNum: 1 | 2 | 3;
+    const weekNum = 1 as 1 | 2 | 3;
 
     if (challenge.status === 'upcoming') {
-      // Challenge hasn't started yet — show week 1 for planning
       challengeDay = 0;
-      weekNum = 1;
     } else {
       challengeDay = getChallengeDay(challenge.start_date, today);
       if (challengeDay > CHALLENGE_DURATION) {
         await ctx.reply(`Неделя завершена. Новый цикл стартует в понедельник.`);
         return;
       }
-      weekNum = getChallengeWeekNumber(challengeDay);
     }
     initWeekSlots(challenge.id, weekNum);
     const slots = getWeekStatus(challenge.id, weekNum);
 
-    // Day-of-week labels: Пн, Вт, Ср...
     const DAY_LABELS = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
     const lines = slots.map(slot => {
-      // Map day_number to day-of-week: day 1 = Mon, day 2 = Tue, etc.
-      const dow = ((slot.day_number - 1) % 7) + 1; // 1=Mon...7=Sun
-      const jsDow = dow === 7 ? 0 : dow; // JS: 0=Sun
+      const dow = ((slot.day_number - 1) % 7) + 1;
+      const jsDow = dow === 7 ? 0 : dow;
       const cat = DAY_CATEGORY_MAP[jsDow];
       const catRu = cat ? CATEGORY_RU[cat] : '?';
       const emoji = cat ? CATEGORY_EMOJI_MAP[cat] : '❓';
       const dayLabel = DAY_LABELS[jsDow];
+      const isToday = slot.day_number === challengeDay;
       const icon = slot.status === 'posted' ? '✅' : slot.status === 'queued' ? '📋' : '⬜';
       const title = slot.title ? ` — ${slot.title.slice(0, 35)}` : '';
-      return `${icon} ${dayLabel} ${emoji} ${catRu}${title}`;
+      const marker = isToday ? ' 👈' : '';
+      return `${icon} ${dayLabel} ${emoji} ${catRu}${title}${marker}`;
     });
 
     const filledCount = slots.filter(s => s.status !== 'empty').length;
@@ -432,7 +447,6 @@ export function registerBotMenu(bot: Bot): void {
         kb.text(`↻ ${dl}`, `fill_day:${challenge.id}:${slot.day_number}`);
         buttonsInRow++;
       }
-      // posted — no button, already published
       if (buttonsInRow === 4) { kb.row(); buttonsInRow = 0; }
     }
 
@@ -538,14 +552,6 @@ export function registerBotMenu(bot: Bot): void {
     const countTomorrow = resetApprovalSessions(tomorrow);
     const total = countToday + countTomorrow;
     await ctx.reply(`Сброшено ${total} сессий (${today}: ${countToday}, ${tomorrow}: ${countTomorrow}). Нажми «Неделя» для нового поиска.`);
-  });
-
-  bot.hears('📈 Аналитика', async (ctx) => {
-    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
-    const { todayMsk } = await import('./dates');
-    const { runDailyAnalytics } = await import('./analytics');
-    await ctx.reply('Запускаю аналитику...');
-    await runDailyAnalytics(bot, todayMsk());
   });
 
   // --- "Очистить" button (admin only) — clear channel posts ---

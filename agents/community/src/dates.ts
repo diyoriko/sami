@@ -48,6 +48,22 @@ export function nextMondayMsk(): string {
   return formatDate(d);
 }
 
+/** YYYY-MM-DD of this week's Monday in MSK (current or past Monday) */
+export function thisMondayMsk(): string {
+  const d = moscowNow();
+  const day = d.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+  const offset = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + offset);
+  return formatDate(d);
+}
+
+/** Yesterday's date in Moscow as YYYY-MM-DD */
+export function yesterdayMsk(): string {
+  const d = moscowNow();
+  d.setDate(d.getDate() - 1);
+  return formatDate(d);
+}
+
 /** Difference in days: b - a (positive if b is later) */
 export function dateDiffDays(a: string, b: string): number {
   const da = new Date(a + 'T00:00:00');

@@ -11,8 +11,14 @@ import { todayMsk, currentWeekMsk } from './dates';
 const log = createLogger('scheduler');
 
 let newMembersToday = 0;
+let newMembersDate = todayMsk();
 
 export function incrementNewMembers(): void {
+  const today = todayMsk();
+  if (today !== newMembersDate) {
+    newMembersToday = 0;
+    newMembersDate = today;
+  }
   newMembersToday++;
 }
 
@@ -28,11 +34,11 @@ export function startScheduler(bot: Bot): void {
     try {
       const { ensureActiveChallenge, getChallengeDay, completeChallenge, getWeekSlotForDay } = require('./db') as typeof import('./db');
       const { postChallengeVideo } = require('./poster') as typeof import('./poster');
-      const { nextMondayMsk } = require('./dates') as typeof import('./dates');
+      const { thisMondayMsk } = require('./dates') as typeof import('./dates');
       const { DAY_CATEGORY_MAP, CATEGORY_RU, CHALLENGE_DURATION } = require('./shared') as typeof import('./shared');
 
       const today = todayMsk();
-      const challenge = ensureActiveChallenge(today, nextMondayMsk());
+      const challenge = ensureActiveChallenge(today, thisMondayMsk());
       if (challenge.status !== 'active') {
         log.info(`challenge ${challenge.number} not active yet (starts ${challenge.start_date})`);
         return;
@@ -77,6 +83,7 @@ export function startScheduler(bot: Bot): void {
     log.info('writing daily community report');
     writeCommunityReport(todayMsk(), newMembersToday);
     newMembersToday = 0;
+    newMembersDate = todayMsk();
   }, { timezone: 'Europe/Moscow' });
 
   // ---- Analytics agent ----
@@ -108,10 +115,10 @@ export function startScheduler(bot: Bot): void {
     log.info('posting weekly progress poll');
     try {
       const { ensureActiveChallenge } = require('./db') as typeof import('./db');
-      const { nextMondayMsk } = require('./dates') as typeof import('./dates');
+      const { thisMondayMsk } = require('./dates') as typeof import('./dates');
 
       const today = todayMsk();
-      const challenge = ensureActiveChallenge(today, nextMondayMsk());
+      const challenge = ensureActiveChallenge(today, thisMondayMsk());
       if (challenge.status !== 'active') return;
 
       const question = `Неделя позади! Сколько тренировок удалось сделать?`;
@@ -134,10 +141,10 @@ export function startScheduler(bot: Bot): void {
     log.info('posting stability wall');
     try {
       const { getWeeklyConsistentUsers, ensureActiveChallenge } = require('./db') as typeof import('./db');
-      const { nextMondayMsk } = require('./dates') as typeof import('./dates');
+      const { thisMondayMsk } = require('./dates') as typeof import('./dates');
 
       const today = todayMsk();
-      const challenge = ensureActiveChallenge(today, nextMondayMsk());
+      const challenge = ensureActiveChallenge(today, thisMondayMsk());
       if (challenge.status !== 'active') return;
 
       // Get the last 7 days range
@@ -271,11 +278,11 @@ export function startScheduler(bot: Bot): void {
     try {
       const { ensureActiveChallenge, getChallengeDay, getWeekSlotForDay } = require('./db') as typeof import('./db');
       const { postChallengeVideo } = require('./poster') as typeof import('./poster');
-      const { nextMondayMsk } = require('./dates') as typeof import('./dates');
+      const { thisMondayMsk } = require('./dates') as typeof import('./dates');
       const { CHALLENGE_DURATION } = require('./shared') as typeof import('./shared');
 
       const today = todayMsk();
-      const challenge = ensureActiveChallenge(today, nextMondayMsk());
+      const challenge = ensureActiveChallenge(today, thisMondayMsk());
       if (challenge.status !== 'active') return;
 
       const dayNumber = getChallengeDay(challenge.start_date, today);

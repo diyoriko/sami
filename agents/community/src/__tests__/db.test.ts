@@ -670,22 +670,12 @@ describe('challenges: getChallengeDay + getChallengeWeekNumber', () => {
     expect(getChallengeDay('2026-04-06', '2026-04-26')).toBe(21);
   });
 
-  it('week 1 for days 1-7', async () => {
+  it('always returns week 1 (7-day cycles)', async () => {
     const { getChallengeWeekNumber } = await import('../db');
     expect(getChallengeWeekNumber(1)).toBe(1);
     expect(getChallengeWeekNumber(7)).toBe(1);
-  });
-
-  it('week 2 for days 8-14', async () => {
-    const { getChallengeWeekNumber } = await import('../db');
-    expect(getChallengeWeekNumber(8)).toBe(2);
-    expect(getChallengeWeekNumber(14)).toBe(2);
-  });
-
-  it('week 3 for days 15-21', async () => {
-    const { getChallengeWeekNumber } = await import('../db');
-    expect(getChallengeWeekNumber(15)).toBe(3);
-    expect(getChallengeWeekNumber(21)).toBe(3);
+    expect(getChallengeWeekNumber(8)).toBe(1);
+    expect(getChallengeWeekNumber(21)).toBe(1);
   });
 });
 

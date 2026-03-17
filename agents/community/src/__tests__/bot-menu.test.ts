@@ -107,6 +107,10 @@ describe('bot-menu module structure', () => {
     const source = fs.readFileSync(path.join(__dirname, '..', 'bot-menu.ts'), 'utf8');
     expect(source).toContain("'🏋️ Мои тренировки'");
     expect(source).toContain("'💡 Предложить тренировку'");
+    expect(source).toContain("'📊 Дашборд'");
+    expect(source).toContain("'📅 Неделя'");
+    expect(source).not.toContain("'📈 Аналитика'");
+    expect(source).not.toContain("'📊 Статус'");
     expect(source).toContain('.persistent()');
   });
 

@@ -468,26 +468,107 @@
 
 ---
 
+## SPRINT 7 — Security + UX + Неделя = текущая
+
+Статус: **в работе** | Начало: 17.03.2026
+
+> Источник: 5 глубинных ревью (код, UX, тесты, архитектура, стратегия) от 17.03.2026
+
+### P0: Security (code review, 17.03) — блокирует деплой
+
+- [ ] **Path traversal в `/upload-cookies`** — endpoint пишет body в `process.env.YT_COOKIES_PATH` без валидации. Fix: проверить что путь начинается с `/data/`. Файл: `index.ts:421-423`
+- [ ] **HTTP body size limit** — POST `/packet` и `/upload-cookies` не ограничивают размер body. DoS через большой payload. Fix: `if (body.length > 1MB) → 413`. Файл: `index.ts:382-386`
+- [ ] **Валидация payload в `/packet`** — `payload.packet` и `payload.report` не проверяются zod-схемой. Fix: добавить zod validation. Файл: `index.ts:386-387`
+- [ ] **Info disclosure: путь cookies в response** — `/upload-cookies` возвращает `path: cookiesPath`. Fix: убрать из response. Файл: `index.ts:427`
+- [ ] **Race condition: `newMembersToday`** — глобальный счётчик в памяти, не атомарный. Fix: перенести в `daily_stats` таблицу с `UPDATE SET new_members = new_members + 1`. Файл: `scheduler.ts:13-17`
+
+### P0: «Неделя = текущая» + «Дашборд» (готово к деплою)
+
+- [x] **`thisMondayMsk()`** — новая функция: текущий понедельник вместо следующего. Файл: `dates.ts`
+- [x] **CHALLENGE_DURATION 21→7** — один цикл = одна неделя. Файл: `shared.ts:240`
+- [x] **`ensureActiveChallenge` переписана** — проверяет покрытие сегодня, авто-завершает старые. Файл: `db.ts:1956-1979`
+- [x] **«📅 Неделя» → текущая неделя** — `thisMondayMsk()`, weekNum=1, маркер 👈 на сегодня. Файл: `bot-menu.ts`
+- [x] **scheduler.ts** — все `nextMondayMsk()` → `thisMondayMsk()` (4 места)
+- [x] **«📊 Статус» + «📈 Аналитика» → «📊 Дашборд»** — единое сообщение: подписчики+дельта, посты, выполнения, расписание, retention, cumulative, стратег+аптайм
+- [x] **Тесты обновлены** — 268/268 pass, typecheck clean
+
+### P1: Security (code review, 17.03)
+
+- [ ] **Fisher-Yates shuffle для капчи** — `Math.sort(() => Math.random() - 0.5)` не равномерный. Fix: правильный shuffle. Файл: `moderation.ts:140`
+- [ ] **Хардкод admin ID в fallback** — `process.env.TELEGRAM_ADMIN_USER_ID` в error handler без `getConfig()`. Fix: кэшировать при старте. Файл: `index.ts:683-695`
+
+### P1: UX — messaging clarity (UX review, 17.03)
+
+- [ ] **Приветствие /start** — не объясняет что в канале ежедневные видео. Fix: добавить "Канал @sami_workouts — тренировка каждый день". Файл: `bot-menu.ts:143-149`
+- [ ] **Welcome DM: фичи ≠ меню** — обещает "Профиль" и "Фильтры" которых нет в persistent menu. Fix: привести в соответствие. Файл: `moderation.ts:440-459`
+- [ ] **Goal responses** — слишком длинные, разной длины. Fix: стандартизировать до 2 строк. Файл: `moderation.ts:147-159`
+- [ ] **Cooldown "Я сделаль"** — "Подожди 12 мин." не объясняет правило. Fix: "Максимум 1 тренировка в час". Файл: `moderation.ts`
+- [ ] **Streak в Профиле** — серия показывается только в комментарии группы, не в профиле. Fix: добавить `🔥 Серия: N дн. подряд`. Файл: `bot-menu.ts:610-625`
+- [ ] **Причина отказа UGC** — при отклонении пользователь не получает объяснения. Fix: опциональная причина + DM. Файл: `bot-menu.ts`
+
+### P1: UX — admin (UX review, 17.03)
+
+- [ ] **Легенда иконок расписания** — ✅/📋/⬜ без объяснения. Fix: одна строка-легенда в конце. Файл: `bot-menu.ts`
+- [ ] **Кнопка "Опубликовать сегодня"** — "сегодня" двусмысленно. Fix: "📤 Опубликовать сейчас". Файл: `bot-menu.ts`
+- [ ] **Captcha timeout** — не указано что 2 минуты. Fix: "решите пример (2 мин)". Файл: `moderation.ts:294-340`
+
+### P2: Code quality (code review, 17.03)
+
+- [ ] **Retention bounds check** — `Math.round(returned/yesterday * 100)` может быть >100%. Fix: `Math.min(100, ...)`. Файл: `analytics.ts:88`
+- [ ] **HTTP body buffering** — `body += chunk` O(n²). Fix: `Buffer.concat(chunks)`. Файл: `index.ts:382-383`
+- [ ] **Silenced catches** — множественные `catch {}` без логирования. Fix: добавить `log.warn`. Файлы: `downloader.ts:132`, `bot-menu.ts` и др.
+- [ ] **English "done." в celebration** — "N — done." → "N — всё." Файл: `moderation.ts:70`
+
+---
+
 ## Бэклог (не в спринте)
 
-> Задачи ниже отложены до явного решения вытащить в спринт.
+> Задачи ниже отложены до явного решения вытащить в спринт. Приоритизированы по 5 ревью от 17.03.
 
-### Growth — трекинг источников (предложение стратега, 17.03)
+### Growth — P1: ручная работа (блокирует всё остальное)
 
-- [ ] **Trackable invite links** — создать 3-5 отдельных Telegram invite-ссылок для разных каналов outreach (личные сообщения, ВК, другие чаты). При вступлении видно через какую ссылку пришёл человек. 30 минут настройки
+> **"SAMI solved the wrong problem perfectly."** Product 9/10, Distribution 1/10.
+> Следующие 4 недели: outreach > фичи. Цель: 30 подписчиков к 14 апреля.
 
-### Growth — Welcome DM (предложение стратега, 17.03)
-
-- [ ] **Welcome DM: "Как ты нас нашёл?"** — после вступления бот присылает один вопрос с кнопками (рекомендация / поиск / другое). Результат в аналитику. Поможет понять реальные каналы роста
-
-### Growth — контент и охват
-
+- [ ] **Написать 10 знакомым лично** — 1/10 сделано. Шаблон: "Нашёл канал с домашними тренировками — без рекламы, только коврик. t.me/sami_workouts"
+- [ ] **Разобраться откуда +12 подписчиков 16.03** — DM последним вступившим: "Как нашёл Sami?"
+- [ ] **Trackable invite links** — 3-5 ссылок для разных каналов (личные, ВК, чаты). 30 мин
+- [ ] **Welcome DM: "Как ты нас нашёл?"** — кнопки (рекомендация / поиск / другое) → аналитика
+- [ ] **Outreach-трекер** — таблица: имя → написал → ответ → вступил. В COMMUNITY_TASKS.md или spreadsheet
 - [ ] **Cross-promo с 3 микро-каналами** — найти каналы 100-500 подписчиков в нише ЗОЖ/фитнес
-- [ ] **Посевной пост** — подборка "тренировки недели"
 
-### UX — богатый список тренировок
+### Growth — статья на VC.ru
 
-- [ ] **«Мои тренировки» — rich UI** — сейчас текстовый список. Варианты: Telegram Web App (мини-приложение с превью, completions, реакциями) или inline mode с карточками. Реализовать после 30+ участников
+- [ ] **Статья "Как я сделал Telegram-бота для тренировок за 2 недели с Claude"** — после 20+ подписчиков
+
+### Architecture — db.ts split (P1, arch review)
+
+- [ ] **Разделить db.ts** — 2122 строки, 161 export. План: `db-videos.ts` (~150), `db-posts.ts` (~150), `db-approval.ts` (~250), `db-members.ts` (~400), `db-challenges.ts` (~350). Re-export для совместимости. 3-4 сессии
+- [ ] **Schema version tracking** — таблица `schema_info (version, name, applied_at)` для аудита миграций
+
+### Tests — критические пробелы (test review)
+
+- [ ] **youtube.ts** — 0 тестов: searchYouTube (ошибки API, malformed response), extractYouTubeId (все форматы URL), scoring formula (граничные значения)
+- [ ] **poster.ts** — 0 тестов: formatCaption (теги, MarkdownV2 escaping, Sami Score), text fallback при ошибке скачивания
+- [ ] **approval.ts callbacks** — 0 тестов: approve/reject/unapprove/refresh button handlers
+- [ ] **downloader.ts** — 0 тестов: downloadVideo, isYtDlpAvailable
+- [ ] **dates.ts** — 0 тестов: thisMondayMsk, nextMondayMsk, dateDiffDays, addDaysMsk
+- [ ] **analytics.ts** — только mock в scheduler.test.ts, нет тестов расчётов
+
+### UX — P2 (UX review)
+
+- [ ] **Equipment auto-suggestion** — показать обнаруженный инвентарь из названия видео
+- [ ] **Title length feedback** — "Название: ${current}/200 символов" вместо голой ошибки
+- [ ] **Muscle detection: показать результат** — "Обнаружены мышцы: спина, плечи"
+- [ ] **Sami Score объяснение** — сократить "(тон, формат, просмотры, лайки, длительность)" → "(popularity + engagement)"
+- [ ] **Undo hint для "Я сделаль"** — подсказка что кнопка toggle
+- [ ] **Drafts editable** — черновики в "Мои тренировки": кнопка "Доделать" вместо только "Удалить"
+- [ ] **«Мои тренировки» — rich UI** — после 30+ участников
+
+### Стратег — оптимизация (strategic review)
+
+- [ ] **Стратег → еженедельный** — daily overkill при 15 подписчиков. Формат: результаты недели → 3 приоритета → цели. 500 слов вместо 3000
+- [ ] **Убрать poll_results** — таблица создана но не используется
 
 ### Отложено (после 50+ участников)
 
@@ -495,6 +576,7 @@
 - [ ] Weekly personal stats DM
 - [ ] Attribution flow для тренеров
 - [ ] Лендинг Sami
+- [ ] Тип "Челлендж" — DB-схема + UX для текстовых челленджей
 
 ---
 
