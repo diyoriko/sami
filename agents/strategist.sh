@@ -89,6 +89,24 @@ if [[ -f "$SYNC_PROPOSALS_SCRIPT" ]] && command -v node >/dev/null 2>&1; then
   fi
 fi
 
+# Apply approved proposals to COMMUNITY_TASKS.md before building prompt (non-critical)
+APPLY_PROPOSALS_SCRIPT="${SAMI_AGENTS_DIR:-$SCRIPT_DIR}/apply-proposals.sh"
+TASKS_FILE="$CONTEXT_ROOT/COMMUNITY_TASKS.md"
+API_KEY_FOR_PROPOSALS="${STRATEGIST_API_KEY:-${TELEGRAM_BOT_TOKEN:-}}"
+if [[ -z "$API_KEY_FOR_PROPOSALS" ]]; then
+  API_KEY_FOR_PROPOSALS="$(grep -m1 'STRATEGIST_API_KEY=' "$HOME/.config/sami/community.env" 2>/dev/null | cut -d= -f2- || true)"
+fi
+if [[ -z "$API_KEY_FOR_PROPOSALS" ]]; then
+  API_KEY_FOR_PROPOSALS="$(grep -m1 'TELEGRAM_BOT_TOKEN=' "$HOME/.config/sami/community.env" 2>/dev/null | cut -d= -f2- || true)"
+fi
+if [[ -f "$APPLY_PROPOSALS_SCRIPT" && -f "$TASKS_FILE" && -n "$API_KEY_FOR_PROPOSALS" ]]; then
+  if bash "$APPLY_PROPOSALS_SCRIPT" "$TASKS_FILE" "$API_KEY_FOR_PROPOSALS" "$COMMUNITY_AGENT_URL" 2>&1; then
+    echo "[strategist] approved proposals applied to backlog"
+  else
+    echo "[strategist] apply proposals failed (non-critical)"
+  fi
+fi
+
 CONTEXT_FILES=(
   "$CONTEXT_ROOT/STRATEGIST_BRIEF.md"
   "$CONTEXT_ROOT/COMMUNITY_TASKS.md"
@@ -606,6 +624,42 @@ if [[ "$STATUS" == "completed" && -s "$OUT_PATH" && -f "$EXTRACT_PROPOSALS_SCRIP
     else
       echo "[strategist] backlog proposals extraction failed (non-critical)" >> "$RAW_OUT_PATH"
     fi
+  fi
+fi
+
+# Send BACKLOG_PROPOSALS as Telegram proposals with Approve/Reject buttons (non-critical)
+EXTRACT_TASKS_SCRIPT="${SAMI_AGENTS_DIR:-$SCRIPT_DIR}/extract-strategist-tasks.sh"
+if [[ "$STATUS" == "completed" && -s "$OUT_PATH" && -f "$EXTRACT_TASKS_SCRIPT" && -f "$TASKS_FILE" ]]; then
+  ADMIN_CHAT_ID="${TELEGRAM_ADMIN_USER_ID:-85013206}"
+  ETK="${STRATEGIST_API_KEY:-${TELEGRAM_BOT_TOKEN:-}}"
+  if [[ -z "$ETK" ]]; then
+    ETK="$(grep -m1 'STRATEGIST_API_KEY=' "$HOME/.config/sami/community.env" 2>/dev/null | cut -d= -f2- || true)"
+  fi
+  TBT="${TELEGRAM_BOT_TOKEN:-}"
+  if [[ -z "$TBT" ]]; then
+    TBT="$(grep -m1 'TELEGRAM_BOT_TOKEN=' "$HOME/.config/sami/community.env" 2>/dev/null | cut -d= -f2- || true)"
+  fi
+  if [[ -n "$ETK" && -n "$TBT" ]]; then
+    if bash "$EXTRACT_TASKS_SCRIPT" "$OUT_PATH" "$TASKS_FILE" "$TBT" "$ADMIN_CHAT_ID" "$COMMUNITY_AGENT_URL" >> "$RAW_OUT_PATH" 2>&1; then
+      echo "[strategist] proposals sent for approval" >> "$RAW_OUT_PATH"
+    else
+      echo "[strategist] extract-strategist-tasks failed (non-critical)" >> "$RAW_OUT_PATH"
+    fi
+  fi
+fi
+
+# Google Calendar event with focus of the day
+if [[ "$STATUS" == "completed" ]] && command -v gcalcli >/dev/null 2>&1; then
+  FOCUS=$(grep -A 5 "## Фокус дня" "$OUT_PATH" 2>/dev/null | tail -4 | tr '\n' ' ' | cut -c1-200)
+  if [ -n "$FOCUS" ]; then
+    gcalcli add \
+      --calendar "Personal" \
+      --title "SAMI Strategist — $(date +%Y-%m-%d)" \
+      --when "$(date -v+1H '+%Y-%m-%dT%H:%M:%S' 2>/dev/null || date '+%Y-%m-%dT%H:%M:%S')" \
+      --duration 15 \
+      --description "$FOCUS" \
+      --noprompt 2>/dev/null && echo "[strategist] Google Calendar event created" >> "$RAW_OUT_PATH" \
+      || echo "[strategist] Google Calendar event failed (non-critical)" >> "$RAW_OUT_PATH"
   fi
 fi
 

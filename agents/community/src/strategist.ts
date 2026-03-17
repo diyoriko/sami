@@ -615,6 +615,33 @@ async function executeAction(bot: Bot, actionId: number, type: StrategistActionT
 }
 
 export function registerStrategistCallbacks(bot: Bot): void {
+  // --- Proposal approve/reject (extract-strategist-tasks.sh sends these) ---
+  bot.callbackQuery(/^prop_(approve|reject):(\d+)$/, async (ctx) => {
+    const decision = ctx.match[1] as 'approve' | 'reject';
+    const proposalId = parseInt(ctx.match[2]);
+
+    const { updateProposalStatus } = await import('./db');
+
+    if (decision === 'approve') {
+      updateProposalStatus(proposalId, 'approved');
+      try {
+        await ctx.editMessageReplyMarkup({
+          reply_markup: new InlineKeyboard().text('✅ Одобрено', 'noop'),
+        });
+      } catch {}
+      await ctx.answerCallbackQuery('Одобрено');
+    } else {
+      updateProposalStatus(proposalId, 'rejected');
+      try {
+        await ctx.editMessageReplyMarkup({
+          reply_markup: new InlineKeyboard().text('❌ Отклонено', 'noop'),
+        });
+      } catch {}
+      await ctx.answerCallbackQuery('Отклонено');
+    }
+  });
+
+  // --- Strategist action approve/reject ---
   bot.callbackQuery(/^strat_action:(approve|reject):(\d+)$/, async (ctx) => {
     const decision = ctx.match[1] as 'approve' | 'reject';
     const actionId = parseInt(ctx.match[2]);
