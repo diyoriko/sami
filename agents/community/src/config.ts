@@ -29,10 +29,9 @@ const ConfigSchema = z.object({
   SCORE_VIEW_WEIGHT: z.string().default('0.35').transform(Number),
   SCORE_DURATION_WEIGHT: z.string().default('0.15').transform(Number),
   // Post rating weights (0-1, must sum to 1) — displayed in channel posts
-  RATING_VIEW_WEIGHT: z.string().default('0.35').transform(Number),
-  RATING_LIKE_WEIGHT: z.string().default('0.30').transform(Number),
-  RATING_CHANNEL_WEIGHT: z.string().default('0.20').transform(Number),
-  RATING_COMPLETION_WEIGHT: z.string().default('0.15').transform(Number),
+  RATING_VIEW_WEIGHT: z.string().default('0.40').transform(Number),
+  RATING_LIKE_WEIGHT: z.string().default('0.35').transform(Number),
+  RATING_CHANNEL_WEIGHT: z.string().default('0.25').transform(Number),
   // Video duration range (seconds)
   VIDEO_MIN_DURATION: z.string().default('240').transform(Number),   // 4 min
   VIDEO_MAX_DURATION: z.string().default('1800').transform(Number),  // 30 min

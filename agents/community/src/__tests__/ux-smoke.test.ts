@@ -205,11 +205,12 @@ describe('UX smoke: approval flow', () => {
 describe('UX smoke: rating formula', () => {
   const dbSource = readSrc('db.ts');
 
-  it('computeRating uses Telegram completions', () => {
-    expect(dbSource).toContain('normalizeCompletions');
-    expect(dbSource).toContain('getVideoCompletionCount');
-    expect(dbSource).toContain('completionScore');
-    expect(dbSource).toContain('RATING_COMPLETION_WEIGHT');
+  it('computeRating uses YouTube metrics', () => {
+    expect(dbSource).toContain('normalizeViews');
+    expect(dbSource).toContain('normalizeLikeRatio');
+    expect(dbSource).toContain('RATING_VIEW_WEIGHT');
+    expect(dbSource).toContain('RATING_LIKE_WEIGHT');
+    expect(dbSource).toContain('RATING_CHANNEL_WEIGHT');
   });
 
   it('DB migration for new categories', () => {

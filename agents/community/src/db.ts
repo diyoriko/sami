@@ -1247,69 +1247,48 @@ export function getPostByGroupCommentId(commentId: number): { id: number; video_
  */
 function normalizeLikeRatio(ratio: number): number {
   if (ratio <= 0) return 0;
-  // Map 0-0.08 range to 0-1 with diminishing returns
+  // Map 0-0.06 range to 0-1 with diminishing returns
+  // 3% = 0.71, 5% = 0.91, 6%+ = 1.0
   return Math.min(Math.sqrt(ratio / 0.06), 1);
 }
 
 /**
  * Normalize view count to 0..1 score.
- * 10K = decent (0.5), 100K = good (0.75), 1M+ = excellent (1.0)
+ * 10K = 0.57, 50K = 0.77, 100K = 0.86, 500K = 0.97, 1M+ = 1.0
  */
 function normalizeViews(viewCount: number): number {
   if (viewCount <= 0) return 0;
-  // log10(10K)=4, log10(1M)=6 → map 4..6 to 0.5..1.0
   const log = Math.log10(viewCount);
-  return Math.min(Math.max((log - 2) / 4, 0), 1); // 100 views = 0, 1M = 1.0
+  return Math.min(Math.max((log - 2) / 3.5, 0), 1);
 }
 
 /**
- * Normalize completion count to 0..1 score.
- * 0 = 0, 3 = 0.5, 10+ = 1.0 (diminishing returns via sqrt)
- */
-function normalizeCompletions(count: number): number {
-  if (count <= 0) return 0;
-  return Math.min(Math.sqrt(count / 10), 1);
-}
-
-/**
- * Get total completions across all posts for a given video.
- */
-function getVideoCompletionCount(videoId: number): number {
-  const row = getDb().prepare(
-    `SELECT COUNT(*) as cnt FROM completions WHERE video_id = ?`
-  ).get(videoId) as { cnt: number };
-  return row.cnt;
-}
-
-/**
- * Rating formula: YouTube metrics + Telegram engagement.
+ * Rating formula: YouTube metrics only.
+ *
+ * Completions removed — always 0 at post time, score never recalculated.
  *
  * Weights:
- *  35% view count (YouTube reach)
- *  30% like ratio (YouTube quality signal)
- *  20% channel authority
- *  15% completions (Telegram engagement — people who actually did the workout)
+ *  40% view count (YouTube reach)
+ *  35% like ratio (YouTube quality signal)
+ *  25% channel authority
  */
 export function computeRating(video: VideoRow): number {
-  // UGC videos (no YouTube metrics) — base 5.0 + completions boost up to 8.0
+  // UGC Telegram files — no YouTube metrics, flat score
   if (video.youtube_id?.startsWith('ugc-')) {
-    const completionScore = normalizeCompletions(getVideoCompletionCount(video.id));
-    return Math.round(Math.min(5 + completionScore * 3, 8) * 10) / 10;
+    return 7.0;
   }
 
   const config = getConfig();
   const viewScore = normalizeViews(video.view_count);
   const likeScore = normalizeLikeRatio(video.like_ratio ?? 0);
   const channelScore = video.channel_subscribers > 0
-    ? Math.min(Math.log10(video.channel_subscribers) / 6, 1) // 1M subs = 1.0
-    : 0.3; // unknown channel — conservative estimate
-  const completionScore = normalizeCompletions(getVideoCompletionCount(video.id));
+    ? Math.min(Math.log10(video.channel_subscribers) / 5.5, 1) // 300K subs ≈ 1.0, 1M = 1.0
+    : 0.5; // unknown channel — neutral estimate
 
   const raw =
     config.RATING_VIEW_WEIGHT * viewScore +
     config.RATING_LIKE_WEIGHT * likeScore +
-    config.RATING_CHANNEL_WEIGHT * channelScore +
-    config.RATING_COMPLETION_WEIGHT * completionScore;
+    config.RATING_CHANNEL_WEIGHT * channelScore;
   return Math.round(Math.min(raw * 10, 10) * 10) / 10; // 0.0 .. 10.0
 }
 

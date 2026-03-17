@@ -112,7 +112,7 @@ describe('rating', () => {
     expect(computeRating(highVideo)).toBeGreaterThan(computeRating(lowVideo));
   });
 
-  it('UGC videos get base rating 5.0', async () => {
+  it('UGC Telegram files get flat rating 7.0', async () => {
     const { computeRating } = await import('../db');
 
     const ugcVideo = {
@@ -123,9 +123,7 @@ describe('rating', () => {
       view_count: 0, rating: 0, like_ratio: 0, channel_subscribers: 0,
     };
 
-    const rating = computeRating(ugcVideo);
-    expect(rating).toBeGreaterThanOrEqual(5.0);
-    expect(rating).toBeLessThanOrEqual(8.0);
+    expect(computeRating(ugcVideo)).toBe(7.0);
   });
 });
 
