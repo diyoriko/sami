@@ -261,8 +261,8 @@ export function registerBotMenu(bot: Bot): void {
             const slotEmoji = slotCat ? SEASON_EMOJI[slotCat] : '❓';
             const dayLabel = DAY_LABELS[jd];
             const isToday = slot.day_number === sDay;
-            const icon = slot.status === 'posted' ? '📤'
-              : slot.status === 'queued' ? '✅'
+            const icon = slot.status === 'posted' ? '✅'
+              : slot.status === 'queued' ? '📋'
               : '⬜';
             const title = slot.title ? ` — ${decodeHtmlEntities(slot.title).slice(0, 30)}` : '';
             const marker = isToday ? ' 👈' : '';
