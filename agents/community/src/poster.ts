@@ -4,8 +4,8 @@ import { getConfig } from './config';
 import {
   getApprovedVideo, recordPost, wasPostedToday, VideoRow,
   markApprovalPosted, withTransaction,
-  getSeasonQueueForDay, markSeasonQueuePosted, getVideoById,
-  type SeasonRow,
+  getWeekSlotForDay, markWeekSlotPosted, getVideoById,
+  type ChallengeRow,
 } from './db';
 import { downloadVideo, isYtDlpAvailable } from './downloader';
 import { detectEquipment } from './youtube';
@@ -23,13 +23,13 @@ const POST_RETRY_DELAY_MS = 3000; // delay between video upload retries
 
 
 
-export interface SeasonInfo {
-  seasonNumber: number;
-  seasonDay: number;
+export interface ChallengeInfo {
+  challengeNumber: number;
+  challengeDay: number;
   category: Category;
 }
 
-async function formatCaption(video: VideoRow, seasonInfo?: SeasonInfo): Promise<string> {
+async function formatCaption(video: VideoRow, challengeInfo?: ChallengeInfo): Promise<string> {
   const categoryRu = CATEGORY_RU[video.category] ?? video.category;
   const difficultyRu = DIFFICULTY_RU[video.difficulty] ?? video.difficulty;
 
@@ -78,7 +78,7 @@ export async function postVideoToChannel(
   bot: Bot,
   date: string,
   category: Category,
-  options?: { force?: boolean; correlationId?: string; seasonInfo?: SeasonInfo; video?: VideoRow }
+  options?: { force?: boolean; correlationId?: string; challengeInfo?: ChallengeInfo; video?: VideoRow }
 ): Promise<PostResult> {
   const postLog = options?.correlationId ? log.withCorrelation(options.correlationId) : log;
   const config = getConfig();
@@ -95,7 +95,7 @@ export async function postVideoToChannel(
     return 'no_video';
   }
 
-  const caption = await formatCaption(video, options?.seasonInfo);
+  const caption = await formatCaption(video, options?.challengeInfo);
 
   // No inline keyboard on channel posts — Telegram hides "Comments" button when reply_markup is present.
   // Bot posts "Я сделаль" button as a comment in the discussion group instead (see moderation.ts).
@@ -165,7 +165,7 @@ export async function postVideoToChannel(
     postLog.warn(`FALLBACK: posting ${category} as TEXT LINK (video upload failed)`);
     const msg = await bot.api.sendMessage(
       config.TELEGRAM_CHANNEL_ID,
-      await formatCaption(video, options?.seasonInfo),
+      await formatCaption(video, options?.challengeInfo),
       {
         parse_mode: 'MarkdownV2',
         link_preview_options: { is_disabled: true },
@@ -186,45 +186,45 @@ export async function postVideoToChannel(
   }
 }
 
-// ─── SEASON AUTO-PUBLISH ────────────────────────────────────────────────────
+// ─── CHALLENGE AUTO-PUBLISH ──────────────────────────────────────────────────
 
-import { SEASON_DAY_MAP } from './shared';
+import { DAY_CATEGORY_MAP } from './shared';
 import { todayMsk } from './dates';
 
 /**
- * Post the season video for a given day. Called by the auto-publish cron.
+ * Post the challenge video for a given day. Called by the auto-publish cron.
  * Returns 'posted' | 'no_video' | 'error'.
  */
-export async function postSeasonVideo(
+export async function postChallengeVideo(
   bot: Bot,
-  season: SeasonRow,
+  challenge: ChallengeRow,
   dayNumber: number,
 ): Promise<PostResult> {
-  const slot = getSeasonQueueForDay(season.id, dayNumber);
+  const slot = getWeekSlotForDay(challenge.id, dayNumber);
   if (!slot || !slot.video_id || slot.status !== 'queued') {
-    log.warn(`no queued video for season ${season.number} day ${dayNumber}`);
+    log.warn(`no queued video for challenge ${challenge.number} day ${dayNumber}`);
     return 'no_video';
   }
 
   const video = getVideoById(slot.video_id);
   if (!video) {
-    log.error(`video ${slot.video_id} not found for season queue`);
+    log.error(`video ${slot.video_id} not found for weekly schedule`);
     return 'error';
   }
 
   const date = todayMsk();
   const dayOfWeek = new Date(date + 'T00:00:00').getDay();
-  const category = SEASON_DAY_MAP[dayOfWeek] ?? video.category;
+  const category = DAY_CATEGORY_MAP[dayOfWeek] ?? video.category;
 
   const result = await postVideoToChannel(bot, date, category as Category, {
     force: true,
-    seasonInfo: { seasonNumber: season.number, seasonDay: dayNumber, category: category as Category },
+    challengeInfo: { challengeNumber: challenge.number, challengeDay: dayNumber, category: category as Category },
     video,
   });
 
   if (result === 'posted') {
-    markSeasonQueuePosted(season.id, dayNumber);
-    log.info(`season ${season.number} day ${dayNumber} posted`);
+    markWeekSlotPosted(challenge.id, dayNumber);
+    log.info(`challenge ${challenge.number} day ${dayNumber} posted`);
   }
 
   return result;

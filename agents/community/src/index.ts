@@ -25,17 +25,17 @@ async function sendDeployReport(
 ): Promise<void> {
   const { escV2: e } = await import('./shared');
   const {
-    getDeployStats, getActiveSeason, getSeasonDay, getSeasonWeekNumber,
+    getDeployStats, getActiveChallenge, getChallengeDay, getChallengeWeekNumber,
     getChannelStats, getLastStrategistTimestamp, getLatestPost: getLatestPostDb,
-    getSeasonWeekStatus, initSeasonWeekSlots,
+    getWeekStatus, initWeekSlots,
   } = await import('./db');
   const { todayMsk } = await import('./dates');
   const { isYtDlpAvailable } = await import('./downloader');
-  const { SEASON_DAY_MAP, CATEGORY_RU, CATEGORY_EMOJI } = await import('./shared');
+  const { DAY_CATEGORY_MAP, CATEGORY_RU, CATEGORY_EMOJI } = await import('./shared');
 
   const today = todayMsk();
   const stats = getDeployStats();
-  const season = getActiveSeason();
+  const challenge = getActiveChallenge();
   const channelStats = getChannelStats(today);
   const lastStrat = getLastStrategistTimestamp();
   const latestPost = getLatestPostDb();
@@ -91,16 +91,16 @@ async function sendDeployReport(
   lines.push(`  Стратег — ежедневный анализ ${lastStrat ? `✅ ${e(lastStrat.slice(0, 16).replace('T', ' '))}` : '⏳ нет данных'}`);
   lines.push(`  Аналитика — метрики и дашборды ✅`);
 
-  // ── Season ──
-  if (season) {
-    const dayNum = getSeasonDay(season.start_date, today);
-    const weekNum = getSeasonWeekNumber(dayNum);
+  // ── Challenge ──
+  if (challenge) {
+    const dayNum = getChallengeDay(challenge.start_date, today);
+    const weekNum = getChallengeWeekNumber(dayNum);
     const dow = new Date(today + 'T00:00:00').getDay();
-    const todayCat = SEASON_DAY_MAP[dow];
+    const todayCat = DAY_CATEGORY_MAP[dow];
     const catLabel = todayCat ? `${CATEGORY_EMOJI[todayCat]} ${CATEGORY_RU[todayCat]}` : '?';
 
-    initSeasonWeekSlots(season.id, weekNum);
-    const slots = getSeasonWeekStatus(season.id, weekNum);
+    initWeekSlots(challenge.id, weekNum);
+    const slots = getWeekStatus(challenge.id, weekNum);
     const filled = slots.filter(s => s.status === 'queued' || s.status === 'posted').length;
     const posted = slots.filter(s => s.status === 'posted').length;
 
@@ -279,7 +279,7 @@ async function main(): Promise<void> {
     await ctx.reply(`🔄 Сброшено ${count} сессий на ${date}. Запусти /search для нового поиска.`);
   });
 
-  // /wipe — clear all data (videos, posts, seasons, UGC, etc.)
+  // /wipe — clear all data (videos, posts, challenges, UGC, etc.)
   bot.command('wipe', async (ctx) => {
     if (ctx.from?.id !== config.TELEGRAM_ADMIN_USER_ID) return;
 
@@ -287,7 +287,7 @@ async function main(): Promise<void> {
     const args = ctx.match?.trim();
     if (args !== 'confirm') {
       await ctx.reply(
-        '⚠️ Это удалит ВСЕ данные: видео, посты, сезоны, тренировки, участников, статистику.\n\n' +
+        '⚠️ Это удалит ВСЕ данные: видео, посты, челленджи, тренировки, участников, статистику.\n\n' +
         'Схема и настройки сохранятся.\n\n' +
         'Для подтверждения напиши: /wipe confirm'
       );

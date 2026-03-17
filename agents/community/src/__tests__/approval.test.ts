@@ -484,29 +484,29 @@ describe('refresh flow (soft-delete + replace)', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// SEASON CONTEXT WITH APPROVAL
+// CHALLENGE CONTEXT WITH APPROVAL
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe('season queue integration with approval', () => {
-  it('setSeasonQueueVideo fills a slot when approval is confirmed', async () => {
+describe('challenge schedule integration with approval', () => {
+  it('setWeekSlotVideo fills a slot when approval is confirmed', async () => {
     const db = await import('../db');
 
-    // Create season and init slots
-    db.getDb().prepare(`DELETE FROM season_queue`).run();
-    db.getDb().prepare(`DELETE FROM seasons`).run();
+    // Create challenge and init slots
+    db.getDb().prepare(`DELETE FROM weekly_schedule`).run();
+    db.getDb().prepare(`DELETE FROM challenges`).run();
 
-    const seasonId = db.createSeason(50, '2026-09-01', '2026-09-21');
-    db.activateSeason(seasonId);
-    db.initSeasonWeekSlots(seasonId, 1);
+    const challengeId = db.createChallenge(50, '2026-09-01', '2026-09-21');
+    db.activateChallenge(challengeId);
+    db.initWeekSlots(challengeId, 1);
 
-    const videoId = db.upsertVideo(makeVideo({ youtube_id: 'season-approval-1' }));
+    const videoId = db.upsertVideo(makeVideo({ youtube_id: 'challenge-approval-1' }));
     const sessionId = db.createApprovalSession('2026-09-01', 'stretching', videoId);
     db.setApprovalStatus(sessionId, 'approved');
 
-    // Simulate what approval callback does: fill the season queue
-    db.setSeasonQueueVideo(seasonId, 1, videoId);
+    // Simulate what approval callback does: fill the weekly schedule
+    db.setWeekSlotVideo(challengeId, 1, videoId);
 
-    const slot = db.getSeasonQueueForDay(seasonId, 1);
+    const slot = db.getWeekSlotForDay(challengeId, 1);
     expect(slot).not.toBeNull();
     expect(slot!.video_id).toBe(videoId);
     expect(slot!.status).toBe('queued');

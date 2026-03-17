@@ -9,7 +9,7 @@ import {
   setApprovalStatus,
   softDeletePendingSessions,
   recordRejection,
-  setSeasonQueueVideo,
+  setWeekSlotVideo,
   getDb,
 } from './db';
 import { searchAllCategories, searchVideos, detectEquipment, Category, ScoredVideo } from './youtube';
@@ -21,15 +21,15 @@ const log = createLogger('approval');
 
 const APPROVAL_SEND_DELAY_MS = 300; // Telegram rate-limit safety
 
-// In-memory map: approval session ID → season context
-const seasonContextMap = new Map<number, { seasonId: number; dayNumber: number }>();
+// In-memory map: approval session ID → challenge context
+const challengeContextMap = new Map<number, { challengeId: number; dayNumber: number }>();
 
-function storeSeasonContext(sessionId: number, seasonId: number, dayNumber: number): void {
-  seasonContextMap.set(sessionId, { seasonId, dayNumber });
+function storeChallengeContext(sessionId: number, challengeId: number, dayNumber: number): void {
+  challengeContextMap.set(sessionId, { challengeId, dayNumber });
 }
 
-function getSeasonContext(sessionId: number): { seasonId: number; dayNumber: number } | undefined {
-  return seasonContextMap.get(sessionId);
+function getChallengeContext(sessionId: number): { challengeId: number; dayNumber: number } | undefined {
+  return challengeContextMap.get(sessionId);
 }
 
 function formatViews(n: number): string {
@@ -101,7 +101,7 @@ export async function runApprovalFlow(
   bot: Bot,
   date: string,
   singleCategory?: Category,
-  seasonContext?: { seasonId: number; dayNumber: number },
+  challengeContext?: { challengeId: number; dayNumber: number },
   customKeywords?: { stretching?: string; strength?: string; mobility?: string },
   correlationId?: string,
 ): Promise<void> {
@@ -110,15 +110,15 @@ export async function runApprovalFlow(
   const config = getConfig();
   const categories: Category[] = singleCategory ? [singleCategory] : [...CATEGORIES];
 
-  const seasonLabel = seasonContext
-    ? ` (Сезон, день ${seasonContext.dayNumber})`
+  const challengeLabel = challengeContext
+    ? ` (Челлендж, день ${challengeContext.dayNumber})`
     : '';
 
-  flowLog.info('starting approval flow', { date, categories: categories.length, season: !!seasonContext });
+  flowLog.info('starting approval flow', { date, categories: categories.length, challenge: !!challengeContext });
 
   await bot.api.sendMessage(
     config.TELEGRAM_ADMIN_USER_ID,
-    `🔍 Ищу видео${seasonLabel}...`,
+    `🔍 Ищу видео${challengeLabel}...`,
   );
 
   // Search: single category or all
@@ -150,7 +150,7 @@ export async function runApprovalFlow(
         .text('📅 Назад к неделе', 'show_week_status');
       await bot.api.sendMessage(
         config.TELEGRAM_ADMIN_USER_ID,
-        `⚠️ Не нашёл видео для ${CATEGORY_RU[category] ?? category}${seasonLabel}.\nНет результатов по запросу.`,
+        `⚠️ Не нашёл видео для ${CATEGORY_RU[category] ?? category}${challengeLabel}.\nНет результатов по запросу.`,
         { reply_markup: retryKb }
       );
       continue;
@@ -160,9 +160,9 @@ export async function runApprovalFlow(
     const videoId = upsertVideo(v);
     const sessionId = createApprovalSession(date, category, videoId);
 
-    // Store season context in session metadata for use on approve callback
-    if (seasonContext) {
-      storeSeasonContext(sessionId, seasonContext.seasonId, seasonContext.dayNumber);
+    // Store challenge context in session metadata for use on approve callback
+    if (challengeContext) {
+      storeChallengeContext(sessionId, challengeContext.challengeId, challengeContext.dayNumber);
     }
 
     const text = await formatApprovalMessage(v, category);
@@ -235,12 +235,12 @@ export function registerApprovalCallbacks(bot: Bot): void {
 
     setApprovalStatus(session.id, action === 'approve' ? 'approved' : 'rejected');
 
-    // If this approval is for a season slot, fill the queue
+    // If this approval is for a challenge slot, fill the queue
     if (action === 'approve' && session.video_id) {
-      const sctx = getSeasonContext(session.id);
-      if (sctx) {
-        setSeasonQueueVideo(sctx.seasonId, sctx.dayNumber, session.video_id);
-        seasonContextMap.delete(session.id);
+      const cctx = getChallengeContext(session.id);
+      if (cctx) {
+        setWeekSlotVideo(cctx.challengeId, cctx.dayNumber, session.video_id);
+        challengeContextMap.delete(session.id);
       }
     }
 
@@ -411,25 +411,25 @@ export function registerApprovalCallbacks(bot: Bot): void {
     if (ctx.from?.id !== config.TELEGRAM_ADMIN_USER_ID) return;
     await ctx.answerCallbackQuery();
     const { todayMsk } = await import('./dates');
-    const { getActiveSeason, getSeasonDay, getSeasonWeekNumber, getSeasonWeekStatus } = await import('./db');
-    const { SEASON_DAY_MAP } = await import('./shared');
-    const season = getActiveSeason();
-    if (!season) {
-      try { await ctx.editMessageText('Нет активного сезона.'); } catch {}
+    const { getActiveChallenge, getChallengeDay, getChallengeWeekNumber, getWeekStatus } = await import('./db');
+    const { DAY_CATEGORY_MAP } = await import('./shared');
+    const challenge = getActiveChallenge();
+    if (!challenge) {
+      try { await ctx.editMessageText('Нет активного челленджа.'); } catch {}
       return;
     }
     const today = todayMsk();
-    const dayNum = getSeasonDay(season.start_date, today);
-    const weekNum = getSeasonWeekNumber(dayNum);
-    const slots = getSeasonWeekStatus(season.id, weekNum);
+    const dayNum = getChallengeDay(challenge.start_date, today);
+    const weekNum = getChallengeWeekNumber(dayNum);
+    const slots = getWeekStatus(challenge.id, weekNum);
     const lines = slots.map(s => {
       const dow = ((s.day_number - 1) % 7 + 1) % 7; // day_number to JS day of week
-      const cat = SEASON_DAY_MAP[dow];
+      const cat = DAY_CATEGORY_MAP[dow];
       const catLabel = cat ? `${CATEGORY_EMOJI[cat] ?? ''} ${CATEGORY_RU[cat] ?? cat}` : `День ${s.day_number}`;
       const emoji = s.status === 'posted' ? '✅' : s.status === 'queued' ? '📋' : '⬜';
       return `${emoji} ${catLabel}${(s as any).title ? ` — ${(s as any).title}` : ''}`;
     });
-    try { await ctx.editMessageText(`Сезон ${season.number}, Неделя ${weekNum}:\n\n${lines.join('\n')}`); } catch {}
+    try { await ctx.editMessageText(`Челлендж ${challenge.number}, Неделя ${weekNum}:\n\n${lines.join('\n')}`); } catch {}
   });
 
   bot.callbackQuery('noop', async (ctx) => {

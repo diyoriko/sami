@@ -31,17 +31,17 @@ describe('poster smoke tests', () => {
     expect(typeof mod.postVideoToChannel).toBe('function');
   });
 
-  it('exports postSeasonVideo function', async () => {
+  it('exports postChallengeVideo function', async () => {
     const mod = await import('../poster');
-    expect(typeof mod.postSeasonVideo).toBe('function');
+    expect(typeof mod.postChallengeVideo).toBe('function');
   });
 
-  it('exports SeasonInfo type (interface exists at type level)', async () => {
-    // SeasonInfo is a TypeScript interface — we verify the module shape
+  it('exports ChallengeInfo type (interface exists at type level)', async () => {
+    // ChallengeInfo is a TypeScript interface — we verify the module shape
     // by checking the PostResult type is used correctly
     const mod = await import('../poster');
     expect(mod.postVideoToChannel).toBeDefined();
-    expect(mod.postSeasonVideo).toBeDefined();
+    expect(mod.postChallengeVideo).toBeDefined();
   });
 
   it('PostResult type covers expected values', async () => {

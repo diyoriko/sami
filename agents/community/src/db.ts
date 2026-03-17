@@ -444,9 +444,9 @@ function migrate(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_impl_tasks_status ON impl_tasks(status);
   `);
 
-  // Seasons — 21-day challenge cycles
+  // Challenges — 21-day challenge cycles
   db.exec(`
-    CREATE TABLE IF NOT EXISTS seasons (
+    CREATE TABLE IF NOT EXISTS challenges (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       number INTEGER UNIQUE NOT NULL,
       start_date TEXT NOT NULL,
@@ -454,24 +454,31 @@ function migrate(db: Database.Database): void {
       status TEXT CHECK(status IN ('active','completed','upcoming')) DEFAULT 'upcoming',
       created_at TEXT DEFAULT (datetime('now'))
     );
-    CREATE INDEX IF NOT EXISTS idx_seasons_status ON seasons(status);
+    CREATE INDEX IF NOT EXISTS idx_challenges_status ON challenges(status);
 
-    CREATE TABLE IF NOT EXISTS season_queue (
+    CREATE TABLE IF NOT EXISTS weekly_schedule (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      season_id INTEGER NOT NULL REFERENCES seasons(id),
+      challenge_id INTEGER NOT NULL REFERENCES challenges(id),
       day_number INTEGER NOT NULL,
       video_id INTEGER REFERENCES videos(id),
       status TEXT CHECK(status IN ('empty','queued','posted')) DEFAULT 'empty',
       queued_at TEXT,
       posted_at TEXT,
-      UNIQUE(season_id, day_number)
+      UNIQUE(challenge_id, day_number)
     );
-    CREATE INDEX IF NOT EXISTS idx_season_queue_lookup ON season_queue(season_id, status);
+    CREATE INDEX IF NOT EXISTS idx_weekly_schedule_lookup ON weekly_schedule(challenge_id, status);
   `);
 
-  // Season columns on posts
-  addColumn(db, 'posts', 'season_id', 'INTEGER REFERENCES seasons(id)');
-  addColumn(db, 'posts', 'season_day', 'INTEGER');
+  // Challenge columns on posts
+  addColumn(db, 'posts', 'challenge_id', 'INTEGER REFERENCES challenges(id)');
+  addColumn(db, 'posts', 'challenge_day', 'INTEGER');
+
+  // Migration: rename old tables/columns if they exist (idempotent)
+  try { db.exec(`ALTER TABLE seasons RENAME TO challenges`); } catch { /* already renamed */ }
+  try { db.exec(`ALTER TABLE season_queue RENAME TO weekly_schedule`); } catch { /* already renamed */ }
+  try { db.exec(`ALTER TABLE posts RENAME COLUMN season_id TO challenge_id`); } catch { /* already renamed */ }
+  try { db.exec(`ALTER TABLE posts RENAME COLUMN season_day TO challenge_day`); } catch { /* already renamed */ }
+  try { db.exec(`ALTER TABLE weekly_schedule RENAME COLUMN season_id TO challenge_id`); } catch { /* already renamed */ }
 
   // Rubrics: weekly ritual challenges, mechanics breakdowns, progress digests
   db.exec(`
@@ -626,6 +633,8 @@ export function upsertVideo(v: Omit<VideoRow, 'id'> & { search_query?: string })
     RETURNING id
   `);
   const row = stmt.get({ search_query: null, ...v }) as { id: number };
+  // Auto-compute rating from YouTube metrics (views, likes, subscribers)
+  updateVideoRating(row.id);
   return row.id;
 }
 
@@ -785,12 +794,12 @@ export function getRecentPosts(days: number = 7): RecentPost[] {
 export function recordPost(
   date: string, category: string, videoId: number, channelMessageId: number,
   postType: 'video' | 'link' = 'video',
-  seasonId?: number, seasonDay?: number,
+  challengeId?: number, challengeDay?: number,
 ): number {
   const result = getDb().prepare(`
-    INSERT INTO posts (date, category, video_id, channel_message_id, post_type, season_id, season_day)
+    INSERT INTO posts (date, category, video_id, channel_message_id, post_type, challenge_id, challenge_day)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(date, category, videoId, channelMessageId, postType, seasonId ?? null, seasonDay ?? null);
+  `).run(date, category, videoId, channelMessageId, postType, challengeId ?? null, challengeDay ?? null);
   return Number(result.lastInsertRowid);
 }
 
@@ -1238,69 +1247,48 @@ export function getPostByGroupCommentId(commentId: number): { id: number; video_
  */
 function normalizeLikeRatio(ratio: number): number {
   if (ratio <= 0) return 0;
-  // Map 0-0.08 range to 0-1 with diminishing returns
+  // Map 0-0.06 range to 0-1 with diminishing returns
+  // 3% = 0.71, 5% = 0.91, 6%+ = 1.0
   return Math.min(Math.sqrt(ratio / 0.06), 1);
 }
 
 /**
  * Normalize view count to 0..1 score.
- * 10K = decent (0.5), 100K = good (0.75), 1M+ = excellent (1.0)
+ * 10K = 0.57, 50K = 0.77, 100K = 0.86, 500K = 0.97, 1M+ = 1.0
  */
 function normalizeViews(viewCount: number): number {
   if (viewCount <= 0) return 0;
-  // log10(10K)=4, log10(1M)=6 → map 4..6 to 0.5..1.0
   const log = Math.log10(viewCount);
-  return Math.min(Math.max((log - 2) / 4, 0), 1); // 100 views = 0, 1M = 1.0
+  return Math.min(Math.max((log - 2) / 3.5, 0), 1);
 }
 
 /**
- * Normalize completion count to 0..1 score.
- * 0 = 0, 3 = 0.5, 10+ = 1.0 (diminishing returns via sqrt)
- */
-function normalizeCompletions(count: number): number {
-  if (count <= 0) return 0;
-  return Math.min(Math.sqrt(count / 10), 1);
-}
-
-/**
- * Get total completions across all posts for a given video.
- */
-function getVideoCompletionCount(videoId: number): number {
-  const row = getDb().prepare(
-    `SELECT COUNT(*) as cnt FROM completions WHERE video_id = ?`
-  ).get(videoId) as { cnt: number };
-  return row.cnt;
-}
-
-/**
- * Rating formula: YouTube metrics + Telegram engagement.
+ * Rating formula: YouTube metrics only.
+ *
+ * Completions removed — always 0 at post time, score never recalculated.
  *
  * Weights:
- *  35% view count (YouTube reach)
- *  30% like ratio (YouTube quality signal)
- *  20% channel authority
- *  15% completions (Telegram engagement — people who actually did the workout)
+ *  40% view count (YouTube reach)
+ *  35% like ratio (YouTube quality signal)
+ *  25% channel authority
  */
 export function computeRating(video: VideoRow): number {
-  // UGC videos (no YouTube metrics) — base 5.0 + completions boost up to 8.0
+  // UGC Telegram files — no YouTube metrics, flat score
   if (video.youtube_id?.startsWith('ugc-')) {
-    const completionScore = normalizeCompletions(getVideoCompletionCount(video.id));
-    return Math.round(Math.min(5 + completionScore * 3, 8) * 10) / 10;
+    return 7.0;
   }
 
   const config = getConfig();
   const viewScore = normalizeViews(video.view_count);
   const likeScore = normalizeLikeRatio(video.like_ratio ?? 0);
   const channelScore = video.channel_subscribers > 0
-    ? Math.min(Math.log10(video.channel_subscribers) / 6, 1) // 1M subs = 1.0
-    : 0.3; // unknown channel — conservative estimate
-  const completionScore = normalizeCompletions(getVideoCompletionCount(video.id));
+    ? Math.min(Math.log10(video.channel_subscribers) / 5.5, 1) // 300K subs ≈ 1.0, 1M = 1.0
+    : 0.5; // unknown channel — neutral estimate
 
   const raw =
     config.RATING_VIEW_WEIGHT * viewScore +
     config.RATING_LIKE_WEIGHT * likeScore +
-    config.RATING_CHANNEL_WEIGHT * channelScore +
-    config.RATING_COMPLETION_WEIGHT * completionScore;
+    config.RATING_CHANNEL_WEIGHT * channelScore;
   return Math.round(Math.min(raw * 10, 10) * 10) / 10; // 0.0 .. 10.0
 }
 
@@ -1913,7 +1901,7 @@ export function getWeeklyTopMembers(weekStart: string, limit: number = 5): { tel
 
 // ─── SEASONS ────────────────────────────────────────────────────────────────
 
-export interface SeasonRow {
+export interface ChallengeRow {
   id: number;
   number: number;
   start_date: string;
@@ -1922,9 +1910,9 @@ export interface SeasonRow {
   created_at: string;
 }
 
-export interface SeasonQueueRow {
+export interface WeeklySlotRow {
   id: number;
-  season_id: number;
+  challenge_id: number;
   day_number: number;
   video_id: number | null;
   status: 'empty' | 'queued' | 'posted';
@@ -1932,59 +1920,59 @@ export interface SeasonQueueRow {
   posted_at: string | null;
 }
 
-export function createSeason(num: number, startDate: string, endDate: string): number {
+export function createChallenge(num: number, startDate: string, endDate: string): number {
   const info = getDb().prepare(
-    `INSERT INTO seasons (number, start_date, end_date, status) VALUES (?, ?, ?, 'upcoming')`
+    `INSERT INTO challenges (number, start_date, end_date, status) VALUES (?, ?, ?, 'upcoming')`
   ).run(num, startDate, endDate);
   return Number(info.lastInsertRowid);
 }
 
-export function getActiveSeason(): SeasonRow | null {
-  return getDb().prepare(`SELECT * FROM seasons WHERE status = 'active' LIMIT 1`).get() as SeasonRow | null;
+export function getActiveChallenge(): ChallengeRow | null {
+  return getDb().prepare(`SELECT * FROM challenges WHERE status = 'active' LIMIT 1`).get() as ChallengeRow | null;
 }
 
-export function getUpcomingSeason(): SeasonRow | null {
-  return getDb().prepare(`SELECT * FROM seasons WHERE status = 'upcoming' ORDER BY start_date LIMIT 1`).get() as SeasonRow | null;
+export function getUpcomingChallenge(): ChallengeRow | null {
+  return getDb().prepare(`SELECT * FROM challenges WHERE status = 'upcoming' ORDER BY start_date LIMIT 1`).get() as ChallengeRow | null;
 }
 
-export function getLatestSeason(): SeasonRow | null {
-  return getDb().prepare(`SELECT * FROM seasons ORDER BY number DESC LIMIT 1`).get() as SeasonRow | null;
+export function getLatestChallenge(): ChallengeRow | null {
+  return getDb().prepare(`SELECT * FROM challenges ORDER BY number DESC LIMIT 1`).get() as ChallengeRow | null;
 }
 
-export function activateSeason(seasonId: number): void {
-  getDb().prepare(`UPDATE seasons SET status = 'active' WHERE id = ?`).run(seasonId);
+export function activateChallenge(challengeId: number): void {
+  getDb().prepare(`UPDATE challenges SET status = 'active' WHERE id = ?`).run(challengeId);
 }
 
-export function completeSeason(seasonId: number): void {
-  getDb().prepare(`UPDATE seasons SET status = 'completed' WHERE id = ?`).run(seasonId);
+export function completeChallenge(challengeId: number): void {
+  getDb().prepare(`UPDATE challenges SET status = 'completed' WHERE id = ?`).run(challengeId);
 }
 
 /**
- * Ensure there is an active season for today.
+ * Ensure there is an active challenge for today.
  * - If active exists, return it.
  * - If upcoming exists and today >= start_date, activate it.
- * - If nothing exists, create Season 1 from next Monday.
+ * - If nothing exists, create Challenge 1 from next Monday.
  */
-export function ensureActiveSeason(today: string, nextMonday: string): SeasonRow {
-  const active = getActiveSeason();
+export function ensureActiveChallenge(today: string, nextMonday: string): ChallengeRow {
+  const active = getActiveChallenge();
   if (active) return active;
 
-  const upcoming = getUpcomingSeason();
+  const upcoming = getUpcomingChallenge();
   if (upcoming && upcoming.start_date <= today) {
-    activateSeason(upcoming.id);
+    activateChallenge(upcoming.id);
     return { ...upcoming, status: 'active' };
   }
   if (upcoming) return upcoming; // not yet started
 
-  // No season at all — create first one
-  const latest = getLatestSeason();
+  // No challenge at all — create first one
+  const latest = getLatestChallenge();
   const num = latest ? latest.number + 1 : 1;
   const start = nextMonday;
   const end = addDaysStr(start, 20); // 21 days: day 0..20
-  const id = createSeason(num, start, end);
-  const created: SeasonRow = { id, number: num, start_date: start, end_date: end, status: 'upcoming', created_at: '' };
+  const id = createChallenge(num, start, end);
+  const created: ChallengeRow = { id, number: num, start_date: start, end_date: end, status: 'upcoming', created_at: '' };
   if (start <= today) {
-    activateSeason(id);
+    activateChallenge(id);
     return { ...created, status: 'active' };
   }
   return created;
@@ -1997,84 +1985,84 @@ function addDaysStr(date: string, days: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/** Compute season day (1-21) from today's date and season start */
-export function getSeasonDay(seasonStartDate: string, today: string): number {
-  const start = new Date(seasonStartDate + 'T00:00:00');
+/** Compute challenge day (1-21) from today's date and challenge start */
+export function getChallengeDay(challengeStartDate: string, today: string): number {
+  const start = new Date(challengeStartDate + 'T00:00:00');
   const now = new Date(today + 'T00:00:00');
   return Math.round((now.getTime() - start.getTime()) / 86_400_000) + 1;
 }
 
-/** Which week of the season (1, 2, or 3) */
-export function getSeasonWeekNumber(seasonDay: number): 1 | 2 | 3 {
-  return Math.ceil(seasonDay / 7) as 1 | 2 | 3;
+/** Which week of the challenge (1, 2, or 3) */
+export function getChallengeWeekNumber(challengeDay: number): 1 | 2 | 3 {
+  return Math.ceil(challengeDay / 7) as 1 | 2 | 3;
 }
 
-// --- Season queue ---
+// --- Weekly schedule ---
 
 /** Create 7 empty slots for a week (idempotent) */
-export function initSeasonWeekSlots(seasonId: number, weekNumber: 1 | 2 | 3): void {
+export function initWeekSlots(challengeId: number, weekNumber: 1 | 2 | 3): void {
   const startDay = (weekNumber - 1) * 7 + 1;
   const stmt = getDb().prepare(
-    `INSERT OR IGNORE INTO season_queue (season_id, day_number, status) VALUES (?, ?, 'empty')`
+    `INSERT OR IGNORE INTO weekly_schedule (challenge_id, day_number, status) VALUES (?, ?, 'empty')`
   );
   for (let d = startDay; d < startDay + 7; d++) {
-    stmt.run(seasonId, d);
+    stmt.run(challengeId, d);
   }
 }
 
 /** Get all 7 slots for a week with video info */
-export function getSeasonWeekStatus(seasonId: number, weekNumber: 1 | 2 | 3): (SeasonQueueRow & { title?: string })[] {
+export function getWeekStatus(challengeId: number, weekNumber: 1 | 2 | 3): (WeeklySlotRow & { title?: string })[] {
   const startDay = (weekNumber - 1) * 7 + 1;
   const endDay = startDay + 6;
   return getDb().prepare(`
     SELECT sq.*, v.title
-    FROM season_queue sq
+    FROM weekly_schedule sq
     LEFT JOIN videos v ON v.id = sq.video_id
-    WHERE sq.season_id = ? AND sq.day_number BETWEEN ? AND ?
+    WHERE sq.challenge_id = ? AND sq.day_number BETWEEN ? AND ?
     ORDER BY sq.day_number
-  `).all(seasonId, startDay, endDay) as (SeasonQueueRow & { title?: string })[];
+  `).all(challengeId, startDay, endDay) as (WeeklySlotRow & { title?: string })[];
 }
 
 /** Fill a queue slot with a video */
-export function setSeasonQueueVideo(seasonId: number, dayNumber: number, videoId: number): void {
+export function setWeekSlotVideo(challengeId: number, dayNumber: number, videoId: number): void {
   getDb().prepare(`
-    UPDATE season_queue SET video_id = ?, status = 'queued', queued_at = datetime('now')
-    WHERE season_id = ? AND day_number = ?
-  `).run(videoId, seasonId, dayNumber);
+    UPDATE weekly_schedule SET video_id = ?, status = 'queued', queued_at = datetime('now')
+    WHERE challenge_id = ? AND day_number = ?
+  `).run(videoId, challengeId, dayNumber);
 }
 
 /** Get queue entry for a specific day */
-export function getSeasonQueueForDay(seasonId: number, dayNumber: number): SeasonQueueRow | null {
+export function getWeekSlotForDay(challengeId: number, dayNumber: number): WeeklySlotRow | null {
   return getDb().prepare(
-    `SELECT * FROM season_queue WHERE season_id = ? AND day_number = ?`
-  ).get(seasonId, dayNumber) as SeasonQueueRow | null;
+    `SELECT * FROM weekly_schedule WHERE challenge_id = ? AND day_number = ?`
+  ).get(challengeId, dayNumber) as WeeklySlotRow | null;
 }
 
 /** Mark a queue slot as posted */
-export function markSeasonQueuePosted(seasonId: number, dayNumber: number): void {
+export function markWeekSlotPosted(challengeId: number, dayNumber: number): void {
   getDb().prepare(`
-    UPDATE season_queue SET status = 'posted', posted_at = datetime('now')
-    WHERE season_id = ? AND day_number = ?
-  `).run(seasonId, dayNumber);
+    UPDATE weekly_schedule SET status = 'posted', posted_at = datetime('now')
+    WHERE challenge_id = ? AND day_number = ?
+  `).run(challengeId, dayNumber);
 }
 
 /** Reset a slot to empty (for replacing a queued video) */
-export function clearSeasonSlot(seasonId: number, dayNumber: number): void {
+export function clearWeekSlot(challengeId: number, dayNumber: number): void {
   getDb().prepare(`
-    UPDATE season_queue SET video_id = NULL, status = 'empty', queued_at = NULL
-    WHERE season_id = ? AND day_number = ? AND status = 'queued'
-  `).run(seasonId, dayNumber);
+    UPDATE weekly_schedule SET video_id = NULL, status = 'empty', queued_at = NULL
+    WHERE challenge_id = ? AND day_number = ? AND status = 'queued'
+  `).run(challengeId, dayNumber);
 }
 
 /** Find first empty slot in a week */
-export function getNextEmptySlot(seasonId: number, weekNumber: 1 | 2 | 3): SeasonQueueRow | null {
+export function getNextEmptySlot(challengeId: number, weekNumber: 1 | 2 | 3): WeeklySlotRow | null {
   const startDay = (weekNumber - 1) * 7 + 1;
   const endDay = startDay + 6;
   return getDb().prepare(`
-    SELECT * FROM season_queue
-    WHERE season_id = ? AND day_number BETWEEN ? AND ? AND status = 'empty'
+    SELECT * FROM weekly_schedule
+    WHERE challenge_id = ? AND day_number BETWEEN ? AND ? AND status = 'empty'
     ORDER BY day_number LIMIT 1
-  `).get(seasonId, startDay, endDay) as SeasonQueueRow | null;
+  `).get(challengeId, startDay, endDay) as WeeklySlotRow | null;
 }
 
 // ─── PROPOSALS (strategist → admin approval → backlog) ──────────────────────
@@ -2101,7 +2089,7 @@ export function wipeAllData(): { tables: string[]; deleted: Record<string, numbe
   const tables = [
     'videos', 'completions', 'approval_sessions', 'posts',
     'ugc_submissions', 'ugc_conversation_state',
-    'seasons', 'season_queue',
+    'challenges', 'weekly_schedule',
     'members', 'user_favorites',
     'pending_captchas', 'moderation_log', 'video_rejections',
     'channel_stats', 'daily_stats', 'deploy_history',

@@ -475,7 +475,7 @@ describe('UGC flow — admin with rubric', () => {
     db.deleteUgcState(ADMIN_ID);
   });
 
-  it('admin "Сезон" rubric sets rubric to null', async () => {
+  it('admin "Челлендж" rubric sets rubric to null', async () => {
     // Clean any leftover state from previous test
     db.deleteUgcState(ADMIN_ID);
 
@@ -488,8 +488,8 @@ describe('UGC flow — admin with rubric', () => {
     await bot.handleUpdate(callbackUpdate(`ugc_dur:${subId}:300`, { user_id: ADMIN_ID, chat_id: ADMIN_ID }));
     await bot.handleUpdate(callbackUpdate(`ugc_equip:${subId}:roller`, { user_id: ADMIN_ID, chat_id: ADMIN_ID }));
 
-    // Pick "Сезон" — rubric = null
-    await bot.handleUpdate(callbackUpdate(`ugc_rubric:${subId}:season`, { user_id: ADMIN_ID, chat_id: ADMIN_ID }));
+    // Pick "Челлендж" — rubric = null
+    await bot.handleUpdate(callbackUpdate(`ugc_rubric:${subId}:challenge`, { user_id: ADMIN_ID, chat_id: ADMIN_ID }));
 
     // Should skip to waiting_title
     expect(db.getUgcState(ADMIN_ID)?.step).toBe('waiting_title');

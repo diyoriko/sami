@@ -235,15 +235,15 @@ export const CATEGORY_QUERIES: Record<Category, string[]> = {
   ],
 };
 
-// ─── SEASONS ────────────────────────────────────────────────────────────────
+// ─── CHALLENGES ─────────────────────────────────────────────────────────────
 
-export const SEASON_DURATION = 21; // days per season (3 weeks)
+export const CHALLENGE_DURATION = 21; // days per challenge (3 weeks)
 
 /**
  * Maps JS day-of-week (0=Sun … 6=Sat) to a Category.
  * Mon–Sun = 7 categories, one per day.
  */
-export const SEASON_DAY_MAP: Record<number, Category> = {
+export const DAY_CATEGORY_MAP: Record<number, Category> = {
   1: 'stretching',   // Пн
   2: 'strength',     // Вт
   3: 'mobility',     // Ср
@@ -253,8 +253,8 @@ export const SEASON_DAY_MAP: Record<number, Category> = {
   0: 'recovery',     // Вс
 };
 
-/** Emojis for season post headers (override where they differ from CATEGORY_EMOJI) */
-export const SEASON_EMOJI: Record<Category, string> = {
+/** Emojis for challenge categories */
+export const CATEGORY_EMOJI_MAP: Record<Category, string> = {
   stretching: '🧘',
   strength: '💪',
   mobility: '🤸',
@@ -263,13 +263,6 @@ export const SEASON_EMOJI: Record<Category, string> = {
   recovery: '🛀',
   cardio: '🏃',
 };
-
-/** Season post header line: «Сезон 1, День 3 — 🤸 Мобильность» */
-export function seasonHeader(seasonNumber: number, seasonDay: number, category: Category): string {
-  const emoji = SEASON_EMOJI[category];
-  const name = CATEGORY_RU[category];
-  return `Сезон ${seasonNumber}, День ${seasonDay} — ${emoji} ${name.charAt(0).toUpperCase() + name.slice(1)}`;
-}
 
 /** Parse muscles JSON string into comma-separated display string */
 export function parseMuscles(raw: string | null | undefined): string {

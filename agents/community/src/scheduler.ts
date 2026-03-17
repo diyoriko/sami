@@ -21,54 +21,54 @@ export function startScheduler(bot: Bot): void {
 
   log.info('starting cron jobs...');
 
-  // ---- Season auto-publish ----
+  // ---- Challenge auto-publish ----
 
-  cron.schedule(config.CRON_SEASON_PUBLISH, async () => {
-    log.info('season auto-publish cron triggered');
+  cron.schedule(config.CRON_CHALLENGE_PUBLISH, async () => {
+    log.info('challenge auto-publish cron triggered');
     try {
-      const { ensureActiveSeason, getSeasonDay, completeSeason, getSeasonQueueForDay } = require('./db') as typeof import('./db');
-      const { postSeasonVideo } = require('./poster') as typeof import('./poster');
+      const { ensureActiveChallenge, getChallengeDay, completeChallenge, getWeekSlotForDay } = require('./db') as typeof import('./db');
+      const { postChallengeVideo } = require('./poster') as typeof import('./poster');
       const { nextMondayMsk } = require('./dates') as typeof import('./dates');
-      const { SEASON_DAY_MAP, CATEGORY_RU, SEASON_DURATION } = require('./shared') as typeof import('./shared');
+      const { DAY_CATEGORY_MAP, CATEGORY_RU, CHALLENGE_DURATION } = require('./shared') as typeof import('./shared');
 
       const today = todayMsk();
-      const season = ensureActiveSeason(today, nextMondayMsk());
-      if (season.status !== 'active') {
-        log.info(`season ${season.number} not active yet (starts ${season.start_date})`);
+      const challenge = ensureActiveChallenge(today, nextMondayMsk());
+      if (challenge.status !== 'active') {
+        log.info(`challenge ${challenge.number} not active yet (starts ${challenge.start_date})`);
         return;
       }
 
-      const dayNumber = getSeasonDay(season.start_date, today);
-      if (dayNumber > SEASON_DURATION) {
-        log.info(`season ${season.number} ended (day ${dayNumber}), completing`);
-        completeSeason(season.id);
-        // Next season will be created on next trigger
+      const dayNumber = getChallengeDay(challenge.start_date, today);
+      if (dayNumber > CHALLENGE_DURATION) {
+        log.info(`challenge ${challenge.number} ended (day ${dayNumber}), completing`);
+        completeChallenge(challenge.id);
+        // Next challenge will be created on next trigger
         return;
       }
 
-      const slot = getSeasonQueueForDay(season.id, dayNumber);
+      const slot = getWeekSlotForDay(challenge.id, dayNumber);
       if (!slot || slot.status === 'posted') {
-        log.info(`season ${season.number} day ${dayNumber}: already posted or no slot`);
+        log.info(`challenge ${challenge.number} day ${dayNumber}: already posted or no slot`);
         return;
       }
       if (slot.status !== 'queued' || !slot.video_id) {
         // Unfilled day — normal when admin fills only 2-3 days per week. Silent skip.
         const dow = new Date(today + 'T00:00:00').getDay();
-        const cat = SEASON_DAY_MAP[dow];
+        const cat = DAY_CATEGORY_MAP[dow];
         const catRu = cat ? CATEGORY_RU[cat] : '?';
-        log.info(`season ${season.number} day ${dayNumber} (${catRu}): no video queued, skipping`);
+        log.info(`challenge ${challenge.number} day ${dayNumber} (${catRu}): no video queued, skipping`);
         return;
       }
 
-      const result = await postSeasonVideo(bot, season, dayNumber);
+      const result = await postChallengeVideo(bot, challenge, dayNumber);
       if (result === 'posted') {
-        log.info(`season auto-publish: day ${dayNumber} posted`);
+        log.info(`challenge auto-publish: day ${dayNumber} posted`);
       } else {
-        await notifyAdmin(bot, 'Season', `Автопубликация провалилась: день ${dayNumber}, результат: ${result}`);
+        await notifyAdmin(bot, 'Challenge', `Автопубликация провалилась: день ${dayNumber}, результат: ${result}`);
       }
     } catch (err) {
-      log.error('season auto-publish failed', { error: String(err) });
-      await notifyAdmin(bot, 'Season', `Автопубликация упала:\n\`${String(err)}\``);
+      log.error('challenge auto-publish failed', { error: String(err) });
+      await notifyAdmin(bot, 'Challenge', `Автопубликация упала:\n\`${String(err)}\``);
     }
   }, { timezone: 'Europe/Moscow' });
 
@@ -107,12 +107,12 @@ export function startScheduler(bot: Bot): void {
   cron.schedule('0 9 * * 0', async () => {
     log.info('posting weekly progress poll');
     try {
-      const { ensureActiveSeason } = require('./db') as typeof import('./db');
+      const { ensureActiveChallenge } = require('./db') as typeof import('./db');
       const { nextMondayMsk } = require('./dates') as typeof import('./dates');
 
       const today = todayMsk();
-      const season = ensureActiveSeason(today, nextMondayMsk());
-      if (season.status !== 'active') return;
+      const challenge = ensureActiveChallenge(today, nextMondayMsk());
+      if (challenge.status !== 'active') return;
 
       const question = `Неделя позади! Сколько тренировок удалось сделать?`;
 
@@ -133,12 +133,12 @@ export function startScheduler(bot: Bot): void {
   cron.schedule('0 16 * * 5', async () => {
     log.info('posting stability wall');
     try {
-      const { getWeeklyConsistentUsers, ensureActiveSeason } = require('./db') as typeof import('./db');
+      const { getWeeklyConsistentUsers, ensureActiveChallenge } = require('./db') as typeof import('./db');
       const { nextMondayMsk } = require('./dates') as typeof import('./dates');
 
       const today = todayMsk();
-      const season = ensureActiveSeason(today, nextMondayMsk());
-      if (season.status !== 'active') return;
+      const challenge = ensureActiveChallenge(today, nextMondayMsk());
+      if (challenge.status !== 'active') return;
 
       // Get the last 7 days range
       const endDate = today;
@@ -266,32 +266,32 @@ export function startScheduler(bot: Bot): void {
     }
   }, 3000);
 
-  // Catch-up on startup: publish today's season video if queued but not yet posted
+  // Catch-up on startup: publish today's challenge video if queued but not yet posted
   setTimeout(async () => {
     try {
-      const { ensureActiveSeason, getSeasonDay, getSeasonQueueForDay } = require('./db') as typeof import('./db');
-      const { postSeasonVideo } = require('./poster') as typeof import('./poster');
+      const { ensureActiveChallenge, getChallengeDay, getWeekSlotForDay } = require('./db') as typeof import('./db');
+      const { postChallengeVideo } = require('./poster') as typeof import('./poster');
       const { nextMondayMsk } = require('./dates') as typeof import('./dates');
-      const { SEASON_DURATION } = require('./shared') as typeof import('./shared');
+      const { CHALLENGE_DURATION } = require('./shared') as typeof import('./shared');
 
       const today = todayMsk();
-      const season = ensureActiveSeason(today, nextMondayMsk());
-      if (season.status !== 'active') return;
+      const challenge = ensureActiveChallenge(today, nextMondayMsk());
+      if (challenge.status !== 'active') return;
 
-      const dayNumber = getSeasonDay(season.start_date, today);
-      if (dayNumber < 1 || dayNumber > SEASON_DURATION) return;
+      const dayNumber = getChallengeDay(challenge.start_date, today);
+      if (dayNumber < 1 || dayNumber > CHALLENGE_DURATION) return;
 
-      const slot = getSeasonQueueForDay(season.id, dayNumber);
+      const slot = getWeekSlotForDay(challenge.id, dayNumber);
       if (!slot || slot.status !== 'queued' || !slot.video_id) return;
 
-      log.info(`catch-up: publishing season ${season.number} day ${dayNumber}`);
-      const result = await postSeasonVideo(bot, season, dayNumber);
-      log.info(`catch-up: season publish result: ${result}`);
+      log.info(`catch-up: publishing challenge ${challenge.number} day ${dayNumber}`);
+      const result = await postChallengeVideo(bot, challenge, dayNumber);
+      log.info(`catch-up: challenge publish result: ${result}`);
       if (result !== 'posted') {
-        await notifyAdmin(bot, 'Season', `Catch-up публикация: день ${dayNumber}, результат: ${result}`);
+        await notifyAdmin(bot, 'Challenge', `Catch-up публикация: день ${dayNumber}, результат: ${result}`);
       }
     } catch (err) {
-      log.error('catch-up season publish failed', { error: String(err) });
+      log.error('catch-up challenge publish failed', { error: String(err) });
     }
   }, 5000);
 
