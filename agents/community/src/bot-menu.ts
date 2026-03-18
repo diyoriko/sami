@@ -38,6 +38,7 @@ import {
   getUniqueCompletionUsersForDate,
   getMemberProfile,
   getMemberLevel,
+  getUserStreak,
   filterVideos,
   getNewMembersToday,
   upsertVideo,
@@ -148,8 +149,9 @@ export function registerBotMenu(bot: Bot): void {
     const greeting = firstName ? `Привет, ${firstName}!` : 'Привет!';
     await ctx.reply(
       `${greeting} Я Ботик Сами — твой помощник в мире ежедневных тренировок.\n\n` +
+      `Тренировки выходят каждый день в канале @sami_workouts.\n\n` +
       `Что умею:\n` +
-      `• Показать твои загруженные тренировки\n` +
+      `• Показать твои тренировки и статистику\n` +
       `• Принять предложение новой тренировки\n\n` +
       `Выбирай:`,
       { reply_markup: mainKeyboard(isAdmin(ctx.from!.id)) }
@@ -602,6 +604,7 @@ export function registerBotMenu(bot: Bot): void {
     const userId = ctx.from!.id;
     const profile = getMemberProfile(userId);
     const { level, completions } = getMemberLevel(userId);
+    const streak = getUserStreak(userId);
 
     const GOAL_LABELS: Record<string, string> = {
       rhythm: 'ритм и дисциплина',
@@ -620,6 +623,9 @@ export function registerBotMenu(bot: Bot): void {
       `Тренировок: ${escV2(String(completions))}`,
       `Предложено: ${escV2(String(subTotal))}`,
     ];
+    if (streak > 0) {
+      lines.splice(5, 0, `Серия: ${escV2(String(streak))} дн\\. 🔥`);
+    }
 
     if (profile?.fitness_goal) {
       lines.push(`Цель: ${escV2(GOAL_LABELS[profile.fitness_goal] ?? profile.fitness_goal)}`);
@@ -1390,7 +1396,7 @@ export function registerBotMenu(bot: Bot): void {
       try {
         await bot.api.sendMessage(
           sub.telegram_user_id,
-          'К сожалению, предложенная тренировка не прошла модерацию. Попробуй предложить другую!'
+          `К сожалению, тренировка «${sub.title}» не прошла модерацию. Обычно причина — качество видео или несоответствие формату. Попробуй предложить другую!`
         );
       } catch {}
     }

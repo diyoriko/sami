@@ -64,7 +64,7 @@ describe('UX smoke: moderation handlers', () => {
     expect(modSource).toContain('Как устроен Sami');
     expect(modSource).toContain('Я сделаль');
     expect(modSource).toContain('Предложить тренировку');
-    expect(modSource).toContain('Фильтры');
+    expect(modSource).toContain('Мои тренировки');
   });
 
   it('auto-forward handler posts completion button', () => {
