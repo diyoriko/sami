@@ -85,7 +85,7 @@ export async function runDailyAnalytics(bot: Bot, date: string): Promise<void> {
       yesterday_active: retention.yesterday_active,
       returned_today: retention.returned_today,
       rate: retention.yesterday_active > 0
-        ? Math.round((retention.returned_today / retention.yesterday_active) * 100)
+        ? Math.min(100, Math.round((retention.returned_today / retention.yesterday_active) * 100))
         : 0,
     },
     completions_by_category: completionsByCat,
@@ -101,7 +101,7 @@ export async function runDailyAnalytics(bot: Bot, date: string): Promise<void> {
   // 6. DM admin
 
   const retentionPct = retention.yesterday_active > 0
-    ? Math.round((retention.returned_today / retention.yesterday_active) * 100)
+    ? Math.min(100, Math.round((retention.returned_today / retention.yesterday_active) * 100))
     : 0;
 
   const videoCount = postTypes.find(p => p.post_type === 'video')?.count ?? 0;
