@@ -331,7 +331,7 @@ export function registerModeration(bot: Bot): void {
     let captchaMsg;
     try {
       captchaMsg = await ctx.reply(
-        `👋 ${escV2(firstName)}, добро пожаловать\\!\n\nЧтобы начать общаться, реши простой пример:\n\n*${escV2(question)} \\= ?*`,
+        `👋 ${escV2(firstName)}, добро пожаловать\\!\n\nЧтобы начать общаться, реши простой пример за 2 минуты:\n\n*${escV2(question)} \\= ?*`,
         { parse_mode: 'MarkdownV2', reply_markup: keyboard }
       );
     } catch (err) {

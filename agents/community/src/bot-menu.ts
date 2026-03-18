@@ -308,6 +308,8 @@ export function registerBotMenu(bot: Bot): void {
         `📋 На модерации: ${escV2(String(pendingUgc))}`,
         weekQueueText,
         ``,
+        `_✅ опубликовано · 📋 в очереди · ⬜ пусто · 👈 сегодня_`,
+        ``,
         `Retention: ${escV2(String(retention.returned_today))}/${escV2(String(retention.yesterday_active))} \\(${escV2(String(retPct))}%\\)`,
         `Всего: ${escV2(String(cumulative.total_completions))} выполнений · ${escV2(String(cumulative.total_active_users))} активных`,
         ``,
@@ -420,6 +422,8 @@ export function registerBotMenu(bot: Bot): void {
       `📅 *Расписание недели*${planTag}`,
       ``,
       ...lines.map(l => escV2(l)),
+      ``,
+      `_✅ опубликовано · 📋 в очереди · ⬜ пусто · 👈 сегодня_`,
       ``,
       `Заполнено: ${filledCount}/7`,
     ].join('\n');
