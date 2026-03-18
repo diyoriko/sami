@@ -137,7 +137,12 @@ export function generateCaptcha(): { question: string; answer: number; options: 
     if (n !== answer) wrong.add(n);
   }
 
-  const options = [answer, ...wrong].sort(() => Math.random() - 0.5);
+  // Fisher-Yates shuffle for uniform randomness
+  const options = [answer, ...wrong];
+  for (let i = options.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [options[i], options[j]] = [options[j], options[i]];
+  }
   return { question: `${a} + ${b}`, answer, options };
 }
 
