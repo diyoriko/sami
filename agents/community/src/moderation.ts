@@ -625,7 +625,15 @@ export function registerModeration(bot: Bot): void {
     }
 
     const channelMsgId = origin.message_id;
-    const post = getPostByMessageId(channelMsgId);
+
+    // Retry once after 2s — handles race condition where auto-forward arrives
+    // before recordPost() completes in the publish flow
+    let post = getPostByMessageId(channelMsgId);
+    if (!post) {
+      log.info('auto-forward: post not in DB yet, retrying in 2s', { channelMsgId });
+      await new Promise(r => setTimeout(r, 2000));
+      post = getPostByMessageId(channelMsgId);
+    }
 
     let keyboard: InlineKeyboard;
     if (post) {
@@ -634,7 +642,7 @@ export function registerModeration(bot: Bot): void {
         .text(`Я сделаль${count > 0 ? ` · ${count}` : ''}`, `done:${post.video_id}`);
     } else {
       // Post not tracked in DB (e.g. manual publish) — skip autocomment
-      log.info('auto-forward: no post in DB, skipping autocomment', { channelMsgId });
+      log.info('auto-forward: no post in DB after retry, skipping autocomment', { channelMsgId });
       return next();
     }
 

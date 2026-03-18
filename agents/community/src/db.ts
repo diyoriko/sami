@@ -817,6 +817,11 @@ export function recordPost(
   const result = getDb().prepare(`
     INSERT INTO posts (date, category, video_id, channel_message_id, post_type, challenge_id, challenge_day)
     VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(date, category, video_id) DO UPDATE SET
+      channel_message_id = excluded.channel_message_id,
+      post_type = excluded.post_type,
+      challenge_id = excluded.challenge_id,
+      challenge_day = excluded.challenge_day
   `).run(date, category, videoId, channelMessageId, postType, challengeId ?? null, challengeDay ?? null);
   return Number(result.lastInsertRowid);
 }
