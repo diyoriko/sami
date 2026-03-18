@@ -493,6 +493,11 @@
 - [x] **Тесты обновлены** — 268/268 pass, typecheck clean
 - [x] **Deploy report footer** — обновлён: «📊 Статус · 📈 Аналитика» → «📊 Дашборд · 📅 Неделя»
 
+### P0: Баги (18.03) — замечены в продакшене
+
+- [ ] **Ложное напоминание «нет постов»** — в 15:00 бот пишет «Сегодня ещё не было постов», хотя пост был в 08:00 (стретчинг). Вероятно `getPostCountForDate(todayMsk())` не находит пост — либо дата в DB записана неверно (UTC vs MSK), либо `recordPost` использует дату из challenge slot а не today. Файлы: `scheduler.ts:216-241` (owner reminder cron), `poster.ts` (recordPost), `db.ts`
+- [ ] **Пропал автокоммент «Я сделаль»** — под сегодняшним постом в канале нет кнопки «Я сделаль» в комментариях группы. Auto-forward handler (`moderation.ts:597-654`) не постит кнопку — либо `is_automatic_forward` не срабатывает, либо `getPostByMessageId` не находит пост в DB (связано с предыдущим багом). Файлы: `moderation.ts:597-654`, `poster.ts`
+
 ### P1: Security (code review, 17.03)
 
 - [ ] **Fisher-Yates shuffle для капчи** — `Math.sort(() => Math.random() - 0.5)` не равномерный. Fix: правильный shuffle. Файл: `moderation.ts:140`
@@ -512,6 +517,16 @@
 - [ ] **Легенда иконок расписания** — ✅/📋/⬜ без объяснения. Fix: одна строка-легенда в конце. Файл: `bot-menu.ts`
 - [ ] **Кнопка "Опубликовать сегодня"** — "сегодня" двусмысленно. Fix: "📤 Опубликовать сейчас". Файл: `bot-menu.ts`
 - [ ] **Captcha timeout** — не указано что 2 минуты. Fix: "решите пример (2 мин)". Файл: `moderation.ts:294-340`
+
+### P0: Mega Review (18.03.2026)
+
+- [ ] **[C4] JSON.parse crash — открыт с 17.03** — `JSON.parse(payload.packet)` упадёт если стратег пришлёт невалидный JSON. Обернуть в try/catch, валидировать схему. `index.ts:~530`
+- [ ] **[H4] challengeContextMap → SQLite** — in-memory Map теряется при рестарте Railway. Все pending approvals пропадают. `approval.ts:26`
+
+### P1: Mega Review (18.03.2026)
+
+- [ ] **[M1] Dead reject callback** — ветка кода недостижима. Удалить. `approval.ts:~280`
+- [ ] **[L1] Дублирование CATEGORY_EMOJI** — `CATEGORY_EMOJI_MAP` и `CATEGORY_EMOJI` — два справочника с разными значениями. Оставить один. `shared.ts:~213`
 
 ### P2: Code quality (code review, 17.03)
 
@@ -631,3 +646,10 @@
 | Claude CLI | Стратег-агент (`claude --print`) | Входит в подписку Max |
 | YouTube Data API v3 | Поиск видео | Бесплатная квота (10K units/day) |
 | Telegram Bot API | Бот | Бесплатно |
+
+### Code Review 2026-03-17
+SAMI и Hunter технически стабильны: тесты идут, деплой работает, основные фичи закрыты. Главная боль этой недели — три монолита по 1500+ строк (bot-menu.ts, bot.ts, db.ts) и критический баг в SAMI: данные от Mac-стратега не записываются в БД. Hunter несёт устаревший Claude model ID, который скоро сломает A/B тест обложек. Бэклоги приоритизированы адекватно, но есть мёртвый код в approval-флоу SAMI.
+- [ ] **Code Review:** **SAMI** — Исправить критический баг: `JSON.parse(payload.packet)` в `/packet` handler — `index.ts:~530`
+- [ ] **Code Review:** **SAMI** — Сохранить `challengeContext` в БД вместо in-memory Map — `approval.ts:26`
+- [ ] **Code Review:** **SAMI** — Удалить мёртвый `reject` из callback pattern или добавить кнопку — `approval.ts:~280`
+- [ ] **Code Review:** **SAMI** — Удалить `CATEGORY_EMOJI_MAP`, унифицировать с `CATEGORY_EMOJI` — `shared.ts:~213`

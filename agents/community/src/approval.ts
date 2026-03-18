@@ -10,6 +10,9 @@ import {
   softDeletePendingSessions,
   recordRejection,
   setWeekSlotVideo,
+  storeChallengeContext,
+  getChallengeContext,
+  clearChallengeContext,
   getDb,
 } from './db';
 import { searchAllCategories, searchVideos, detectEquipment, Category, ScoredVideo } from './youtube';
@@ -20,17 +23,6 @@ import { CATEGORIES, CATEGORY_RU, DIFFICULTY_RU, CATEGORY_EMOJI, escV2, parseMus
 const log = createLogger('approval');
 
 const APPROVAL_SEND_DELAY_MS = 300; // Telegram rate-limit safety
-
-// In-memory map: approval session ID → challenge context
-const challengeContextMap = new Map<number, { challengeId: number; dayNumber: number }>();
-
-function storeChallengeContext(sessionId: number, challengeId: number, dayNumber: number): void {
-  challengeContextMap.set(sessionId, { challengeId, dayNumber });
-}
-
-function getChallengeContext(sessionId: number): { challengeId: number; dayNumber: number } | undefined {
-  return challengeContextMap.get(sessionId);
-}
 
 function formatViews(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -219,9 +211,8 @@ async function editKeyboard(
 }
 
 export function registerApprovalCallbacks(bot: Bot): void {
-  bot.callbackQuery(/^(approve|reject):(\d+)$/, async (ctx) => {
-    const action = ctx.match[1] as 'approve' | 'reject';
-    const sessionIdFromCallback = parseInt(ctx.match[2]);
+  bot.callbackQuery(/^approve:(\d+)$/, async (ctx) => {
+    const sessionIdFromCallback = parseInt(ctx.match[1]);
 
     // Primary: lookup by message_id. Fallback: by session ID from callback data
     let session = getApprovalSessionByMessageId(ctx.callbackQuery.message?.message_id ?? -1);
@@ -233,26 +224,24 @@ export function registerApprovalCallbacks(bot: Bot): void {
       return;
     }
 
-    setApprovalStatus(session.id, action === 'approve' ? 'approved' : 'rejected');
+    setApprovalStatus(session.id, 'approved');
 
     // If this approval is for a challenge slot, fill the queue
-    if (action === 'approve' && session.video_id) {
+    if (session.video_id) {
       const cctx = getChallengeContext(session.id);
       if (cctx) {
         setWeekSlotVideo(cctx.challengeId, cctx.dayNumber, session.video_id);
-        challengeContextMap.delete(session.id);
+        clearChallengeContext(session.id);
       }
     }
 
-    const newKeyboard = action === 'approve'
-      ? new InlineKeyboard()
-          .text('✅ Выбрано', 'noop').text('↩️ Отменить', `unapprove:${session.id}`)
-          .row()
-          .text('📢 Опубликовать', `publish_card:${session.id}`)
-      : new InlineKeyboard().text('❌ Пропущено', 'noop').text('↩️ Вернуть', `unapprove:${session.id}`);
+    const newKeyboard = new InlineKeyboard()
+      .text('✅ Выбрано', 'noop').text('↩️ Отменить', `unapprove:${session.id}`)
+      .row()
+      .text('📢 Опубликовать', `publish_card:${session.id}`);
 
     await editKeyboard(ctx as any, newKeyboard);
-    await ctx.answerCallbackQuery(action === 'approve' ? 'Выбрано!' : 'Пропущено');
+    await ctx.answerCallbackQuery('Выбрано!');
   });
 
   bot.callbackQuery(/^unapprove:(\d+)$/, async (ctx) => {

@@ -360,6 +360,7 @@ function migrate(db: Database.Database): void {
   addColumn(db, 'ugc_submissions', 'muscles', 'TEXT');
   addColumn(db, 'ugc_submissions', 'equipment', 'TEXT');
   addColumn(db, 'ugc_submissions', 'rubric', 'TEXT');
+  addColumn(db, 'approval_sessions', 'challenge_context', 'TEXT');
 
   // Migration: rebuild tables with updated CHECK constraints (added yoga, breathing, recovery, cardio)
   migrateCheckConstraints(db);
@@ -705,6 +706,23 @@ export function markApprovalPosted(date: string, category: string): number {
     WHERE date = ? AND category = ? AND status = 'approved' AND deleted_at IS NULL
   `).run(date, category);
   return result.changes;
+}
+
+export function storeChallengeContext(sessionId: number, challengeId: number, dayNumber: number): void {
+  const json = JSON.stringify({ challengeId, dayNumber });
+  getDb().prepare(`UPDATE approval_sessions SET challenge_context = ? WHERE id = ? AND deleted_at IS NULL`).run(json, sessionId);
+}
+
+export function getChallengeContext(sessionId: number): { challengeId: number; dayNumber: number } | undefined {
+  const row = getDb().prepare(
+    `SELECT challenge_context FROM approval_sessions WHERE id = ? AND deleted_at IS NULL`
+  ).get(sessionId) as { challenge_context: string | null } | undefined;
+  if (!row?.challenge_context) return undefined;
+  try { return JSON.parse(row.challenge_context); } catch { return undefined; }
+}
+
+export function clearChallengeContext(sessionId: number): void {
+  getDb().prepare(`UPDATE approval_sessions SET challenge_context = NULL WHERE id = ?`).run(sessionId);
 }
 
 export interface QueueItem {

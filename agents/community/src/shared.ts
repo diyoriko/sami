@@ -253,17 +253,6 @@ export const DAY_CATEGORY_MAP: Record<number, Category> = {
   0: 'recovery',     // Вс
 };
 
-/** Emojis for challenge categories */
-export const CATEGORY_EMOJI_MAP: Record<Category, string> = {
-  stretching: '🧘',
-  strength: '💪',
-  mobility: '🤸',
-  yoga: '🕉️',
-  breathing: '🌬️',
-  recovery: '🛀',
-  cardio: '🏃',
-};
-
 /** Parse muscles JSON string into comma-separated display string */
 export function parseMuscles(raw: string | null | undefined): string {
   if (!raw) return '';

@@ -650,7 +650,7 @@ fi
 
 # Google Calendar event with focus of the day
 if [[ "$STATUS" == "completed" ]] && command -v gcalcli >/dev/null 2>&1; then
-  FOCUS=$(grep -A 5 "## Фокус дня" "$OUT_PATH" 2>/dev/null | tail -4 | tr '\n' ' ' | cut -c1-200)
+  FOCUS=$(grep -A 5 "## Фокус дня" "$OUT_PATH" 2>/dev/null | tail -4 | sed 's/\*\*//g' | sed 's/`//g' | sed 's/^#\+ //' | tr '\n' ' ' | cut -c1-200)
   if [ -n "$FOCUS" ]; then
     gcalcli add \
       --calendar "Personal" \

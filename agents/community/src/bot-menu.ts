@@ -210,7 +210,7 @@ export function registerBotMenu(bot: Bot): void {
     const {
       ensureActiveChallenge, getChallengeDay, initWeekSlots, getWeekStatus,
     } = await import('./db');
-    const { DAY_CATEGORY_MAP, CATEGORY_EMOJI_MAP, CATEGORY_RU: CR, CHALLENGE_DURATION } = await import('./shared');
+    const { DAY_CATEGORY_MAP, CATEGORY_EMOJI, CATEGORY_RU: CR, CHALLENGE_DURATION } = await import('./shared');
 
     const date = todayMsk();
     const yesterday = yesterdayMsk();
@@ -259,7 +259,7 @@ export function registerBotMenu(bot: Bot): void {
             const jd = d === 7 ? 0 : d;
             const slotCat = DAY_CATEGORY_MAP[jd];
             const slotCatRu = slotCat ? CR[slotCat] : '?';
-            const slotEmoji = slotCat ? CATEGORY_EMOJI_MAP[slotCat] : '❓';
+            const slotEmoji = slotCat ? CATEGORY_EMOJI[slotCat] : '❓';
             const dayLabel = DAY_LABELS[jd];
             const isToday = slot.day_number === sDay;
             const icon = slot.status === 'posted' ? '✅'
@@ -370,7 +370,7 @@ export function registerBotMenu(bot: Bot): void {
       ensureActiveChallenge, getChallengeDay,
       initWeekSlots, getWeekStatus,
     } = await import('./db');
-    const { DAY_CATEGORY_MAP, CATEGORY_RU, CATEGORY_EMOJI_MAP, CHALLENGE_DURATION } = await import('./shared');
+    const { DAY_CATEGORY_MAP, CATEGORY_RU, CATEGORY_EMOJI, CHALLENGE_DURATION } = await import('./shared');
 
     const today = todayMsk();
     const challenge = ensureActiveChallenge(today, thisMondayMsk());
@@ -402,7 +402,7 @@ export function registerBotMenu(bot: Bot): void {
       const jsDow = dow === 7 ? 0 : dow;
       const cat = DAY_CATEGORY_MAP[jsDow];
       const catRu = cat ? CATEGORY_RU[cat] : '?';
-      const emoji = cat ? CATEGORY_EMOJI_MAP[cat] : '❓';
+      const emoji = cat ? CATEGORY_EMOJI[cat] : '❓';
       const dayLabel = DAY_LABELS[jsDow];
       const isToday = slot.day_number === challengeDay;
       const icon = slot.status === 'posted' ? '✅' : slot.status === 'queued' ? '📋' : '⬜';

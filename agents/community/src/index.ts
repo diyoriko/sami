@@ -394,9 +394,9 @@ async function main(): Promise<void> {
         }
         try {
           const payload = JSON.parse(body);
-          if (typeof payload.packet !== 'string' || typeof payload.report !== 'string') {
+          if (!payload.packet || typeof payload.packet !== 'object') {
             res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'packet and report must be strings' }));
+            res.end(JSON.stringify({ error: 'packet must be an object' }));
             return;
           }
           const { packetId, actionIds } = savePacketFromExternal(payload.packet, payload.report);
