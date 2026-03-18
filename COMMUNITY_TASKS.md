@@ -1,6 +1,6 @@
 # COMMUNITY_TASKS.md — Бэклог Sami Community
 
-Последнее обновление: 17 марта 2026, 21:40
+Последнее обновление: 18 марта 2026, 16:15
 
 ---
 
@@ -493,47 +493,48 @@
 - [x] **Тесты обновлены** — 268/268 pass, typecheck clean
 - [x] **Deploy report footer** — обновлён: «📊 Статус · 📈 Аналитика» → «📊 Дашборд · 📅 Неделя»
 
-### P0: Баги (18.03) — замечены в продакшене
+### P0: Баги (18.03) — DONE
 
-- [ ] **Ложное напоминание «нет постов»** — в 15:00 бот пишет «Сегодня ещё не было постов», хотя пост был в 08:00 (стретчинг). Вероятно `getPostCountForDate(todayMsk())` не находит пост — либо дата в DB записана неверно (UTC vs MSK), либо `recordPost` использует дату из challenge slot а не today. Файлы: `scheduler.ts:216-241` (owner reminder cron), `poster.ts` (recordPost), `db.ts`
-- [ ] **Пропал автокоммент «Я сделаль»** — под сегодняшним постом в канале нет кнопки «Я сделаль» в комментариях группы. Auto-forward handler (`moderation.ts:597-654`) не постит кнопку — либо `is_automatic_forward` не срабатывает, либо `getPostByMessageId` не находит пост в DB (связано с предыдущим багом). Файлы: `moderation.ts:597-654`, `poster.ts`
+- [x] **Пропал автокоммент «Я сделаль» (race condition)** — auto-forward handler получал сообщение ДО того как `recordPost()` успевал записать пост в DB. Fix: retry через 2с если пост не найден. Файл: `moderation.ts:627-633`
+- [x] **`recordPost` UNIQUE constraint** — при повторной публикации того же видео INSERT падал. Fix: `ON CONFLICT DO UPDATE` вместо fail. Файл: `db.ts:817-823`
+- [x] **Ложное напоминание «нет постов»** — связано с предыдущим: если recordPost падал, пост не записывался в DB → `getPostCountForDate` возвращал 0. Исправлено через ON CONFLICT upsert
 
-### P1: Security (code review, 17.03)
+### P1: Security (code review, 17.03) — DONE
 
-- [ ] **Fisher-Yates shuffle для капчи** — `Math.sort(() => Math.random() - 0.5)` не равномерный. Fix: правильный shuffle. Файл: `moderation.ts:140`
-- [ ] **Хардкод admin ID в fallback** — `process.env.TELEGRAM_ADMIN_USER_ID` в error handler без `getConfig()`. Fix: кэшировать при старте. Файл: `index.ts:683-695`
+- [x] **Fisher-Yates shuffle для капчи** — заменён `sort(() => Math.random() - 0.5)` на Fisher-Yates. Файл: `moderation.ts:140`
+- [x] **Хардкод admin ID в fallback** — WONTFIX: в fatal crash handler `process.env` безопаснее чем `getConfig()` (может бросить). Файл: `index.ts`
 
-### P1: UX — messaging clarity (UX review, 17.03)
+### P1: UX — messaging clarity (UX review, 17.03) — DONE
 
-- [ ] **Приветствие /start** — не объясняет что в канале ежедневные видео. Fix: добавить "Канал @sami_workouts — тренировка каждый день". Файл: `bot-menu.ts:143-149`
-- [ ] **Welcome DM: фичи ≠ меню** — обещает "Профиль" и "Фильтры" которых нет в persistent menu. Fix: привести в соответствие. Файл: `moderation.ts:440-459`
-- [ ] **Goal responses** — слишком длинные, разной длины. Fix: стандартизировать до 2 строк. Файл: `moderation.ts:147-159`
-- [ ] **Cooldown "Я сделаль"** — "Подожди 12 мин." не объясняет правило. Fix: "Максимум 1 тренировка в час". Файл: `moderation.ts`
-- [ ] **Streak в Профиле** — серия показывается только в комментарии группы, не в профиле. Fix: добавить `🔥 Серия: N дн. подряд`. Файл: `bot-menu.ts:610-625`
-- [ ] **Причина отказа UGC** — при отклонении пользователь не получает объяснения. Fix: опциональная причина + DM. Файл: `bot-menu.ts`
+- [x] **Приветствие /start** — добавлено упоминание канала @sami_workouts. Файл: `bot-menu.ts`
+- [x] **Welcome DM: фичи ≠ меню** — убраны «Профиль» и «Фильтры», оставлены только реальные кнопки. Файл: `moderation.ts`
+- [x] **Goal responses** — обновлены "три тренировки" → "тренировка", стандартизирована длина. Файл: `moderation.ts`
+- [x] **Cooldown "Я сделаль"** — «Подожди N мин.» → «Ты уже отметился. Следующая отметка через N мин.». Файл: `moderation.ts`
+- [x] **Streak в Профиле** — добавлен `🔥 Серия: N дн.` через `getUserStreak()`. Файл: `bot-menu.ts`
+- [x] **Причина отказа UGC** — DM теперь включает название видео и типичную причину. Файл: `bot-menu.ts`
 
-### P1: UX — admin (UX review, 17.03)
+### P1: UX — admin (UX review, 17.03) — DONE
 
-- [ ] **Легенда иконок расписания** — ✅/📋/⬜ без объяснения. Fix: одна строка-легенда в конце. Файл: `bot-menu.ts`
+- [x] **Легенда иконок расписания** — добавлена строка `✅ опубликовано · 📋 в очереди · ⬜ пусто · 👈 сегодня` в Дашборд и Неделю. Файл: `bot-menu.ts`
+- [x] **Captcha timeout** — добавлено «за 2 минуты» в текст капчи. Файл: `moderation.ts`
 - [ ] **Кнопка "Опубликовать сегодня"** — "сегодня" двусмысленно. Fix: "📤 Опубликовать сейчас". Файл: `bot-menu.ts`
-- [ ] **Captcha timeout** — не указано что 2 минуты. Fix: "решите пример (2 мин)". Файл: `moderation.ts:294-340`
 
-### P0: Mega Review (18.03.2026)
+### P0: Mega Review (18.03.2026) — DONE
 
-- [ ] **[C4] JSON.parse crash — открыт с 17.03** — `JSON.parse(payload.packet)` упадёт если стратег пришлёт невалидный JSON. Обернуть в try/catch, валидировать схему. `index.ts:~530`
-- [ ] **[H4] challengeContextMap → SQLite** — in-memory Map теряется при рестарте Railway. Все pending approvals пропадают. `approval.ts:26`
+- [x] **[C4] /packet validation** — payload.packet теперь проверяется как объект (стратег шлёт объекты, не строки). `index.ts`
+- [x] **[H4] challengeContextMap → SQLite** — перенесён в колонку `approval_sessions.challenge_context TEXT`. Хелперы: `storeChallengeContext`, `getChallengeContext`, `clearChallengeContext` в db.ts. `approval.ts`
 
-### P1: Mega Review (18.03.2026)
+### P1: Mega Review (18.03.2026) — DONE
 
-- [ ] **[M1] Dead reject callback** — ветка кода недостижима. Удалить. `approval.ts:~280`
-- [ ] **[L1] Дублирование CATEGORY_EMOJI** — `CATEGORY_EMOJI_MAP` и `CATEGORY_EMOJI` — два справочника с разными значениями. Оставить один. `shared.ts:~213`
+- [x] **[M1] Dead reject callback** — удалён из regex, оставлен только `approve:`. `approval.ts`
+- [x] **[L1] Дублирование CATEGORY_EMOJI** — удалён `CATEGORY_EMOJI_MAP`, все ссылки заменены на `CATEGORY_EMOJI`. `shared.ts`, `bot-menu.ts`
 
-### P2: Code quality (code review, 17.03)
+### P2: Code quality (code review, 17.03) — частично DONE
 
-- [ ] **Retention bounds check** — `Math.round(returned/yesterday * 100)` может быть >100%. Fix: `Math.min(100, ...)`. Файл: `analytics.ts:88`
+- [x] **Retention bounds check** — `Math.min(100, ...)` в обоих местах. Файл: `analytics.ts`
+- [x] **English "done." в celebration** — «done.» → «сделано.». Файл: `moderation.ts`
 - [ ] **HTTP body buffering** — `body += chunk` O(n²). Fix: `Buffer.concat(chunks)`. Файл: `index.ts:382-383`
 - [ ] **Silenced catches** — множественные `catch {}` без логирования. Fix: добавить `log.warn`. Файлы: `downloader.ts:132`, `bot-menu.ts` и др.
-- [ ] **English "done." в celebration** — "N — done." → "N — всё." Файл: `moderation.ts:70`
 
 ---
 
