@@ -134,9 +134,6 @@ export async function postVideoToChannel(
               parse_mode: 'MarkdownV2',
               supports_streaming: true,
               duration: download.meta.duration ?? video.duration_seconds ?? undefined,
-              width: download.meta.width ?? undefined,
-              height: download.meta.height ?? undefined,
-              thumbnail: video.thumbnail_url ? new InputFile(new URL(video.thumbnail_url)) : undefined,
             }
           );
           videoSent = true;
@@ -296,8 +293,6 @@ export async function postChallengeSeriesVideo(
           const msg = await bot.api.sendVideo(config.TELEGRAM_CHANNEL_ID, new InputFile(download.filePath), {
             caption, parse_mode: 'MarkdownV2', supports_streaming: true,
             duration: download.meta.duration ?? video.duration_seconds ?? undefined,
-            width: download.meta.width ?? undefined, height: download.meta.height ?? undefined,
-            thumbnail: video.thumbnail_url ? new InputFile(new URL(video.thumbnail_url)) : undefined,
           });
           videoSent = true;
           download.cleanup();

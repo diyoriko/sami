@@ -1555,8 +1555,6 @@ export function registerBotMenu(bot: Bot): void {
                     parse_mode: 'MarkdownV2',
                     supports_streaming: true,
                     duration: download.meta.duration ?? undefined,
-                    width: download.meta.width ?? undefined,
-                    height: download.meta.height ?? undefined,
                   }
                 );
                 videoSent = true;
