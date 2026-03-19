@@ -36,8 +36,9 @@ export interface SeriesInfo {
   participants: number;
 }
 
-async function formatCaption(video: VideoRow, challengeInfo?: ChallengeInfo, seriesInfo?: SeriesInfo): Promise<string> {
-  const categoryRu = CATEGORY_RU[video.category] ?? video.category;
+async function formatCaption(video: VideoRow, challengeInfo?: ChallengeInfo, seriesInfo?: SeriesInfo, overrideCategory?: Category): Promise<string> {
+  const displayCategory = overrideCategory ?? video.category as Category;
+  const categoryRu = CATEGORY_RU[displayCategory] ?? displayCategory;
   const difficultyRu = DIFFICULTY_RU[video.difficulty] ?? video.difficulty;
 
   const muscles = parseMuscles(video.muscles);
@@ -48,7 +49,7 @@ async function formatCaption(video: VideoRow, challengeInfo?: ChallengeInfo, ser
   const title = await rewriteTitle(video.title);
   const channelName = await formatChannelName(video.channel_name);
 
-  const catEmoji = CATEGORY_EMOJI[video.category] ?? '🏷';
+  const catEmoji = CATEGORY_EMOJI[displayCategory] ?? '🏷';
 
   const tagLines = [
     `\`${catEmoji} ${categoryRu}\``,
@@ -110,7 +111,7 @@ export async function postVideoToChannel(
     return 'no_video';
   }
 
-  const caption = await formatCaption(video, options?.challengeInfo);
+  const caption = await formatCaption(video, options?.challengeInfo, undefined, category);
 
   // No inline keyboard on channel posts — Telegram hides "Comments" button when reply_markup is present.
   // Bot posts "Я сделаль" button as a comment in the discussion group instead (see moderation.ts).
@@ -180,7 +181,7 @@ export async function postVideoToChannel(
     postLog.warn(`FALLBACK: posting ${category} as TEXT LINK (video upload failed)`);
     const msg = await bot.api.sendMessage(
       config.TELEGRAM_CHANNEL_ID,
-      await formatCaption(video, options?.challengeInfo),
+      await formatCaption(video, options?.challengeInfo, undefined, category),
       {
         parse_mode: 'MarkdownV2',
         link_preview_options: { is_disabled: true },
@@ -281,7 +282,7 @@ export async function postChallengeSeriesVideo(
     participants,
   };
 
-  const caption = await formatCaption(video, undefined, seriesInfo);
+  const caption = await formatCaption(video, undefined, seriesInfo, category);
   const config = getConfig();
 
   // Try video upload, then link fallback (same pattern as postVideoToChannel)
