@@ -104,15 +104,21 @@ export async function runApprovalFlow(
   const config = getConfig();
   const categories: Category[] = singleCategory ? [singleCategory] : [...CATEGORIES];
 
-  const challengeLabel = challengeContext
-    ? ` (Челлендж, день ${challengeContext.dayNumber})`
-    : '';
+  let challengeLabel = '';
+  if (challengeContext) {
+    const series = getChallengeSeries(challengeContext.challengeId);
+    if (series) {
+      challengeLabel = ` (${series.name}, день ${challengeContext.dayNumber})`;
+    }
+    // Weekly schedule — no extra label, category name is enough
+  }
 
   flowLog.info('starting approval flow', { date, categories: categories.length, challenge: !!challengeContext });
 
+  const catLabel = singleCategory ? ` ${CATEGORY_RU[singleCategory]}` : '';
   await bot.api.sendMessage(
     config.TELEGRAM_ADMIN_USER_ID,
-    `🔍 Ищу видео${challengeLabel}...`,
+    `🔍 Ищу${catLabel}${challengeLabel}...`,
   );
 
   // Search: single category or all
