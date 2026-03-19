@@ -78,6 +78,46 @@ export function startScheduler(bot: Bot): void {
     }
   }, { timezone: 'Europe/Moscow' });
 
+  // ---- Challenge series auto-publish ----
+  // Runs every minute at :00 to check if any active series has a slot to publish at this time
+  cron.schedule('* * * * *', async () => {
+    try {
+      const { getActiveChallengeSeriesList, getChallengeSeriesDaySlot } = require('./db') as typeof import('./db');
+      const { postChallengeSeriesVideo } = require('./poster') as typeof import('./poster');
+      const { moscowNow } = require('./dates') as typeof import('./dates');
+
+      const now = moscowNow();
+      const currentHH = String(now.getHours()).padStart(2, '0');
+      const currentMM = String(now.getMinutes()).padStart(2, '0');
+      const currentTime = `${currentHH}:${currentMM}`;
+      const today = todayMsk();
+
+      const activeSeries = getActiveChallengeSeriesList();
+      for (const series of activeSeries) {
+        // Check if publish_time matches current minute
+        if (series.publish_time !== currentTime) continue;
+
+        // Determine which day of the series today is
+        const startMs = new Date(series.start_date + 'T00:00:00').getTime();
+        const todayMs = new Date(today + 'T00:00:00').getTime();
+        const dayNumber = Math.floor((todayMs - startMs) / 86400000) + 1;
+
+        if (dayNumber < 1 || dayNumber > series.duration_days) continue;
+
+        const slot = getChallengeSeriesDaySlot(series.id, dayNumber);
+        if (!slot || slot.status !== 'queued' || !slot.video_id) continue;
+
+        log.info(`series auto-publish: "${series.name}" day ${dayNumber}`);
+        const result = await postChallengeSeriesVideo(bot, series, dayNumber);
+        if (result !== 'posted') {
+          await notifyAdmin(bot, 'Challenge Series', `Автопубликация "${series.name}" день ${dayNumber}: ${result}`);
+        }
+      }
+    } catch (err) {
+      log.error('challenge series auto-publish failed', { error: String(err) });
+    }
+  }, { timezone: 'Europe/Moscow' });
+
   // 23:55 — write daily report for strategist
   cron.schedule('55 23 * * *', () => {
     log.info('writing daily community report');
@@ -301,6 +341,34 @@ export function startScheduler(bot: Bot): void {
       log.error('catch-up challenge publish failed', { error: String(err) });
     }
   }, 5000);
+
+  // Catch-up on startup: publish queued challenge series slots for today
+  setTimeout(async () => {
+    try {
+      const { getActiveChallengeSeriesList, getChallengeSeriesDaySlot } = require('./db') as typeof import('./db');
+      const { postChallengeSeriesVideo } = require('./poster') as typeof import('./poster');
+
+      const today = todayMsk();
+      const activeSeries = getActiveChallengeSeriesList();
+      for (const series of activeSeries) {
+        const startMs = new Date(series.start_date + 'T00:00:00').getTime();
+        const todayMs = new Date(today + 'T00:00:00').getTime();
+        const dayNumber = Math.floor((todayMs - startMs) / 86400000) + 1;
+        if (dayNumber < 1 || dayNumber > series.duration_days) continue;
+
+        const slot = getChallengeSeriesDaySlot(series.id, dayNumber);
+        if (!slot || slot.status !== 'queued' || !slot.video_id) continue;
+
+        log.info(`catch-up: publishing series "${series.name}" day ${dayNumber}`);
+        const result = await postChallengeSeriesVideo(bot, series, dayNumber);
+        if (result !== 'posted') {
+          await notifyAdmin(bot, 'Challenge Series', `Catch-up "${series.name}" день ${dayNumber}: ${result}`);
+        }
+      }
+    } catch (err) {
+      log.error('catch-up challenge series publish failed', { error: String(err) });
+    }
+  }, 7000);
 
   // Auto-search catch-up disabled — admin uses "Неделя" button manually
 }

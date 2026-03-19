@@ -110,14 +110,15 @@ describe('scheduler: startScheduler registers cron jobs', () => {
 
     // The scheduler registers:
     // 1. Challenge auto-publish (config.CRON_CHALLENGE_PUBLISH)
-    // 2. Daily report (55 23 * * *)
-    // 3. Daily analytics (config.CRON_ANALYTICS_DAILY)
-    // 4. Weekly analytics (config.CRON_ANALYTICS_WEEKLY)
-    // 5. Weekly progress poll (0 9 * * 0)
-    // 6. Stability wall (0 16 * * 5)
-    // 7. 48h inactivity reminder (0 10 * * *)
-    // 8. Owner reminder (0 15 * * *)
-    expect(scheduledJobs.length).toBe(8);
+    // 2. Challenge series auto-publish (* * * * *)
+    // 3. Daily report (55 23 * * *)
+    // 4. Daily analytics (config.CRON_ANALYTICS_DAILY)
+    // 5. Weekly analytics (config.CRON_ANALYTICS_WEEKLY)
+    // 6. Weekly progress poll (0 9 * * 0)
+    // 7. Stability wall (0 16 * * 5)
+    // 8. 48h inactivity reminder (0 10 * * *)
+    // 9. Owner reminder (0 15 * * *)
+    expect(scheduledJobs.length).toBe(9);
   });
 
   it('all cron jobs use Europe/Moscow timezone', async () => {

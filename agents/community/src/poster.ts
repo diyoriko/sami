@@ -3,7 +3,7 @@ import { InputFile } from 'grammy';
 import { getConfig } from './config';
 import {
   getApprovedVideo, recordPost, wasPostedToday, VideoRow,
-  markApprovalPosted, withTransaction,
+  markApprovalPosted, withTransaction, getDb,
   getWeekSlotForDay, markWeekSlotPosted, getVideoById,
   type ChallengeRow,
 } from './db';
@@ -29,7 +29,14 @@ export interface ChallengeInfo {
   category: Category;
 }
 
-async function formatCaption(video: VideoRow, challengeInfo?: ChallengeInfo): Promise<string> {
+export interface SeriesInfo {
+  name: string;
+  dayNumber: number;
+  totalDays: number;
+  participants: number;
+}
+
+async function formatCaption(video: VideoRow, challengeInfo?: ChallengeInfo, seriesInfo?: SeriesInfo): Promise<string> {
   const categoryRu = CATEGORY_RU[video.category] ?? video.category;
   const difficultyRu = DIFFICULTY_RU[video.difficulty] ?? video.difficulty;
 
@@ -60,7 +67,15 @@ async function formatCaption(video: VideoRow, challengeInfo?: ChallengeInfo): Pr
     ? `\`Sami Score: ${scorePercent}% (тон, формат, просмотры, лайки, длительность)\``
     : null;
 
+  const header: string[] = [];
+  if (seriesInfo) {
+    header.push(`🏆 *${escV2(seriesInfo.name)}* · День ${seriesInfo.dayNumber}/${seriesInfo.totalDays}`);
+    header.push(`👥 ${seriesInfo.participants} участник${seriesInfo.participants === 1 ? '' : seriesInfo.participants < 5 ? 'а' : 'ов'}`);
+    header.push('');
+  }
+
   const lines = [
+    ...header,
     `*${title}*`,
     '',
     ...tagLines,
@@ -228,4 +243,103 @@ export async function postChallengeVideo(
   }
 
   return result;
+}
+
+// ─── CHALLENGE SERIES PUBLISH ────────────────────────────────────────────────
+
+import {
+  type ChallengeSeriesRow,
+  getChallengeSeriesDaySlot, markChallengeSeriesDayPosted,
+  getChallengeParticipantCount,
+} from './db';
+
+export async function postChallengeSeriesVideo(
+  bot: Bot,
+  series: ChallengeSeriesRow,
+  dayNumber: number,
+): Promise<PostResult> {
+  const slot = getChallengeSeriesDaySlot(series.id, dayNumber);
+  if (!slot || !slot.video_id || slot.status !== 'queued') {
+    log.warn(`no queued video for series "${series.name}" day ${dayNumber}`);
+    return 'no_video';
+  }
+
+  const video = getVideoById(slot.video_id);
+  if (!video) {
+    log.error(`video ${slot.video_id} not found for series "${series.name}"`);
+    return 'error';
+  }
+
+  const date = todayMsk();
+  const category = (slot.category ?? series.default_category ?? video.category) as Category;
+  const participants = getChallengeParticipantCount(series.id);
+
+  const seriesInfo: SeriesInfo = {
+    name: series.name,
+    dayNumber,
+    totalDays: series.duration_days,
+    participants,
+  };
+
+  const caption = await formatCaption(video, undefined, seriesInfo);
+  const config = getConfig();
+
+  // Try video upload, then link fallback (same pattern as postVideoToChannel)
+  const MAX_ATTEMPTS = 2;
+  if (isYtDlpAvailable()) {
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      let videoSent = false;
+      try {
+        const download = await downloadVideo(video.video_url, video.youtube_id);
+        try {
+          const msg = await bot.api.sendVideo(config.TELEGRAM_CHANNEL_ID, new InputFile(download.filePath), {
+            caption, parse_mode: 'MarkdownV2', supports_streaming: true,
+            duration: download.meta.duration ?? video.duration_seconds ?? undefined,
+            width: download.meta.width ?? undefined, height: download.meta.height ?? undefined,
+            thumbnail: video.thumbnail_url ? new InputFile(new URL(video.thumbnail_url)) : undefined,
+          });
+          videoSent = true;
+          download.cleanup();
+          try {
+            withTransaction(() => {
+              recordPost(date, category, video.id, msg.message_id, 'video', undefined, undefined);
+              // Update the post with series info
+              getDb().prepare(`UPDATE posts SET challenge_series_id = ?, challenge_series_day = ? WHERE channel_message_id = ?`)
+                .run(series.id, dayNumber, msg.message_id);
+              markChallengeSeriesDayPosted(series.id, dayNumber);
+            });
+          } catch (dbErr) {
+            log.error(`DB WRITE FAILED for series "${series.name}" day ${dayNumber}`, { error: String(dbErr) });
+          }
+          log.info(`series "${series.name}" day ${dayNumber} posted as VIDEO`, { msgId: msg.message_id });
+          return 'posted';
+        } catch (uploadErr) {
+          download.cleanup();
+          if (videoSent) return 'posted';
+          log.error(`VIDEO UPLOAD FAILED for series day ${dayNumber} (attempt ${attempt})`, { error: String(uploadErr) });
+        }
+      } catch (dlErr) {
+        log.error(`DOWNLOAD FAILED for series day ${dayNumber} (attempt ${attempt})`, { error: String(dlErr) });
+      }
+      if (attempt < MAX_ATTEMPTS) await new Promise(r => setTimeout(r, 3000));
+    }
+  }
+
+  // Fallback: text + link
+  try {
+    const msg = await bot.api.sendMessage(config.TELEGRAM_CHANNEL_ID, caption, {
+      parse_mode: 'MarkdownV2', link_preview_options: { is_disabled: true },
+    });
+    withTransaction(() => {
+      recordPost(date, category, video.id, msg.message_id, 'link');
+      getDb().prepare(`UPDATE posts SET challenge_series_id = ?, challenge_series_day = ? WHERE channel_message_id = ?`)
+        .run(series.id, dayNumber, msg.message_id);
+      markChallengeSeriesDayPosted(series.id, dayNumber);
+    });
+    log.warn(`series "${series.name}" day ${dayNumber} posted as LINK`);
+    return 'posted';
+  } catch (err) {
+    log.error(`COMPLETE FAILURE for series "${series.name}" day ${dayNumber}`, { error: String(err) });
+    return 'error';
+  }
 }

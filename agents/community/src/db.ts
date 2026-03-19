@@ -481,6 +481,67 @@ function migrate(db: Database.Database): void {
   try { db.exec(`ALTER TABLE posts RENAME COLUMN season_day TO challenge_day`); } catch { /* already renamed */ }
   try { db.exec(`ALTER TABLE weekly_schedule RENAME COLUMN season_id TO challenge_id`); } catch { /* already renamed */ }
 
+  // Named challenge series (parallel to weekly schedule)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS challenge_series (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      duration_days INTEGER NOT NULL CHECK(duration_days BETWEEN 1 AND 90),
+      default_category TEXT,
+      description TEXT,
+      start_date TEXT NOT NULL,
+      end_date TEXT NOT NULL,
+      publish_time TEXT DEFAULT '09:00',
+      status TEXT CHECK(status IN ('draft','active','completed','cancelled')) DEFAULT 'draft',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_challenge_series_status ON challenge_series(status);
+
+    CREATE TABLE IF NOT EXISTS challenge_series_days (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      challenge_id INTEGER NOT NULL REFERENCES challenge_series(id),
+      day_number INTEGER NOT NULL CHECK(day_number >= 1),
+      video_id INTEGER REFERENCES videos(id),
+      category TEXT,
+      status TEXT CHECK(status IN ('empty','queued','posted')) DEFAULT 'empty',
+      queued_at TEXT,
+      posted_at TEXT,
+      UNIQUE(challenge_id, day_number)
+    );
+    CREATE INDEX IF NOT EXISTS idx_cs_days_lookup ON challenge_series_days(challenge_id, status);
+
+    CREATE TABLE IF NOT EXISTS challenge_participants (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      challenge_id INTEGER NOT NULL REFERENCES challenge_series(id),
+      telegram_user_id INTEGER NOT NULL,
+      joined_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(challenge_id, telegram_user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_cp_lookup ON challenge_participants(challenge_id);
+    CREATE INDEX IF NOT EXISTS idx_cp_user ON challenge_participants(telegram_user_id);
+
+    CREATE TABLE IF NOT EXISTS challenge_completions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      challenge_id INTEGER NOT NULL REFERENCES challenge_series(id),
+      day_number INTEGER NOT NULL,
+      telegram_user_id INTEGER NOT NULL,
+      completed_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(challenge_id, day_number, telegram_user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_cc_lookup ON challenge_completions(challenge_id, telegram_user_id);
+  `);
+
+  // Challenge series columns on posts
+  addColumn(db, 'posts', 'challenge_series_id', 'INTEGER REFERENCES challenge_series(id)');
+  addColumn(db, 'posts', 'challenge_series_day', 'INTEGER');
+
+  // Ensure UNIQUE index exists on posts (may be missing if table was created before constraint was added)
+  // Clean up any duplicate rows first to prevent index creation failure
+  try {
+    db.exec(`DELETE FROM posts WHERE id NOT IN (SELECT MIN(id) FROM posts GROUP BY date, category, video_id)`);
+    db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_posts_date_cat_vid ON posts(date, category, video_id)`);
+  } catch { /* index already exists via table constraint — ok */ }
+
   // Rubrics: weekly ritual challenges, mechanics breakdowns, progress digests
   db.exec(`
     CREATE TABLE IF NOT EXISTS rubric_rituals (
@@ -565,7 +626,7 @@ export function getExpiredCaptchas(): CaptchaRow[] {
 
 // --- UGC conversation state (persistent) ---
 
-export type UgcStep = 'waiting_link' | 'waiting_category' | 'waiting_difficulty' | 'waiting_duration' | 'waiting_equipment' | 'waiting_rubric' | 'waiting_title';
+export type UgcStep = 'waiting_link' | 'waiting_category' | 'waiting_difficulty' | 'waiting_duration' | 'waiting_equipment' | 'waiting_rubric' | 'waiting_title' | 'cs_name' | 'cs_duration' | 'cs_category';
 
 export interface UgcConversationRow {
   telegram_user_id: number;
@@ -814,14 +875,21 @@ export function recordPost(
   postType: 'video' | 'link' = 'video',
   challengeId?: number, challengeDay?: number,
 ): number {
+  // Check for existing post first (handles case where UNIQUE index may not exist)
+  const existing = getDb().prepare(
+    `SELECT id FROM posts WHERE date = ? AND category = ? AND video_id = ?`
+  ).get(date, category, videoId) as { id: number } | undefined;
+
+  if (existing) {
+    getDb().prepare(
+      `UPDATE posts SET channel_message_id = ?, post_type = ?, challenge_id = ?, challenge_day = ? WHERE id = ?`
+    ).run(channelMessageId, postType, challengeId ?? null, challengeDay ?? null, existing.id);
+    return existing.id;
+  }
+
   const result = getDb().prepare(`
     INSERT INTO posts (date, category, video_id, channel_message_id, post_type, challenge_id, challenge_day)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(date, category, video_id) DO UPDATE SET
-      channel_message_id = excluded.channel_message_id,
-      post_type = excluded.post_type,
-      challenge_id = excluded.challenge_id,
-      challenge_day = excluded.challenge_day
   `).run(date, category, videoId, channelMessageId, postType, challengeId ?? null, challengeDay ?? null);
   return Number(result.lastInsertRowid);
 }
@@ -1237,17 +1305,17 @@ export function getPollResults(seasonNumber?: number): { poll_id: string; questi
   return rows.map(r => ({ ...r, options: JSON.parse(r.options_json) }));
 }
 
-export function getPostByMessageId(channelMessageId: number): { id: number; video_id: number; category: string; date: string } | null {
+export function getPostByMessageId(channelMessageId: number): { id: number; video_id: number; category: string; date: string; challenge_series_id: number | null; challenge_series_day: number | null } | null {
   return (getDb().prepare(
-    `SELECT id, video_id, category, date FROM posts WHERE channel_message_id = ?`
-  ).get(channelMessageId) as { id: number; video_id: number; category: string; date: string } | undefined) ?? null;
+    `SELECT id, video_id, category, date, challenge_series_id, challenge_series_day FROM posts WHERE channel_message_id = ?`
+  ).get(channelMessageId) as { id: number; video_id: number; category: string; date: string; challenge_series_id: number | null; challenge_series_day: number | null } | undefined) ?? null;
 }
 
 /** Fallback: find most recent post by video_id (for when message_id lookup fails, e.g. forwarded messages) */
-export function getLatestPostByVideoId(videoId: number): { id: number; video_id: number; category: string; date: string } | null {
+export function getLatestPostByVideoId(videoId: number): { id: number; video_id: number; category: string; date: string; challenge_series_id: number | null; challenge_series_day: number | null } | null {
   return (getDb().prepare(
-    `SELECT id, video_id, category, date FROM posts WHERE video_id = ? ORDER BY posted_at DESC LIMIT 1`
-  ).get(videoId) as { id: number; video_id: number; category: string; date: string } | undefined) ?? null;
+    `SELECT id, video_id, category, date, challenge_series_id, challenge_series_day FROM posts WHERE video_id = ? ORDER BY posted_at DESC LIMIT 1`
+  ).get(videoId) as { id: number; video_id: number; category: string; date: string; challenge_series_id: number | null; challenge_series_day: number | null } | undefined) ?? null;
 }
 
 /** Save the bot's comment message_id in the discussion group */
@@ -1256,10 +1324,10 @@ export function setGroupCommentId(postId: number, groupCommentId: number): void 
 }
 
 /** Find post by its group comment message_id */
-export function getPostByGroupCommentId(commentId: number): { id: number; video_id: number; category: string; date: string } | null {
+export function getPostByGroupCommentId(commentId: number): { id: number; video_id: number; category: string; date: string; challenge_series_id: number | null; challenge_series_day: number | null } | null {
   return (getDb().prepare(
-    `SELECT id, video_id, category, date FROM posts WHERE group_comment_id = ?`
-  ).get(commentId) as { id: number; video_id: number; category: string; date: string } | undefined) ?? null;
+    `SELECT id, video_id, category, date, challenge_series_id, challenge_series_day FROM posts WHERE group_comment_id = ?`
+  ).get(commentId) as { id: number; video_id: number; category: string; date: string; challenge_series_id: number | null; challenge_series_day: number | null } | undefined) ?? null;
 }
 
 // --- Rating ---
@@ -2114,6 +2182,149 @@ export function deleteProposals(ids: number[]): void {
   getDb().prepare(`DELETE FROM proposals WHERE id IN (${ids.map(() => '?').join(',')})`).run(...ids);
 }
 
+// ─── CHALLENGE SERIES (named challenges, parallel to weekly schedule) ────────
+
+export interface ChallengeSeriesRow {
+  id: number; name: string; duration_days: number; default_category: string | null;
+  description: string | null; start_date: string; end_date: string;
+  publish_time: string; status: 'draft' | 'active' | 'completed' | 'cancelled';
+  created_at: string;
+}
+
+export interface ChallengeSeriesDayRow {
+  id: number; challenge_id: number; day_number: number; video_id: number | null;
+  category: string | null; status: 'empty' | 'queued' | 'posted';
+  queued_at: string | null; posted_at: string | null;
+}
+
+export function createChallengeSeries(
+  name: string, durationDays: number, startDate: string,
+  opts?: { defaultCategory?: string; description?: string; publishTime?: string },
+): number {
+  const endDate = (() => {
+    const d = new Date(startDate + 'T00:00:00');
+    d.setDate(d.getDate() + durationDays - 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  })();
+  const id = Number(getDb().prepare(`
+    INSERT INTO challenge_series (name, duration_days, default_category, description, start_date, end_date, publish_time)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(name, durationDays, opts?.defaultCategory ?? null, opts?.description ?? null,
+    startDate, endDate, opts?.publishTime ?? '09:00').lastInsertRowid);
+
+  // Pre-create day slots
+  const db = getDb();
+  const stmt = db.prepare(`INSERT OR IGNORE INTO challenge_series_days (challenge_id, day_number, category) VALUES (?, ?, ?)`);
+  for (let d = 1; d <= durationDays; d++) {
+    stmt.run(id, d, opts?.defaultCategory ?? null);
+  }
+  return id;
+}
+
+export function getChallengeSeries(id: number): ChallengeSeriesRow | null {
+  return (getDb().prepare(`SELECT * FROM challenge_series WHERE id = ?`).get(id) as ChallengeSeriesRow | undefined) ?? null;
+}
+
+export function getActiveChallengeSeriesList(): ChallengeSeriesRow[] {
+  return getDb().prepare(`SELECT * FROM challenge_series WHERE status = 'active' ORDER BY start_date`).all() as ChallengeSeriesRow[];
+}
+
+export function listChallengeSeries(statuses?: string[]): ChallengeSeriesRow[] {
+  if (!statuses?.length) return getDb().prepare(`SELECT * FROM challenge_series ORDER BY created_at DESC`).all() as ChallengeSeriesRow[];
+  const placeholders = statuses.map(() => '?').join(',');
+  return getDb().prepare(`SELECT * FROM challenge_series WHERE status IN (${placeholders}) ORDER BY created_at DESC`).all(...statuses) as ChallengeSeriesRow[];
+}
+
+export function updateChallengeSeriesStatus(id: number, status: 'draft' | 'active' | 'completed' | 'cancelled'): void {
+  getDb().prepare(`UPDATE challenge_series SET status = ? WHERE id = ?`).run(status, id);
+}
+
+export function getChallengeSeriesDaySlot(challengeId: number, dayNumber: number): (ChallengeSeriesDayRow & { title?: string }) | null {
+  return (getDb().prepare(`
+    SELECT d.*, v.title FROM challenge_series_days d
+    LEFT JOIN videos v ON v.id = d.video_id
+    WHERE d.challenge_id = ? AND d.day_number = ?
+  `).get(challengeId, dayNumber) as (ChallengeSeriesDayRow & { title?: string }) | undefined) ?? null;
+}
+
+export function getChallengeSeriesDaysStatus(challengeId: number): (ChallengeSeriesDayRow & { title?: string })[] {
+  return getDb().prepare(`
+    SELECT d.*, v.title FROM challenge_series_days d
+    LEFT JOIN videos v ON v.id = d.video_id
+    WHERE d.challenge_id = ?
+    ORDER BY d.day_number
+  `).all(challengeId) as (ChallengeSeriesDayRow & { title?: string })[];
+}
+
+export function setChallengeSeriesDayVideo(challengeId: number, dayNumber: number, videoId: number, category?: string): void {
+  getDb().prepare(`
+    UPDATE challenge_series_days SET video_id = ?, category = COALESCE(?, category), status = 'queued', queued_at = datetime('now')
+    WHERE challenge_id = ? AND day_number = ?
+  `).run(videoId, category ?? null, challengeId, dayNumber);
+}
+
+export function markChallengeSeriesDayPosted(challengeId: number, dayNumber: number): void {
+  getDb().prepare(`
+    UPDATE challenge_series_days SET status = 'posted', posted_at = datetime('now')
+    WHERE challenge_id = ? AND day_number = ?
+  `).run(challengeId, dayNumber);
+}
+
+export function clearChallengeSeriesDaySlot(challengeId: number, dayNumber: number): void {
+  getDb().prepare(`
+    UPDATE challenge_series_days SET video_id = NULL, status = 'empty', queued_at = NULL
+    WHERE challenge_id = ? AND day_number = ? AND status = 'queued'
+  `).run(challengeId, dayNumber);
+}
+
+// --- Participants ---
+
+export function joinChallengeSeries(challengeId: number, userId: number): boolean {
+  try {
+    getDb().prepare(`INSERT INTO challenge_participants (challenge_id, telegram_user_id) VALUES (?, ?)`).run(challengeId, userId);
+    return true;
+  } catch { return false; } // UNIQUE constraint = already joined
+}
+
+export function isChallengeParticipant(challengeId: number, userId: number): boolean {
+  const row = getDb().prepare(`SELECT 1 FROM challenge_participants WHERE challenge_id = ? AND telegram_user_id = ?`).get(challengeId, userId);
+  return !!row;
+}
+
+export function getChallengeParticipantCount(challengeId: number): number {
+  return (getDb().prepare(`SELECT COUNT(*) as cnt FROM challenge_participants WHERE challenge_id = ?`).get(challengeId) as { cnt: number }).cnt;
+}
+
+// --- Completions ---
+
+export function recordChallengeCompletion(challengeId: number, dayNumber: number, userId: number): boolean {
+  try {
+    getDb().prepare(`INSERT INTO challenge_completions (challenge_id, day_number, telegram_user_id) VALUES (?, ?, ?)`).run(challengeId, dayNumber, userId);
+    return true;
+  } catch { return false; } // UNIQUE constraint = already completed
+}
+
+export function hasChallengeCompletion(challengeId: number, dayNumber: number, userId: number): boolean {
+  return !!getDb().prepare(`SELECT 1 FROM challenge_completions WHERE challenge_id = ? AND day_number = ? AND telegram_user_id = ?`).get(challengeId, dayNumber, userId);
+}
+
+export function removeChallengeCompletion(challengeId: number, dayNumber: number, userId: number): boolean {
+  return getDb().prepare(`DELETE FROM challenge_completions WHERE challenge_id = ? AND day_number = ? AND telegram_user_id = ?`).run(challengeId, dayNumber, userId).changes > 0;
+}
+
+export function getChallengeCompletionCount(challengeId: number, dayNumber: number): number {
+  return (getDb().prepare(`SELECT COUNT(*) as cnt FROM challenge_completions WHERE challenge_id = ? AND day_number = ?`).get(challengeId, dayNumber) as { cnt: number }).cnt;
+}
+
+export function getUserChallengeProgress(challengeId: number, userId: number): { completed: number; total: number } {
+  const series = getChallengeSeries(challengeId);
+  const total = series?.duration_days ?? 0;
+  const completed = (getDb().prepare(
+    `SELECT COUNT(*) as cnt FROM challenge_completions WHERE challenge_id = ? AND telegram_user_id = ?`
+  ).get(challengeId, userId) as { cnt: number }).cnt;
+  return { completed, total };
+}
+
 // ─── WIPE ALL DATA ──────────────────────────────────────────────────────────
 
 /** Delete all user-generated data. Keeps schema, config, stop_phrases. */
@@ -2128,6 +2339,7 @@ export function wipeAllData(): { tables: string[]; deleted: Record<string, numbe
     'channel_stats', 'daily_stats', 'deploy_history',
     'strategist_packets', 'strategist_actions',
     'impl_tasks', 'rubric_rituals', 'rubric_ritual_participants', 'proposals',
+    'challenge_series', 'challenge_series_days', 'challenge_participants', 'challenge_completions',
   ];
   const deleted: Record<string, number> = {};
   db.transaction(() => {

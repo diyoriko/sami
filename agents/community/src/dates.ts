@@ -3,7 +3,7 @@
  * Cron jobs run in MSK, approval sessions store MSK dates, posts use MSK dates.
  */
 
-function moscowNow(): Date {
+export function moscowNow(): Date {
   return new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Moscow' }));
 }
 

@@ -19,6 +19,10 @@ import {
   wasBuddyInviteSent, markBuddyInviteSent,
   upsertPollResult,
   getRecentPostsByCategory,
+  getChallengeSeries, joinChallengeSeries, isChallengeParticipant,
+  getChallengeParticipantCount,
+  recordChallengeCompletion, hasChallengeCompletion, removeChallengeCompletion,
+  getChallengeCompletionCount, getUserChallengeProgress,
 } from './db';
 
 // ─── FIRST COMPLETION DM ─────────────────────────────────────────────────────
@@ -640,6 +644,16 @@ export function registerModeration(bot: Bot): void {
       const count = getCompletionCount(post.id);
       keyboard = new InlineKeyboard()
         .text(`Я сделаль${count > 0 ? ` · ${count}` : ''}`, `done:${post.video_id}`);
+
+      // Challenge series post: add "Присоединиться" button
+      if (post.challenge_series_id) {
+        const series = getChallengeSeries(post.challenge_series_id);
+        if (series && series.status === 'active') {
+          const pCount = getChallengeParticipantCount(series.id);
+          keyboard.row()
+            .text(`🏆 Присоединиться${pCount > 0 ? ` · ${pCount}` : ''}`, `ch_join:${series.id}`);
+        }
+      }
     } else {
       // Post not tracked in DB (e.g. manual publish) — skip autocomment
       log.info('auto-forward: no post in DB after retry, skipping autocomment', { channelMsgId });
@@ -873,6 +887,49 @@ export function registerModeration(bot: Bot): void {
     await ctx.answerCallbackQuery('Тренировка записана.');
   });
 
+
+  // --- Challenge series: "Присоединиться" button ---
+  bot.callbackQuery(/^ch_join:(\d+)$/, async (ctx) => {
+    const seriesId = parseInt(ctx.match[1]);
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const series = getChallengeSeries(seriesId);
+    if (!series || series.status !== 'active') {
+      await ctx.answerCallbackQuery('Челлендж завершён');
+      return;
+    }
+
+    if (isChallengeParticipant(seriesId, userId)) {
+      const progress = getUserChallengeProgress(seriesId, userId);
+      await ctx.answerCallbackQuery(`Ты уже участвуешь! ${progress.completed}/${progress.total} дней`);
+      return;
+    }
+
+    joinChallengeSeries(seriesId, userId);
+    const pCount = getChallengeParticipantCount(seriesId);
+    await ctx.answerCallbackQuery(`Ты в деле! Участников: ${pCount}`);
+
+    // Update button count
+    try {
+      const msg = ctx.callbackQuery.message;
+      if (msg?.reply_markup) {
+        const newKb = new InlineKeyboard();
+        for (const row of msg.reply_markup.inline_keyboard) {
+          for (const btn of row) {
+            const cbData = 'callback_data' in btn ? btn.callback_data : undefined;
+            if (cbData?.startsWith('ch_join:')) {
+              newKb.text(`🏆 Присоединиться · ${pCount}`, cbData);
+            } else if (cbData) {
+              newKb.text(btn.text, cbData);
+            }
+          }
+          newKb.row();
+        }
+        await ctx.editMessageReplyMarkup({ reply_markup: newKb });
+      }
+    } catch { /* message too old */ }
+  });
 
   // ---- Poll results tracking (S5) ----
   bot.on('poll', (ctx) => {

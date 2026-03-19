@@ -13,6 +13,8 @@ import {
   storeChallengeContext,
   getChallengeContext,
   clearChallengeContext,
+  getChallengeSeries,
+  setChallengeSeriesDayVideo,
   getDb,
 } from './db';
 import { searchAllCategories, searchVideos, detectEquipment, Category, ScoredVideo } from './youtube';
@@ -230,7 +232,13 @@ export function registerApprovalCallbacks(bot: Bot): void {
     if (session.video_id) {
       const cctx = getChallengeContext(session.id);
       if (cctx) {
-        setWeekSlotVideo(cctx.challengeId, cctx.dayNumber, session.video_id);
+        // Check if challengeId refers to a challenge_series or weekly challenge
+        const series = getChallengeSeries(cctx.challengeId);
+        if (series) {
+          setChallengeSeriesDayVideo(cctx.challengeId, cctx.dayNumber, session.video_id);
+        } else {
+          setWeekSlotVideo(cctx.challengeId, cctx.dayNumber, session.video_id);
+        }
         clearChallengeContext(session.id);
       }
     }
