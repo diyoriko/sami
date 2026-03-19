@@ -8,7 +8,7 @@ import { createLogger } from './logger';
 const execFileAsync = promisify(execFile);
 const log = createLogger('downloader');
 
-const MAX_SIZE_BYTES = 45 * 1024 * 1024; // 45MB — Telegram Bot API limit is 50MB
+const MAX_SIZE_BYTES = 50 * 1024 * 1024; // 50MB — Telegram Bot API limit
 const COOKIES_PATH = process.env.YT_COOKIES_PATH || '/data/cookies.txt';
 
 // Timeouts for external processes (ms)

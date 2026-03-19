@@ -185,11 +185,15 @@ export async function postVideoToChannel(
       }
     );
 
-    // Atomic: record as link post + mark approval
-    withTransaction(() => {
-      recordPost(date, category, video.id, msg.message_id, 'link');
-      markApprovalPosted(date, category);
-    });
+    // Record in DB — separate try so DB failure doesn't lose the already-sent post
+    try {
+      withTransaction(() => {
+        recordPost(date, category, video.id, msg.message_id, 'link');
+        markApprovalPosted(date, category);
+      });
+    } catch (dbErr) {
+      postLog.error(`DB WRITE FAILED for ${category} (link already sent)`, { msgId: msg.message_id, error: String(dbErr) });
+    }
 
     postLog.warn(`posted ${category} as LINK (degraded)`, { msgId: msg.message_id });
     return 'posted';
@@ -326,12 +330,16 @@ export async function postChallengeSeriesVideo(
     const msg = await bot.api.sendMessage(config.TELEGRAM_CHANNEL_ID, caption, {
       parse_mode: 'MarkdownV2', link_preview_options: { is_disabled: true },
     });
-    withTransaction(() => {
-      recordPost(date, category, video.id, msg.message_id, 'link');
-      getDb().prepare(`UPDATE posts SET challenge_series_id = ?, challenge_series_day = ? WHERE channel_message_id = ?`)
-        .run(series.id, dayNumber, msg.message_id);
-      markChallengeSeriesDayPosted(series.id, dayNumber);
-    });
+    try {
+      withTransaction(() => {
+        recordPost(date, category, video.id, msg.message_id, 'link');
+        getDb().prepare(`UPDATE posts SET challenge_series_id = ?, challenge_series_day = ? WHERE channel_message_id = ?`)
+          .run(series.id, dayNumber, msg.message_id);
+        markChallengeSeriesDayPosted(series.id, dayNumber);
+      });
+    } catch (dbErr) {
+      log.error(`DB WRITE FAILED for series "${series.name}" day ${dayNumber} (link already sent)`, { msgId: msg.message_id, error: String(dbErr) });
+    }
     log.warn(`series "${series.name}" day ${dayNumber} posted as LINK`);
     return 'posted';
   } catch (err) {

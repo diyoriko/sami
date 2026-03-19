@@ -192,6 +192,45 @@ function migrateUgcPublishedStatus(db: Database.Database): void {
   }
 }
 
+function migrateApprovalPostedStatus(db: Database.Database): void {
+  // Test if CHECK allows 'posted' status
+  try {
+    db.exec(`INSERT INTO approval_sessions (date, category, video_id, status) VALUES ('__test__', '__test__', NULL, 'posted')`);
+    db.exec(`DELETE FROM approval_sessions WHERE date = '__test__'`);
+    return; // Already supports 'posted'
+  } catch {
+    // Need to rebuild
+  }
+
+  db.pragma('foreign_keys = OFF');
+  try {
+    db.exec('BEGIN');
+    db.exec(`ALTER TABLE approval_sessions RENAME TO approval_sessions_old`);
+    db.exec(`
+      CREATE TABLE approval_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT NOT NULL,
+        category TEXT NOT NULL,
+        video_id INTEGER REFERENCES videos(id),
+        status TEXT CHECK(status IN ('pending','approved','rejected','posted')) DEFAULT 'pending',
+        message_id INTEGER,
+        created_at TEXT DEFAULT (datetime('now')),
+        decided_at TEXT,
+        deleted_at TEXT,
+        challenge_context TEXT
+      )
+    `);
+    db.exec(`INSERT INTO approval_sessions SELECT * FROM approval_sessions_old`);
+    db.exec(`DROP TABLE approval_sessions_old`);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  } finally {
+    db.pragma('foreign_keys = ON');
+  }
+}
+
 function migrate(db: Database.Database): void {
   // Migrations for older schemas
   addColumn(db, 'videos', 'view_count', 'INTEGER DEFAULT 0');
@@ -367,6 +406,9 @@ function migrate(db: Database.Database): void {
 
   // Migration: allow 'published' status in ugc_submissions
   migrateUgcPublishedStatus(db);
+
+  // Migration: allow 'posted' status in approval_sessions
+  migrateApprovalPostedStatus(db);
 
   // Video rejections (blocklist): tracks admin "Другое" clicks
   db.exec(`
