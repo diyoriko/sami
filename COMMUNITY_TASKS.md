@@ -1,8 +1,33 @@
 # COMMUNITY_TASKS.md — Бэклог Sami Community
 
-Последнее обновление: 19 марта 2026, 17:50
+Последнее обновление: 20 марта 2026
 
 ---
+
+## SPRINT 8 — Tests + Growth + Quality
+
+Статус: **в работе** | Начало: 20.03.2026
+
+### P1: Тесты — критические пробелы
+
+- [x] **dates.ts** — 40 тестов: todayMsk, tomorrowMsk, yesterdayMsk, moscowHour, dayOfWeekMsk, thisMondayMsk, nextMondayMsk, dateDiffDays, addDaysMsk. Frozen time + pure functions
+- [ ] **youtube.ts** — 0 тестов: extractYouTubeId (все форматы URL), scoring formula (граничные значения), searchYouTube (ошибки API)
+- [ ] **poster.ts** — 0 тестов: formatCaption (теги, MarkdownV2 escaping, Sami Score), text fallback при ошибке скачивания
+
+### P1: Growth — фичи
+
+- [ ] **Welcome DM: "Как ты нас нашёл?"** — кнопки (рекомендация / поиск / другое) → запись в DB → аналитика. При вступлении в группу
+- [ ] **Trackable invite links** — бот создаёт 3-5 уникальных invite ссылок для разных каналов (личные, ВК, чаты). DB: таблица `invite_links(id, label, url, clicks, joins)`
+
+### P2: Code quality
+
+- [ ] **Silenced catches** — 63 empty `catch {}` без логирования (31 в bot-menu.ts — expected TG API errors → `log.debug`, остальные → `log.warn`). Перенесено из Sprint 7
+- [ ] **db.ts split фаза 1** — вынести analytics или challenges из db.ts (2399 строк). Re-export для совместимости
+
+---
+
+<details>
+<summary>Сделано — релизы v0.1.0–v0.14.0</summary>
 
 ## Сделано
 
@@ -127,6 +152,8 @@
 
 ---
 
+</details>
+
 ## Завершённые спринты
 
 <details>
@@ -152,9 +179,12 @@
 
 ---
 
+<details>
+<summary>Sprint 6 — Качество + UX (v0.6.0–v0.15.2) — DONE</summary>
+
 ## SPRINT 6 — Качество + UX
 
-Статус: **в работе** | Версия: v0.15.2
+Статус: **завершён** | Версия: v0.15.2
 
 Решение по архитектуре (11.03): **канал + группа зафиксирована** до 50 подписчиков.
 
@@ -468,9 +498,14 @@
 
 ---
 
+</details>
+
+<details>
+<summary>Sprint 7 — Security + UX + Неделя = текущая (17.03–20.03) — DONE</summary>
+
 ## SPRINT 7 — Security + UX + Неделя = текущая
 
-Статус: **в работе** | Начало: 17.03.2026
+Статус: **завершён** | 17.03–20.03.2026
 
 > Источник: 5 глубинных ревью (код, UX, тесты, архитектура, стратегия) от 17.03.2026
 
@@ -552,6 +587,8 @@
 
 ---
 
+</details>
+
 ## Бэклог (не в спринте)
 
 > Задачи ниже отложены до явного решения вытащить в спринт. Приоритизированы по 5 ревью от 17.03.
@@ -589,7 +626,7 @@
 - [ ] **poster.ts** — 0 тестов: formatCaption (теги, MarkdownV2 escaping, Sami Score), text fallback при ошибке скачивания
 - [ ] **approval.ts callbacks** — 0 тестов: approve/reject/unapprove/refresh button handlers
 - [ ] **downloader.ts** — 0 тестов: downloadVideo, isYtDlpAvailable
-- [ ] **dates.ts** — 0 тестов: thisMondayMsk, nextMondayMsk, dateDiffDays, addDaysMsk
+- [x] **dates.ts** — 40 тестов (Sprint 8): todayMsk, tomorrowMsk, yesterdayMsk, moscowHour, dayOfWeekMsk, thisMondayMsk, nextMondayMsk, dateDiffDays, addDaysMsk
 - [ ] **analytics.ts** — только mock в scheduler.test.ts, нет тестов расчётов
 
 ### UX — P2 (UX review)
@@ -690,4 +727,4 @@ SAMI и Hunter технически стабильны: тесты идут, д�
 - [ ] **backlog triage** — 43 open задач: sprint assignment, закрыть нерелевантные, цель ≤15 open
 
 ### Architect Review 2026-03-20
-- [ ] **Backlog structure fix** — переместить текущий Sprint 7 наверх файла, секцию 'Сделано' и завершённые спринты вниз. Как у Hunter: open sprint сверху, done внизу
+- [x] **Backlog structure fix** — Sprint 8 наверх, Sprint 6-7 и Сделано в `<details>`. Как у Hunter: open sprint сверху, done внизу
