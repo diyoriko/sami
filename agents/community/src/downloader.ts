@@ -214,15 +214,16 @@ async function probeVideoMeta(filePath: string): Promise<VideoMeta> {
 
 /**
  * Normalize video for Telegram: ensure H.264 codec and square pixels (SAR 1:1).
- * Only re-encodes when needed (wrong codec or non-square SAR) to avoid inflating
- * file size on long videos. When re-encoding, uses higher CRF (28) to stay under
- * Telegram's 50MB limit.
+ * When SAR != 1:1 (anamorphic pixels), we MUST re-encode with proper scaling —
+ * just changing SAR metadata causes aspect ratio distortion.
+ * Scale formula: `scale=trunc(iw*sar/2)*2:trunc(ih/2)*2` computes the correct
+ * display dimensions, then `setsar=1:1` marks pixels as square.
  */
 async function normalizeVideo(filePath: string): Promise<string> {
   try {
     const { stdout } = await execFileAsync('ffprobe', [
       '-v', 'quiet', '-select_streams', 'v:0',
-      '-show_entries', 'stream=codec_name,sample_aspect_ratio,display_aspect_ratio',
+      '-show_entries', 'stream=codec_name,width,height,sample_aspect_ratio,display_aspect_ratio',
       '-show_entries', 'format_tags=rotate',
       '-print_format', 'json', filePath,
     ], { timeout: METADATA_TIMEOUT });
@@ -230,6 +231,7 @@ async function normalizeVideo(filePath: string): Promise<string> {
     const stream = info.streams?.[0];
     const codec = stream?.codec_name;
     const sar = stream?.sample_aspect_ratio ?? '1:1';
+    const dar = stream?.display_aspect_ratio ?? 'N/A';
     const rotation = info.format?.tags?.rotate;
 
     const needsReencode = codec !== 'h264';
@@ -241,31 +243,36 @@ async function normalizeVideo(filePath: string): Promise<string> {
       return filePath;
     }
 
-    log.info(`normalizing video`, { codec, sar, rotation, needsReencode, needsSarFix });
+    log.info(`normalizing video`, { codec, sar, dar, rotation, width: stream?.width, height: stream?.height, needsReencode, needsSarFix });
     const outPath = filePath.replace(/\.mp4$/, '.norm.mp4');
 
-    if (needsReencode || needsRotationFix) {
-      // Full re-encode: wrong codec or rotation needs fixing
-      await execFileAsync('ffmpeg', [
-        '-i', filePath,
-        '-c:v', 'libx264', '-preset', 'fast', '-crf', '28',
-        '-vf', 'setsar=1:1',
-        '-c:a', 'aac',
-        '-movflags', '+faststart',
-        '-map_metadata', '-1',
-        '-y', outPath,
-      ], { timeout: DOWNLOAD_TIMEOUT });
-    } else {
-      // SAR fix only: copy streams, just fix metadata (fast, no quality loss)
-      await execFileAsync('ffmpeg', [
-        '-i', filePath,
-        '-c', 'copy',
-        '-bsf:v', 'h264_metadata=sample_aspect_ratio=1/1',
-        '-movflags', '+faststart',
-        '-map_metadata', '-1',
-        '-y', outPath,
-      ], { timeout: DOWNLOAD_TIMEOUT });
-    }
+    // Always re-encode with proper scaling to display dimensions.
+    // scale=trunc(iw*sar/2)*2:trunc(ih/2)*2 converts anamorphic → square pixels.
+    // If SAR is already 1:1, this is an identity scale (iw*1=iw).
+    await execFileAsync('ffmpeg', [
+      '-i', filePath,
+      '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+      '-vf', 'scale=trunc(iw*sar/2)*2:trunc(ih/2)*2,setsar=1:1',
+      '-c:a', 'aac',
+      '-movflags', '+faststart',
+      '-map_metadata', '-1',
+      '-y', outPath,
+    ], { timeout: DOWNLOAD_TIMEOUT });
+
+    // Verify output aspect ratio
+    try {
+      const { stdout: probeOut } = await execFileAsync('ffprobe', [
+        '-v', 'quiet', '-select_streams', 'v:0',
+        '-show_entries', 'stream=width,height,sample_aspect_ratio,display_aspect_ratio',
+        '-print_format', 'json', outPath,
+      ], { timeout: METADATA_TIMEOUT });
+      const outInfo = JSON.parse(probeOut);
+      const outStream = outInfo.streams?.[0];
+      log.info('normalized result', {
+        width: outStream?.width, height: outStream?.height,
+        sar: outStream?.sample_aspect_ratio, dar: outStream?.display_aspect_ratio,
+      });
+    } catch { /* non-critical */ }
 
     fs.unlinkSync(filePath);
     fs.renameSync(outPath, filePath);
@@ -298,10 +305,11 @@ async function compressToFit(filePath: string): Promise<boolean> {
     const totalBitrateKbps = Math.floor((targetBytes * 8) / (duration * 1000));
     const videoBitrateKbps = Math.max(totalBitrateKbps - audioBitrate, 200);
 
-    // If bitrate is low, scale down to 360p for better perceived quality
+    // Scale to display dimensions (handle SAR != 1:1 defensively, even after normalize).
+    // Low bitrate → also scale down to 360p for better perceived quality.
     const scaleFilter = videoBitrateKbps < 700
-      ? 'scale=-2:360,setsar=1:1'
-      : 'setsar=1:1';
+      ? 'scale=trunc(360*dar/2)*2:360,setsar=1:1'
+      : 'scale=trunc(iw*sar/2)*2:trunc(ih/2)*2,setsar=1:1';
 
     log.info(`compressing: ${duration}s, target ${videoBitrateKbps}k video + ${audioBitrate}k audio, filter=${scaleFilter}`);
 

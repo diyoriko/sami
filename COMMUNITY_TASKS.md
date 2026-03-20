@@ -527,7 +527,7 @@
 
 - [x] **Легенда иконок расписания** — добавлена строка `✅ опубликовано · 📋 в очереди · ⬜ пусто · 👈 сегодня` в Дашборд и Неделю. Файл: `bot-menu.ts`
 - [x] **Captcha timeout** — добавлено «за 2 минуты» в текст капчи. Файл: `moderation.ts`
-- [ ] **Кнопка "Опубликовать сегодня"** — "сегодня" двусмысленно. Fix: "📤 Опубликовать сейчас". Файл: `bot-menu.ts`
+- [x] **Кнопка "Опубликовать сегодня"** — "сегодня" двусмысленно. Fix: "📤 Опубликовать сейчас". 2 места в `bot-menu.ts`
 
 ### P0: Mega Review (18.03.2026) — DONE
 
@@ -539,11 +539,15 @@
 - [x] **[M1] Dead reject callback** — удалён из regex, оставлен только `approve:`. `approval.ts`
 - [x] **[L1] Дублирование CATEGORY_EMOJI** — удалён `CATEGORY_EMOJI_MAP`, все ссылки заменены на `CATEGORY_EMOJI`. `shared.ts`, `bot-menu.ts`
 
+### P0: Видео — пропорции (20.03) — DONE
+
+- [x] **SAR distortion fix** — видео с SAR != 1:1 отображалось вытянутым в Telegram. `setsar=1:1` менял только метаданные без масштабирования. Fix: `scale=trunc(iw*sar/2)*2:trunc(ih/2)*2,setsar=1:1` — сначала масштабирует до display-размеров, потом SAR 1:1. Исправлено в 3 местах: normalizeVideo re-encode, normalizeVideo SAR-only (убран stream copy, теперь полный re-encode), compressToFit. CRF 28→23 (лучше качество). Верификация DAR после нормализации. Файл: `downloader.ts`
+
 ### P2: Code quality (code review, 17.03) — частично DONE
 
 - [x] **Retention bounds check** — `Math.min(100, ...)` в обоих местах. Файл: `analytics.ts`
 - [x] **English "done." в celebration** — «done.» → «сделано.». Файл: `moderation.ts`
-- [ ] **HTTP body buffering** — `body += chunk` O(n²). Fix: `Buffer.concat(chunks)`. Файл: `index.ts:382-383`
+- [x] **HTTP body buffering** — `body += chunk` O(n²). Fix: `Buffer.concat(chunks)` во всех 5 endpoints. Файл: `index.ts`
 - [ ] **Silenced catches** — множественные `catch {}` без логирования. Fix: добавить `log.warn`. Файлы: `downloader.ts:132`, `bot-menu.ts` и др.
 
 ---
@@ -601,7 +605,7 @@
 ### Стратег — оптимизация (strategic review)
 
 - [ ] **Стратег → еженедельный** — daily overkill при 15 подписчиков. Формат: результаты недели → 3 приоритета → цели. 500 слов вместо 3000
-- [ ] **Убрать poll_results** — таблица создана но не используется
+- ~~**Убрать poll_results**~~ — таблица активно используется (moderation.ts:944, upsertPollResult при каждом опросе)
 
 ### Отложено (после 50+ участников)
 
@@ -666,7 +670,24 @@
 
 ### Code Review 2026-03-17
 SAMI и Hunter технически стабильны: тесты идут, деплой работает, основные фичи закрыты. Главная боль этой недели — три монолита по 1500+ строк (bot-menu.ts, bot.ts, db.ts) и критический баг в SAMI: данные от Mac-стратега не записываются в БД. Hunter несёт устаревший Claude model ID, который скоро сломает A/B тест обложек. Бэклоги приоритизированы адекватно, но есть мёртвый код в approval-флоу SAMI.
-- [ ] **Code Review:** **SAMI** — Исправить критический баг: `JSON.parse(payload.packet)` в `/packet` handler — `index.ts:~530`
-- [ ] **Code Review:** **SAMI** — Сохранить `challengeContext` в БД вместо in-memory Map — `approval.ts:26`
-- [ ] **Code Review:** **SAMI** — Удалить мёртвый `reject` из callback pattern или добавить кнопку — `approval.ts:~280`
-- [ ] **Code Review:** **SAMI** — Удалить `CATEGORY_EMOJI_MAP`, унифицировать с `CATEGORY_EMOJI` — `shared.ts:~213`
+- [x] **Code Review:** **SAMI** — Исправить критический баг: `JSON.parse(payload.packet)` в `/packet` handler — `index.ts:~530` — готово: payload.packet проверяется как объект (Sprint 7 P0)
+- [x] **Code Review:** **SAMI** — Сохранить `challengeContext` в БД вместо in-memory Map — `approval.ts:26` — готово: Mega Review [H4] (Sprint 7)
+- [x] **Code Review:** **SAMI** — Удалить мёртвый `reject` из callback pattern или добавить кнопку — `approval.ts:~280` — готово: Mega Review [M1] (Sprint 7)
+- [x] **Code Review:** **SAMI** — Удалить `CATEGORY_EMOJI_MAP`, унифицировать с `CATEGORY_EMOJI` — `shared.ts:~213` — готово: Mega Review [L1] (Sprint 7)
+
+### Mega Review 2026-03-20
+<!-- Source: ~/Documents/Projects/Architect/code-reviews/2026-03-20.md -->
+- [x] **Mega Review:** **SAMI** — critical — исправить `JSON.parse(payload.packet)` в `/packet` handler — готово (Sprint 7 P0)
+- [x] **Mega Review:** **SAMI** — high — сохранить `challengeContext` в DB вместо in-memory Map — готово (Sprint 7 Mega Review)
+- [x] **Mega Review:** **SAMI** — medium — заменить `body += chunk` на `Buffer.concat(chunks)` — все 5 endpoints в `index.ts`
+- [ ] **Mega Review:** **Portfolio** — medium — обновить SAMI case (SYNC-03): Seasons→Challenges, LOC 14K+ — `projects/sami.html`
+- [x] **Mega Review:** **SAMI** — low — удалить `CATEGORY_EMOJI_MAP`, везде использовать `CATEGORY_EMOJI` — готово (Sprint 7 Mega Review)
+
+### Mega Review 2026-03-20
+<!-- Source: ~/Documents/Projects/Architect/code-reviews/2026-03-20.md -->
+- [ ] **db.ts split фаза 1** — вынести analytics или approval из db.ts (2399 строк, план есть)
+- [ ] **pre-release checklist в CLAUDE.md** — typecheck + test перед каждым feat-релизом
+- [ ] **backlog triage** — 43 open задач: sprint assignment, закрыть нерелевантные, цель ≤15 open
+
+### Architect Review 2026-03-20
+- [ ] **Backlog structure fix** — переместить текущий Sprint 7 наверх файла, секцию 'Сделано' и завершённые спринты вниз. Как у Hunter: open sprint сверху, done внизу

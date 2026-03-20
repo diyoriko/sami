@@ -380,11 +380,13 @@ async function main(): Promise<void> {
       }
 
       const MAX_BODY = 5 * 1024 * 1024; // 5 MB
-      let body = '';
+      const chunks: Buffer[] = [];
+      let bodySize = 0;
       let tooBig = false;
-      req.on('data', (chunk) => {
-        body += chunk;
-        if (body.length > MAX_BODY) { tooBig = true; req.destroy(); }
+      req.on('data', (chunk: Buffer) => {
+        bodySize += chunk.length;
+        if (bodySize > MAX_BODY) { tooBig = true; req.destroy(); return; }
+        chunks.push(chunk);
       });
       req.on('end', async () => {
         if (tooBig) {
@@ -393,6 +395,7 @@ async function main(): Promise<void> {
           return;
         }
         try {
+          const body = Buffer.concat(chunks).toString('utf8');
           const payload = JSON.parse(body);
           if (!payload.packet || typeof payload.packet !== 'object') {
             res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -430,11 +433,13 @@ async function main(): Promise<void> {
       }
 
       const MAX_COOKIES = 1 * 1024 * 1024; // 1 MB
-      let body = '';
+      const chunks: Buffer[] = [];
+      let bodySize = 0;
       let tooBig = false;
-      req.on('data', (chunk: string) => {
-        body += chunk;
-        if (body.length > MAX_COOKIES) { tooBig = true; req.destroy(); }
+      req.on('data', (chunk: Buffer) => {
+        bodySize += chunk.length;
+        if (bodySize > MAX_COOKIES) { tooBig = true; req.destroy(); return; }
+        chunks.push(chunk);
       });
       req.on('end', () => {
         if (tooBig) {
@@ -443,6 +448,7 @@ async function main(): Promise<void> {
           return;
         }
         try {
+          const body = Buffer.concat(chunks).toString('utf8');
           const cookiesPath = process.env.YT_COOKIES_PATH || '/data/cookies.txt';
           // Path traversal guard: must be within /data/ or project dir
           const resolved = path.resolve(cookiesPath);
@@ -493,11 +499,13 @@ async function main(): Promise<void> {
       }
 
       const MAX_BODY = 1 * 1024 * 1024; // 1 MB
-      let body = '';
+      const chunks: Buffer[] = [];
+      let bodySize = 0;
       let tooBig = false;
-      req.on('data', (chunk: string) => {
-        body += chunk;
-        if (body.length > MAX_BODY) { tooBig = true; req.destroy(); }
+      req.on('data', (chunk: Buffer) => {
+        bodySize += chunk.length;
+        if (bodySize > MAX_BODY) { tooBig = true; req.destroy(); return; }
+        chunks.push(chunk);
       });
       req.on('end', async () => {
         if (tooBig) {
@@ -506,6 +514,7 @@ async function main(): Promise<void> {
           return;
         }
         try {
+          const body = Buffer.concat(chunks).toString('utf8');
           const payload = JSON.parse(body) as {
             id: number;
             status: ImplTaskStatus;
@@ -567,11 +576,13 @@ async function main(): Promise<void> {
       }
 
       const MAX_BODY = 1 * 1024 * 1024;
-      let body = '';
+      const chunks: Buffer[] = [];
+      let bodySize = 0;
       let tooBig = false;
-      req.on('data', (chunk: string) => {
-        body += chunk;
-        if (body.length > MAX_BODY) { tooBig = true; req.destroy(); }
+      req.on('data', (chunk: Buffer) => {
+        bodySize += chunk.length;
+        if (bodySize > MAX_BODY) { tooBig = true; req.destroy(); return; }
+        chunks.push(chunk);
       });
       req.on('end', () => {
         if (tooBig) {
@@ -580,6 +591,7 @@ async function main(): Promise<void> {
           return;
         }
         try {
+          const body = Buffer.concat(chunks).toString('utf8');
           const payload = JSON.parse(body) as {
             title: string;
             spec: string;
@@ -614,11 +626,13 @@ async function main(): Promise<void> {
       }
 
       const MAX_BODY = 512 * 1024;
-      let body = '';
+      const chunks: Buffer[] = [];
+      let bodySize = 0;
       let tooBig = false;
-      req.on('data', (chunk: string) => {
-        body += chunk;
-        if (body.length > MAX_BODY) { tooBig = true; req.destroy(); }
+      req.on('data', (chunk: Buffer) => {
+        bodySize += chunk.length;
+        if (bodySize > MAX_BODY) { tooBig = true; req.destroy(); return; }
+        chunks.push(chunk);
       });
       req.on('end', () => {
         if (tooBig) {
@@ -627,6 +641,7 @@ async function main(): Promise<void> {
           return;
         }
         try {
+          const body = Buffer.concat(chunks).toString('utf8');
           const payload = JSON.parse(body) as { task_text: string };
           if (!payload.task_text) {
             res.writeHead(400, { 'Content-Type': 'application/json' });

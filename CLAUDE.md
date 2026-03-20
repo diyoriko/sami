@@ -137,6 +137,18 @@ bash agents/uninstall-1x-daily-mac.sh              # удалить cron
 - Валидация: zod
 - Модульно, но без over-engineering
 
+## Dashboard
+- Architect Dashboard (localhost:3333) читает COMMUNITY_TASKS.md **live** при каждом запросе
+- Дашборд НЕ статический — изменения в COMMUNITY_TASKS.md видны на localhost:3333/sami-backlog.html через ≤30 секунд
+- Не нужно "пересобирать" дашборд — он всегда актуален
+
+## Backlog & Session Discipline
+
+- `COMMUNITY_TASKS.md` — единственный источник правды для задач
+- При завершении задачи — отметить `[x]` в COMMUNITY_TASKS.md
+- Новые задачи/баги, найденные в ходе работы — добавить в COMMUNITY_TASKS.md с приоритетом
+- В конце сессии: обновить COMMUNITY_TASKS.md (отметить сделанное, добавить новое)
+
 ## Quality Gate
 
 - `npm run typecheck` + `npm test` перед каждым деплоем (из `agents/community/`)

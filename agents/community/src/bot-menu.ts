@@ -289,7 +289,7 @@ export function registerBotMenu(bot: Bot): void {
           // Show publish button if today's slot is queued
           const todaySlot = slots.find(s => s.day_number === sDay);
           if (todaySlot && todaySlot.status === 'queued') {
-            dashKb = new InlineKeyboard().text('📤 Опубликовать сегодня', `challenge_pub:${challenge.id}:${sDay}`);
+            dashKb = new InlineKeyboard().text('📤 Опубликовать сейчас', `challenge_pub:${challenge.id}:${sDay}`);
           }
         }
       }
@@ -447,7 +447,7 @@ export function registerBotMenu(bot: Bot): void {
     if (challenge.status === 'active' && challengeDay >= 1) {
       const todaySlot = slots.find(s => s.day_number === challengeDay);
       if (todaySlot && todaySlot.status === 'queued') {
-        kb.text('📤 Опубликовать сегодня', `challenge_pub:${challenge.id}:${challengeDay}`);
+        kb.text('📤 Опубликовать сейчас', `challenge_pub:${challenge.id}:${challengeDay}`);
         kb.row();
       }
     }
