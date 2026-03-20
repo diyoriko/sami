@@ -277,40 +277,137 @@ async function normalizeVideo(filePath: string): Promise<string> {
   }
 }
 
+/**
+ * Re-encode video to fit under Telegram's 50MB limit.
+ * Calculates target bitrate from duration and re-encodes with ffmpeg.
+ * Returns true if successful, false if compression failed.
+ */
+async function compressToFit(filePath: string): Promise<boolean> {
+  try {
+    const meta = await probeVideoMeta(filePath);
+    const duration = meta.duration;
+    if (!duration || duration < 1) {
+      log.warn('cannot compress: unknown duration');
+      return false;
+    }
+
+    // Target: 48MB (leave 2MB margin for container overhead)
+    const targetBytes = 48 * 1024 * 1024;
+    // Total bitrate in kbps (video + audio); reserve 128kbps for audio
+    const audioBitrate = 128;
+    const totalBitrateKbps = Math.floor((targetBytes * 8) / (duration * 1000));
+    const videoBitrateKbps = Math.max(totalBitrateKbps - audioBitrate, 200);
+
+    // If bitrate is low, scale down to 360p for better perceived quality
+    const scaleFilter = videoBitrateKbps < 700
+      ? 'scale=-2:360,setsar=1:1'
+      : 'setsar=1:1';
+
+    log.info(`compressing: ${duration}s, target ${videoBitrateKbps}k video + ${audioBitrate}k audio, filter=${scaleFilter}`);
+
+    const outPath = filePath.replace(/\.mp4$/, '.compress.mp4');
+    await execFileAsync('ffmpeg', [
+      '-i', filePath,
+      '-c:v', 'libx264', '-preset', 'fast',
+      '-b:v', `${videoBitrateKbps}k`, '-maxrate', `${Math.round(videoBitrateKbps * 1.5)}k`,
+      '-bufsize', `${videoBitrateKbps * 2}k`,
+      '-vf', scaleFilter,
+      '-c:a', 'aac', '-b:a', `${audioBitrate}k`,
+      '-movflags', '+faststart',
+      '-map_metadata', '-1',
+      '-y', outPath,
+    ], { timeout: DOWNLOAD_TIMEOUT });
+
+    const compressedSize = fs.statSync(outPath).size;
+    if (compressedSize > MAX_SIZE_BYTES) {
+      log.warn(`compression result still too large: ${Math.round(compressedSize / 1024 / 1024)}MB`);
+      fs.unlinkSync(outPath);
+      return false;
+    }
+
+    fs.unlinkSync(filePath);
+    fs.renameSync(outPath, filePath);
+    log.info(`compressed: ${Math.round(compressedSize / 1024 / 1024)}MB`);
+    return true;
+  } catch (err) {
+    log.error('compression failed', { error: String(err) });
+    // Clean up temp file if it exists
+    const outPath = filePath.replace(/\.mp4$/, '.compress.mp4');
+    try { fs.unlinkSync(outPath); } catch { /* ignore */ }
+    return false;
+  }
+}
+
+const MAX_VIDEO_DURATION = 900; // 15 min — longer videos get posted as link
+
+/**
+ * Pick max resolution based on video duration to stay under 50MB with decent quality.
+ * - ≤10 min: 480p (~800kbps video = comfortable fit)
+ * - 10–15 min: 360p (~500kbps = good quality at lower res)
+ * Videos >15 min are rejected before download (posted as YouTube link instead).
+ */
+function pickMaxHeight(durationSeconds: number | undefined): number {
+  if (!durationSeconds || durationSeconds <= 600) return 480;
+  return 360;
+}
+
+/** Fetch video duration via yt-dlp metadata (no download) */
+async function fetchDuration(ytDlp: string, url: string, extraArgs: string[]): Promise<number | undefined> {
+  try {
+    const args = [url, '--dump-json', '--no-playlist', '--no-warnings', ...extraArgs];
+    const { stdout } = await execFileAsync(ytDlp, args, { timeout: METADATA_TIMEOUT });
+    const info = JSON.parse(stdout);
+    return info.duration ? Math.round(Number(info.duration)) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function downloadVideo(youtubeUrl: string, youtubeId: string): Promise<DownloadResult> {
   const ytDlp = findYtDlp();
   const tmpDir = os.tmpdir();
   const outTemplate = path.join(tmpDir, `sami-${youtubeId}.%(ext)s`);
 
-  // Target 480p H.264 mp4 — Telegram requires H.264/AVC, not VP9/AV1.
-  // Prefer avc1 (H.264), fall back to any mp4, then re-encode if needed.
+  // Common args for proxy/cookies
+  const commonArgs: string[] = [];
+  const proxy = process.env.YT_PROXY;
+  if (proxy) commonArgs.push('--proxy', proxy);
+  const cookieCandidates = [COOKIES_PATH, path.join(os.tmpdir(), 'yt-cookies.txt')];
+  for (const cp of cookieCandidates) {
+    if (fs.existsSync(cp) && fs.statSync(cp).size > 100) {
+      commonArgs.push('--cookies', cp);
+      break;
+    }
+  }
+
+  // Fetch duration to pick optimal resolution (or skip download for very long videos)
+  const duration = await fetchDuration(ytDlp, youtubeUrl, commonArgs);
+  if (duration && duration > MAX_VIDEO_DURATION) {
+    throw new Error(`Video too long for upload (${Math.round(duration / 60)} min > 15 min limit) — will post as link`);
+  }
+  const maxHeight = pickMaxHeight(duration);
+  if (maxHeight < 480) {
+    log.info(`long video (${duration}s), downloading at ${maxHeight}p to fit 50MB limit`);
+  }
+
+  // Format string with adaptive resolution
+  const fmt = [
+    `bestvideo[height<=${maxHeight}][vcodec^=avc1]+bestaudio[ext=m4a]`,
+    `bestvideo[height<=${maxHeight}][ext=mp4]+bestaudio[ext=m4a]`,
+    `best[height<=${maxHeight}][ext=mp4]`,
+    `best[height<=${maxHeight}]`,
+  ].join('/');
+
   const baseArgs = [
     youtubeUrl,
-    '-f', 'bestvideo[height<=480][vcodec^=avc1]+bestaudio[ext=m4a]/bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best[height<=480]',
+    '-f', fmt,
     '--merge-output-format', 'mp4',
     '-o', outTemplate,
     '--no-playlist',
     '--quiet',
     '--no-warnings',
+    ...commonArgs,
   ];
-
-  // Use proxy if configured (needed for datacenter IPs blocked by YouTube)
-  const proxy = process.env.YT_PROXY;
-  if (proxy) {
-    baseArgs.push('--proxy', proxy);
-  }
-
-  // Use cookies if available and non-empty (skip placeholder/empty files)
-  const cookieCandidates = [COOKIES_PATH, path.join(os.tmpdir(), 'yt-cookies.txt')];
-  for (const cp of cookieCandidates) {
-    if (fs.existsSync(cp)) {
-      const size = fs.statSync(cp).size;
-      if (size > 100) { // skip empty/placeholder files
-        baseArgs.push('--cookies', cp);
-        break;
-      }
-    }
-  }
 
   const attempts = [
     [...baseArgs, '--extractor-args', 'youtube:player_client=mediaconnect'],
@@ -355,11 +452,17 @@ export async function downloadVideo(youtubeUrl: string, youtubeId: string): Prom
   // Normalize: H.264 codec + SAR 1:1 + clean metadata for Telegram compatibility
   await normalizeVideo(filePath);
 
-  const { size } = fs.statSync(filePath);
+  let { size } = fs.statSync(filePath);
 
+  // If file exceeds Telegram limit, re-encode to fit
   if (size > MAX_SIZE_BYTES) {
-    fs.unlinkSync(filePath);
-    throw new Error(`File too large: ${Math.round(size / 1024 / 1024)}MB > 50MB limit`);
+    log.info(`file too large (${Math.round(size / 1024 / 1024)}MB), compressing to fit under 50MB`);
+    const compressed = await compressToFit(filePath);
+    if (!compressed) {
+      fs.unlinkSync(filePath);
+      throw new Error(`File too large (${Math.round(size / 1024 / 1024)}MB) and compression failed`);
+    }
+    size = fs.statSync(filePath).size;
   }
 
   const meta = await probeVideoMeta(filePath);
