@@ -1,6 +1,6 @@
 # COMMUNITY_TASKS.md — Бэклог Sami Community
 
-Последнее обновление: 20 марта 2026
+Последнее обновление: 20 марта 2026, 17:20
 
 ---
 
@@ -8,9 +8,15 @@
 
 Статус: **в работе** | Начало: 20.03.2026
 
+### P0: Видео пропорции — DONE (20.03)
+
+- [x] **SAR distortion fix** — `setsar=1:1` без масштабирования → `scale=trunc(iw*sar/2)*2:trunc(ih/2)*2,setsar=1:1`. Файл: `downloader.ts`
+- [x] **Always re-encode** — убран early return, каждое видео проходит ffmpeg (чистый контейнер, consistent tkhd + stream metadata). Файл: `downloader.ts`
+- [x] **Explicit width/height в sendVideo** — Telegram неправильно auto-detect'ил размеры из MP4 → вытянутый preview на всех клиентах. Fix: передаём `width` и `height` из ffprobe в `sendVideo`. 3 места: poster (обычные), poster (series), bot-menu (UGC). Файлы: `poster.ts`, `bot-menu.ts`
+
 ### P1: Тесты — критические пробелы
 
-- [x] **dates.ts** — 40 тестов: todayMsk, tomorrowMsk, yesterdayMsk, moscowHour, dayOfWeekMsk, thisMondayMsk, nextMondayMsk, dateDiffDays, addDaysMsk. Frozen time + pure functions
+- [x] **dates.ts** — 40 тестов: все time-функции с frozen MSK time + pure functions
 - [ ] **youtube.ts** — 0 тестов: extractYouTubeId (все форматы URL), scoring formula (граничные значения), searchYouTube (ошибки API)
 - [ ] **poster.ts** — 0 тестов: formatCaption (теги, MarkdownV2 escaping, Sami Score), text fallback при ошибке скачивания
 
