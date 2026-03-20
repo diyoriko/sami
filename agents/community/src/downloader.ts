@@ -213,24 +213,60 @@ async function probeVideoMeta(filePath: string): Promise<VideoMeta> {
 }
 
 /**
- * Normalize video for Telegram: ensure H.264 codec, square pixels (SAR 1:1),
- * no rotation metadata. Always re-encodes to guarantee clean output — avoids
- * stretched/letterboxed playback caused by non-square SAR or broken metadata.
+ * Normalize video for Telegram: ensure H.264 codec and square pixels (SAR 1:1).
+ * Only re-encodes when needed (wrong codec or non-square SAR) to avoid inflating
+ * file size on long videos. When re-encoding, uses higher CRF (28) to stay under
+ * Telegram's 50MB limit.
  */
 async function normalizeVideo(filePath: string): Promise<string> {
   try {
+    const { stdout } = await execFileAsync('ffprobe', [
+      '-v', 'quiet', '-select_streams', 'v:0',
+      '-show_entries', 'stream=codec_name,sample_aspect_ratio,display_aspect_ratio',
+      '-show_entries', 'format_tags=rotate',
+      '-print_format', 'json', filePath,
+    ], { timeout: METADATA_TIMEOUT });
+    const info = JSON.parse(stdout);
+    const stream = info.streams?.[0];
+    const codec = stream?.codec_name;
+    const sar = stream?.sample_aspect_ratio ?? '1:1';
+    const rotation = info.format?.tags?.rotate;
+
+    const needsReencode = codec !== 'h264';
+    const needsSarFix = sar !== '1:1' && sar !== 'N/A';
+    const needsRotationFix = rotation && rotation !== '0';
+
+    if (!needsReencode && !needsSarFix && !needsRotationFix) {
+      log.info('video already clean (H.264, SAR 1:1, no rotation)');
+      return filePath;
+    }
+
+    log.info(`normalizing video`, { codec, sar, rotation, needsReencode, needsSarFix });
     const outPath = filePath.replace(/\.mp4$/, '.norm.mp4');
-    log.info('normalizing video (H.264, SAR 1:1, faststart)');
-    await execFileAsync('ffmpeg', [
-      '-i', filePath,
-      '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
-      '-vf', 'setsar=1:1',
-      '-c:a', 'aac',
-      '-movflags', '+faststart',
-      '-map_metadata', '-1',
-      '-y', outPath,
-    ], { timeout: DOWNLOAD_TIMEOUT });
-    // Replace original
+
+    if (needsReencode || needsRotationFix) {
+      // Full re-encode: wrong codec or rotation needs fixing
+      await execFileAsync('ffmpeg', [
+        '-i', filePath,
+        '-c:v', 'libx264', '-preset', 'fast', '-crf', '28',
+        '-vf', 'setsar=1:1',
+        '-c:a', 'aac',
+        '-movflags', '+faststart',
+        '-map_metadata', '-1',
+        '-y', outPath,
+      ], { timeout: DOWNLOAD_TIMEOUT });
+    } else {
+      // SAR fix only: copy streams, just fix metadata (fast, no quality loss)
+      await execFileAsync('ffmpeg', [
+        '-i', filePath,
+        '-c', 'copy',
+        '-bsf:v', 'h264_metadata=sample_aspect_ratio=1/1',
+        '-movflags', '+faststart',
+        '-map_metadata', '-1',
+        '-y', outPath,
+      ], { timeout: DOWNLOAD_TIMEOUT });
+    }
+
     fs.unlinkSync(filePath);
     fs.renameSync(outPath, filePath);
     log.info('video normalized successfully');
