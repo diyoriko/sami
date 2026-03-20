@@ -89,7 +89,7 @@ function mainKeyboard(isAdmin = false): Keyboard {
 // UGC conversation state is persisted in SQLite (survives bot restarts).
 // See db.ts: saveUgcState, getUgcState, deleteUgcState
 
-function extractYoutubeId(url: string): string | null {
+export function extractYoutubeId(url: string): string | null {
   const patterns = [
     /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
   ];

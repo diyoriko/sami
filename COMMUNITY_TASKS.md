@@ -17,7 +17,7 @@
 ### P1: Тесты — критические пробелы
 
 - [x] **dates.ts** — 40 тестов: все time-функции с frozen MSK time + pure functions
-- [ ] **youtube.ts** — 0 тестов: extractYouTubeId (все форматы URL), scoring formula (граничные значения), searchYouTube (ошибки API)
+- [x] **youtube.ts + extractYoutubeId** — 26 тестов: extractYoutubeId (13 URL-форматов), computeTotalScore (веса, граничные значения), detectEquipment (гантели, резинка, скакалка, case insensitive, multi-equipment)
 - [ ] **poster.ts** — 0 тестов: formatCaption (теги, MarkdownV2 escaping, Sami Score), text fallback при ошибке скачивания
 
 ### P1: Growth — фичи
@@ -629,7 +629,7 @@
 
 ### Tests — критические пробелы (test review)
 
-- [ ] **youtube.ts** — 0 тестов: searchYouTube (ошибки API, malformed response), extractYouTubeId (все форматы URL), scoring formula (граничные значения)
+- [x] **youtube.ts** — 26 тестов (Sprint 8): extractYoutubeId (13 URL-форматов), computeTotalScore, detectEquipment
 - [ ] **poster.ts** — 0 тестов: formatCaption (теги, MarkdownV2 escaping, Sami Score), text fallback при ошибке скачивания
 - [ ] **approval.ts callbacks** — 0 тестов: approve/reject/unapprove/refresh button handlers
 - [ ] **downloader.ts** — 0 тестов: downloadVideo, isYtDlpAvailable
