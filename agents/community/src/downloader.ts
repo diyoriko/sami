@@ -212,30 +212,31 @@ async function probeVideoMeta(filePath: string): Promise<VideoMeta> {
   }
 }
 
-/** Check if video codec is H.264. If not, re-encode with ffmpeg. */
-async function ensureH264(filePath: string): Promise<string> {
+/**
+ * Normalize video for Telegram: ensure H.264 codec, square pixels (SAR 1:1),
+ * no rotation metadata. Always re-encodes to guarantee clean output — avoids
+ * stretched/letterboxed playback caused by non-square SAR or broken metadata.
+ */
+async function normalizeVideo(filePath: string): Promise<string> {
   try {
-    const { stdout } = await execFileAsync('ffprobe', [
-      '-v', 'quiet', '-select_streams', 'v:0',
-      '-show_entries', 'stream=codec_name',
-      '-print_format', 'json', filePath,
-    ], { timeout: COOKIES_EXTRACT_TIMEOUT });
-    const codec = JSON.parse(stdout).streams?.[0]?.codec_name;
-    if (codec === 'h264') return filePath;
-
-    log.info(`video codec is ${codec}, re-encoding to H.264`);
-    const outPath = filePath.replace(/\.mp4$/, '.h264.mp4');
+    const outPath = filePath.replace(/\.mp4$/, '.norm.mp4');
+    log.info('normalizing video (H.264, SAR 1:1, faststart)');
     await execFileAsync('ffmpeg', [
-      '-i', filePath, '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
-      '-c:a', 'aac', '-movflags', '+faststart', '-y', outPath,
+      '-i', filePath,
+      '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+      '-vf', 'setsar=1:1',
+      '-c:a', 'aac',
+      '-movflags', '+faststart',
+      '-map_metadata', '-1',
+      '-y', outPath,
     ], { timeout: DOWNLOAD_TIMEOUT });
     // Replace original
     fs.unlinkSync(filePath);
     fs.renameSync(outPath, filePath);
-    log.info('re-encoded to H.264 successfully');
+    log.info('video normalized successfully');
     return filePath;
   } catch (err) {
-    log.warn('H.264 check/re-encode failed, using original', { error: String(err) });
+    log.warn('video normalization failed, using original', { error: String(err) });
     return filePath;
   }
 }
@@ -315,14 +316,14 @@ export async function downloadVideo(youtubeUrl: string, youtubeId: string): Prom
     throw new Error(`Downloaded file not found: ${filePath}`);
   }
 
-  // Ensure H.264 codec for Telegram compatibility (VP9/AV1 = black screen)
-  await ensureH264(filePath);
+  // Normalize: H.264 codec + SAR 1:1 + clean metadata for Telegram compatibility
+  await normalizeVideo(filePath);
 
   const { size } = fs.statSync(filePath);
 
   if (size > MAX_SIZE_BYTES) {
     fs.unlinkSync(filePath);
-    throw new Error(`File too large: ${Math.round(size / 1024 / 1024)}MB > 45MB limit`);
+    throw new Error(`File too large: ${Math.round(size / 1024 / 1024)}MB > 50MB limit`);
   }
 
   const meta = await probeVideoMeta(filePath);
