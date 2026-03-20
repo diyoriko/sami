@@ -213,11 +213,18 @@ async function probeVideoMeta(filePath: string): Promise<VideoMeta> {
 }
 
 /**
- * Normalize video for Telegram: ensure H.264 codec and square pixels (SAR 1:1).
- * When SAR != 1:1 (anamorphic pixels), we MUST re-encode with proper scaling —
- * just changing SAR metadata causes aspect ratio distortion.
+ * ALWAYS re-encode video for Telegram compatibility.
+ *
+ * Why always re-encode (not just when SAR != 1:1):
+ * - yt-dlp merge can produce MP4 containers where tkhd (track header) dimensions
+ *   differ from stream dimensions. Telegram clients may use tkhd for display.
+ * - Re-encoding through ffmpeg creates a clean MP4 with consistent metadata
+ *   in both container and stream levels.
+ * - At 480p / CRF 23, re-encode adds ~10-20s and quality loss is negligible.
+ *
  * Scale formula: `scale=trunc(iw*sar/2)*2:trunc(ih/2)*2` computes the correct
- * display dimensions, then `setsar=1:1` marks pixels as square.
+ * display dimensions from coded dimensions + SAR, then `setsar=1:1` marks
+ * pixels as square. When SAR is already 1:1, this is an identity transform.
  */
 async function normalizeVideo(filePath: string): Promise<string> {
   try {
@@ -232,23 +239,18 @@ async function normalizeVideo(filePath: string): Promise<string> {
     const codec = stream?.codec_name;
     const sar = stream?.sample_aspect_ratio ?? '1:1';
     const dar = stream?.display_aspect_ratio ?? 'N/A';
+    const codedW = stream?.width;
+    const codedH = stream?.height;
     const rotation = info.format?.tags?.rotate;
 
-    const needsReencode = codec !== 'h264';
-    const needsSarFix = sar !== '1:1' && sar !== 'N/A';
-    const needsRotationFix = rotation && rotation !== '0';
-
-    if (!needsReencode && !needsSarFix && !needsRotationFix) {
-      log.info('video already clean (H.264, SAR 1:1, no rotation)');
-      return filePath;
-    }
-
-    log.info(`normalizing video`, { codec, sar, dar, rotation, width: stream?.width, height: stream?.height, needsReencode, needsSarFix });
+    log.info(`normalizing video (always re-encode for Telegram)`, {
+      codec, sar, dar, rotation, width: codedW, height: codedH,
+    });
     const outPath = filePath.replace(/\.mp4$/, '.norm.mp4');
 
-    // Always re-encode with proper scaling to display dimensions.
+    // Re-encode with proper scaling to display dimensions.
     // scale=trunc(iw*sar/2)*2:trunc(ih/2)*2 converts anamorphic → square pixels.
-    // If SAR is already 1:1, this is an identity scale (iw*1=iw).
+    // If SAR is already 1:1, this preserves dimensions but rebuilds clean container.
     await execFileAsync('ffmpeg', [
       '-i', filePath,
       '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',

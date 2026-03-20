@@ -576,7 +576,8 @@
 
 ### P0: Видео — пропорции (20.03) — DONE
 
-- [x] **SAR distortion fix** — видео с SAR != 1:1 отображалось вытянутым в Telegram. `setsar=1:1` менял только метаданные без масштабирования. Fix: `scale=trunc(iw*sar/2)*2:trunc(ih/2)*2,setsar=1:1` — сначала масштабирует до display-размеров, потом SAR 1:1. Исправлено в 3 местах: normalizeVideo re-encode, normalizeVideo SAR-only (убран stream copy, теперь полный re-encode), compressToFit. CRF 28→23 (лучше качество). Верификация DAR после нормализации. Файл: `downloader.ts`
+- [x] **SAR distortion fix v1** — видео с SAR != 1:1 отображалось вытянутым. Fix: `scale=trunc(iw*sar/2)*2:trunc(ih/2)*2,setsar=1:1`. CRF 28→23. Файл: `downloader.ts`
+- [x] **SAR distortion fix v2** — видео всё ещё с неправильными пропорциями. Причина: yt-dlp merge может создать MP4 с mismatched container (tkhd) и stream dimensions; Telegram читает tkhd. Fix: ВСЕГДА re-encode через ffmpeg (убран early return для "already clean"), что пересоздаёт контейнер с правильными метаданными. При 480p/CRF23 — +10-20с, качество не страдает. Файл: `downloader.ts`
 
 ### P2: Code quality (code review, 17.03) — частично DONE
 
