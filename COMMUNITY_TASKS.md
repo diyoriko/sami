@@ -655,6 +655,9 @@
 
 ---
 
+<details>
+<summary>Справочник (инструменты, деплой, идентификаторы, code reviews)</summary>
+
 ## Инструменты Claude Code для Sami
 
 | Инструмент | Применение | Когда использовать |
@@ -729,3 +732,5 @@ SAMI и Hunter технически стабильны: тесты идут, д�
 
 ### Architect Review 2026-03-20
 - [x] **Backlog structure fix** — Sprint 8 наверх, Sprint 6-7 и Сделано в `<details>`. Как у Hunter: open sprint сверху, done внизу
+
+</details>
