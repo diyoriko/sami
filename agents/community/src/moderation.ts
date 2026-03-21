@@ -123,31 +123,55 @@ function buildCelebrationComment(firstName: string, streak: number, completionCo
 }
 
 // ─── CAPTCHA ──────────────────────────────────────────────────────────────────
-// Simple math captcha to filter bots. New member is muted until they pass.
-// Wrong answer or timeout (2 min) → kick.
+// Brand-aligned captcha: "Что нужно для тренировки в Sami?" → 🧘 Коврик.
+// Friendly, on-brand, easy for humans, blocks bots.
+// Wrong answer or timeout (2 min) → kick (can rejoin).
 // State is persisted in SQLite — survives bot restarts.
 
 const CAPTCHA_TIMEOUT_MS = 2 * 60 * 1000;
 
-export function generateCaptcha(): { question: string; answer: number; options: number[] } {
-  const a = Math.floor(Math.random() * 9) + 1;
-  const b = Math.floor(Math.random() * 9) + 1;
-  const answer = a + b;
+const CAPTCHA_QUESTIONS: { question: string; answer: number; options: { text: string; value: number }[] }[] = [
+  {
+    question: 'Что нужно для тренировки в Sami?',
+    answer: 1,
+    options: [
+      { text: '🧘 Коврик', value: 1 },
+      { text: '🏋️ Штанга', value: 2 },
+      { text: '🏊 Бассейн', value: 3 },
+      { text: '🎿 Лыжи', value: 4 },
+    ],
+  },
+  {
+    question: 'Девиз Sami — это...',
+    answer: 1,
+    options: [
+      { text: '📐 Не мотивация. Структура.', value: 1 },
+      { text: '🔥 Жги калории!', value: 2 },
+      { text: '💰 Заработай на спорте', value: 3 },
+      { text: '🏆 Будь первым!', value: 4 },
+    ],
+  },
+  {
+    question: 'Сколько минут длится тренировка в Sami?',
+    answer: 2,
+    options: [
+      { text: '⏱ 60–90 мин', value: 1 },
+      { text: '⏱ 10–20 мин', value: 2 },
+      { text: '⏱ 3–5 часов', value: 3 },
+      { text: '⏱ 30 секунд', value: 4 },
+    ],
+  },
+];
 
-  // 3 wrong options, all different from answer and each other
-  const wrong = new Set<number>();
-  while (wrong.size < 3) {
-    const n = Math.floor(Math.random() * 18) + 1;
-    if (n !== answer) wrong.add(n);
-  }
-
-  // Fisher-Yates shuffle for uniform randomness
-  const options = [answer, ...wrong];
-  for (let i = options.length - 1; i > 0; i--) {
+export function generateCaptcha(): { question: string; answer: number; options: { text: string; value: number }[] } {
+  const q = CAPTCHA_QUESTIONS[Math.floor(Math.random() * CAPTCHA_QUESTIONS.length)];
+  // Fisher-Yates shuffle options
+  const shuffled = [...q.options];
+  for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [options[i], options[j]] = [options[j], options[i]];
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
-  return { question: `${a} + ${b}`, answer, options };
+  return { question: q.question, answer: q.answer, options: shuffled };
 }
 
 // ─── GOAL QUIZ ────────────────────────────────────────────────────────────────
@@ -169,19 +193,15 @@ const GOAL_RESPONSES: Record<string, string> = {
 
 // ─── SPAM PATTERNS ───────────────────────────────────────────────────────────
 
+// Spam patterns — only clear-cut spam. Links are ALLOWED (community is small,
+// trust participants after captcha). No URL blocking, no "подпишись" blocking.
 const SPAM_PATTERNS = [
-  // External URLs (except YouTube, youtu.be, t.me/sami)
-  /https?:\/\/(?!youtube\.com|youtu\.be|t\.me\/sami)/i,
   // Financial/gambling/crypto
   /(?:заработ|earn|casino|казино|crypto|крипт|invest|инвест|forex|форекс|binance|биржа|трейд|trade|betting|ставк|slot|слот|poker|покер|roulette|рулетк)/i,
-  // Follow/subscribe spam
-  /подпишись|subscribe|follow me|подпишитесь/i,
   // Adult/dating spam
   /(?:знакомств|dating|18\+|секс|sex|порн|porn|onlyfans|эскорт|escort)/i,
   // MLM/pyramid
   /(?:пассивн.{0,10}доход|passive\s*income|mlm|сетев.{0,10}маркетинг|network\s*marketing|пирамид)/i,
-  // Telegram channel/group promo (except our own)
-  /(?:t\.me\/(?!sami)\w+|телеграм.{0,10}канал|telegram.{0,10}channel)/i,
 ];
 
 export function isSpam(text: string): boolean {
@@ -213,16 +233,16 @@ function matchesStopPhrases(text: string): boolean {
 // Tracks message timestamps per user. Mutes at threshold.
 
 const ANTIFLOOD_WINDOW_MS = 30_000;   // 30 seconds
-const ANTIFLOOD_MAX_MESSAGES = 5;     // max messages in window
+const ANTIFLOOD_MAX_MESSAGES = 10;    // max messages in window (relaxed for small community)
 
-// Newbie cooldown: 1 message per minute for first 24h
-const NEWBIE_COOLDOWN_MS = 60_000;    // 1 minute between messages
+// Newbie cooldown: disabled — community is small, trust after captcha
+const NEWBIE_COOLDOWN_MS = 0;         // disabled
 const NEWBIE_PERIOD_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-// Night mode: 00:00-07:00 MSK — stricter thresholds
+// Night mode: disabled — no need at 16 subscribers
 const NIGHT_START_HOUR = 0;
-const NIGHT_END_HOUR = 7;
-const NIGHT_ANTIFLOOD_MAX = 3; // stricter at night
+const NIGHT_END_HOUR = 0;            // same as start = never active
+const NIGHT_ANTIFLOOD_MAX = 10;      // same as day
 
 const messageTimestamps = new Map<number, number[]>();
 
@@ -328,14 +348,14 @@ export function registerModeration(bot: Bot): void {
 
     const keyboard = new InlineKeyboard();
     options.forEach((opt, i) => {
-      keyboard.text(String(opt), `captcha:${user.id}:${opt}`);
-      if (i === 1) keyboard.row();
+      keyboard.text(opt.text, `captcha:${user.id}:${opt.value}`);
+      if (i % 2 === 1) keyboard.row();
     });
 
     let captchaMsg;
     try {
       captchaMsg = await ctx.reply(
-        `👋 ${escV2(firstName)}, добро пожаловать\\!\n\nЧтобы начать общаться, реши простой пример за 2 минуты:\n\n*${escV2(question)} \\= ?*`,
+        `👋 ${escV2(firstName)}, добро пожаловать\\!\n\n${escV2(question)}`,
         { parse_mode: 'MarkdownV2', reply_markup: keyboard }
       );
     } catch (err) {

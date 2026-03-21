@@ -6,10 +6,8 @@ import { isSpam, generateCaptcha } from '../moderation';
 
 describe('isSpam', () => {
   const spamTexts = [
-    'Check https://scam.com for free stuff',
     'Заработок в интернете без вложений',
     'Crypto trading signals FREE',
-    'Подпишись на мой канал t.me/spamchannel',
     'Casino online 24/7',
     'Passive income from home',
     'Пассивный доход без усилий',
@@ -19,7 +17,6 @@ describe('isSpam', () => {
     'OnlyFans link in bio',
     'Forex trading binance invest',
     'Ставки на спорт betting',
-    'Телеграм канал с сигналами',
   ];
 
   const cleanTexts = [
@@ -33,6 +30,10 @@ describe('isSpam', () => {
     'Сделаль! Растяжка огонь',
     'Мне нравится силовая по утрам',
     'Могу предложить тренировку',
+    // Links are now allowed (moderation relaxed for small community)
+    'Check https://example.com for the article',
+    'Подпишись на мой канал t.me/coolchannel',
+    'Телеграм канал с тренировками',
   ];
 
   it.each(spamTexts)('detects spam: "%s"', (text) => {
@@ -45,34 +46,33 @@ describe('isSpam', () => {
 });
 
 describe('generateCaptcha', () => {
-  it('produces correct answer for math question', () => {
-    for (let i = 0; i < 20; i++) {
-      const { question, answer, options } = generateCaptcha();
-      const [a, b] = question.split(' + ').map(Number);
-      expect(a + b).toBe(answer);
-    }
+  it('returns a brand-aligned question', () => {
+    const { question } = generateCaptcha();
+    expect(typeof question).toBe('string');
+    expect(question.length).toBeGreaterThan(5);
   });
 
   it('has exactly 4 options including the answer', () => {
     for (let i = 0; i < 10; i++) {
       const { answer, options } = generateCaptcha();
       expect(options).toHaveLength(4);
-      expect(options).toContain(answer);
+      expect(options.some(o => o.value === answer)).toBe(true);
     }
   });
 
-  it('all options are unique', () => {
+  it('all option values are unique', () => {
     for (let i = 0; i < 10; i++) {
       const { options } = generateCaptcha();
-      expect(new Set(options).size).toBe(4);
+      const values = options.map(o => o.value);
+      expect(new Set(values).size).toBe(4);
     }
   });
 
-  it('answer is between 2 and 18', () => {
-    for (let i = 0; i < 50; i++) {
-      const { answer } = generateCaptcha();
-      expect(answer).toBeGreaterThanOrEqual(2);
-      expect(answer).toBeLessThanOrEqual(18);
+  it('options have text labels', () => {
+    const { options } = generateCaptcha();
+    for (const opt of options) {
+      expect(typeof opt.text).toBe('string');
+      expect(opt.text.length).toBeGreaterThan(0);
     }
   });
 });

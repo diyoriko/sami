@@ -185,7 +185,7 @@ function lastSendText(): string {
 describe('onboarding flow', () => {
   const NEW_USER = USER_ID + 500;
 
-  it('new member triggers captcha: mute + math question + 4 options', async () => {
+  it('new member triggers captcha: mute + brand question + 4 options', async () => {
     await bot.handleUpdate(chatMemberUpdate(NEW_USER, 'Новичок'));
 
     // User was restricted (muted)
@@ -203,8 +203,8 @@ describe('onboarding flow', () => {
     // Captcha persisted in DB
     const captcha = db.getCaptcha(NEW_USER);
     expect(captcha).not.toBeNull();
-    expect(captcha!.answer).toBeGreaterThanOrEqual(2);
-    expect(captcha!.answer).toBeLessThanOrEqual(18);
+    expect(captcha!.answer).toBeGreaterThanOrEqual(1);
+    expect(captcha!.answer).toBeLessThanOrEqual(4);
   });
 
   it('correct captcha answer → unrestrict + goal quiz', async () => {
