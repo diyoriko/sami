@@ -727,9 +727,3 @@ SAMI и Hunter технически стабильны: тесты идут, д�
 - [ ] **Mega Review:** **SAMI** — medium — Добавить тесты poster.ts: formatCaption, MarkdownV2 escaping, text fallback при ошибке скачивания
 - [ ] **Mega Review:** **Portfolio** — medium — SYNC-03: SAMI case — обновить LOC (14K+), Seasons→Challenges
 
-### Mega Review 2026-03-21
-<!-- Source: ~/Documents/Projects/Architect/code-reviews/2026-03-21.md -->
-- [ ] **Mega Review:** **SAMI** — critical — `npm run typecheck && npm run lint` локально после moderation-изменений, найти и исправить ошибку
-- [ ] **Mega Review:** **SAMI** — medium — db.ts split фаза 1: вынести `db-approval.ts` (~250L) с re-export — `db.ts`
-- [ ] **Mega Review:** **SAMI** — medium — Тесты `poster.ts`: formatCaption, MarkdownV2 escaping, text fallback при ошибке скачивания
-- [ ] **Mega Review:** **Portfolio** — medium — SYNC-03: SAMI case — LOC (14K+), Seasons→Challenges — `projects/sami.html`
