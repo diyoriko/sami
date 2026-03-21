@@ -284,7 +284,7 @@ export function registerBotMenu(bot: Bot): void {
             const marker = isToday ? ' 👈' : '';
             return `${icon} ${dayLabel} ${slotEmoji} ${slotCatRu}${title}${marker}`;
           });
-          weekQueueText = `\n*Расписание:*\n${lines.map(l => escV2(l)).join('\n')}`;
+          // Schedule shown in «📅 Неделя», not in dashboard
 
           // Show publish button if today's slot is queued
           const todaySlot = slots.find(s => s.day_number === sDay);
@@ -435,8 +435,6 @@ export function registerBotMenu(bot: Bot): void {
       `📅 *Расписание недели*${planTag}`,
       ``,
       ...lines.map(l => escV2(l)),
-      ``,
-      `_✅ опубликовано · 📋 в очереди · ⬜ пусто · 👈 сегодня_`,
       ``,
       `Заполнено: ${filledCount}/7`,
     ].join('\n');

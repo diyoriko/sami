@@ -5,6 +5,7 @@ import {
   getApprovedVideo, recordPost, wasPostedToday, VideoRow,
   markApprovalPosted, withTransaction, getDb,
   getWeekSlotForDay, markWeekSlotPosted, getVideoById,
+  getActiveChallenge, getChallengeDay,
   type ChallengeRow,
 } from './db';
 import { downloadVideo, isYtDlpAvailable } from './downloader';
@@ -146,6 +147,14 @@ export async function postVideoToChannel(
             withTransaction(() => {
               recordPost(date, category, video.id, msg.message_id, 'video');
               markApprovalPosted(date, category);
+              // Also mark weekly schedule slot as posted (SM-812)
+              try {
+                const ch = getActiveChallenge();
+                if (ch) {
+                  const dayNum = getChallengeDay(ch.start_date, date);
+                  if (dayNum >= 1) markWeekSlotPosted(ch.id, dayNum);
+                }
+              } catch { /* no challenge */ }
             });
           } catch (dbErr) {
             postLog.error(`DB WRITE FAILED for ${category} (video already sent)`, { msgId: msg.message_id, error: String(dbErr) });
@@ -192,6 +201,14 @@ export async function postVideoToChannel(
       withTransaction(() => {
         recordPost(date, category, video.id, msg.message_id, 'link');
         markApprovalPosted(date, category);
+        // Also mark weekly schedule slot as posted (SM-812)
+        try {
+          const ch = getActiveChallenge();
+          if (ch) {
+            const dayNum = getChallengeDay(ch.start_date, date);
+            if (dayNum >= 1) markWeekSlotPosted(ch.id, dayNum);
+          }
+        } catch { /* no challenge */ }
       });
     } catch (dbErr) {
       postLog.error(`DB WRITE FAILED for ${category} (link already sent)`, { msgId: msg.message_id, error: String(dbErr) });
