@@ -37,7 +37,7 @@ export interface SeriesInfo {
   participants: number;
 }
 
-async function formatCaption(video: VideoRow, challengeInfo?: ChallengeInfo, seriesInfo?: SeriesInfo, overrideCategory?: Category): Promise<string> {
+export async function formatCaption(video: VideoRow, challengeInfo?: ChallengeInfo, seriesInfo?: SeriesInfo, overrideCategory?: Category): Promise<string> {
   const displayCategory = overrideCategory ?? video.category as Category;
   const categoryRu = CATEGORY_RU[displayCategory] ?? displayCategory;
   const difficultyRu = DIFFICULTY_RU[video.difficulty] ?? video.difficulty;
@@ -63,10 +63,10 @@ async function formatCaption(video: VideoRow, challengeInfo?: ChallengeInfo, ser
   // URL: escape only ) and \ which break MarkdownV2 link syntax
   const safeUrl = video.video_url.replace(/[)\\]/g, '\\$&');
 
-  // Sami Score line: Sami Score: 84% (тон, формат, просмотры, лайки, длительность)
+  // Sami Score line: Sami Score: 84% (качество и популярность)
   const scorePercent = video.rating > 0 ? Math.round(video.rating * 10) : 0;
   const samiScoreLine = scorePercent > 0
-    ? `\`Sami Score: ${scorePercent}% (тон, формат, просмотры, лайки, длительность)\``
+    ? `\`Sami Score: ${scorePercent}% (качество и популярность)\``
     : null;
 
   const header: string[] = [];

@@ -76,7 +76,9 @@ function findYtDlp(): string {
     if (fromPath && !candidates.includes(fromPath)) {
       candidates.push(fromPath);
     }
-  } catch {}
+  } catch (err) {
+    log.warn('yt-dlp not found in PATH', { error: String(err) });
+  }
 
   // Find all working binaries, pick the newest version (semver-safe comparison)
   let bestBin = '';
@@ -89,7 +91,7 @@ function findYtDlp(): string {
         bestBin = bin;
         bestVer = ver;
       }
-    } catch {
+    } catch { /* binary not available, try next */
       continue;
     }
   }
@@ -178,7 +180,7 @@ export async function runDiagnostic(): Promise<string> {
       try {
         const files = require('fs').readdirSync(os.tmpdir()).filter((f: string) => f.startsWith('sami-diag'));
         files.forEach((f: string) => fs.unlinkSync(path.join(os.tmpdir(), f)));
-      } catch {}
+      } catch { /* cleanup */ }
       return lines.join('\n');
     } catch (err: any) {
       const msg = (err.stderr || err.message || '').slice(0, 150);
@@ -368,7 +370,7 @@ async function fetchDuration(ytDlp: string, url: string, extraArgs: string[]): P
     const { stdout } = await execFileAsync(ytDlp, args, { timeout: METADATA_TIMEOUT });
     const info = JSON.parse(stdout);
     return info.duration ? Math.round(Number(info.duration)) : undefined;
-  } catch {
+  } catch { /* metadata fetch failed, duration unknown */
     return undefined;
   }
 }
@@ -491,7 +493,7 @@ export function isYtDlpAvailable(): boolean {
   try {
     findYtDlp();
     return true;
-  } catch {
+  } catch { /* yt-dlp not installed */
     return false;
   }
 }

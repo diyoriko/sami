@@ -152,8 +152,8 @@ export function registerBotMenu(bot: Bot): void {
     const msgId = ctx.message?.message_id;
     if (msgId) {
       for (let id = msgId; id > msgId - 200 && id > 0; id--) {
-        try { await ctx.api.deleteMessage(ctx.chat.id, id); } catch {
-          break; // stop on first failure (too old or already deleted)
+        try { await ctx.api.deleteMessage(ctx.chat.id, id); } catch { /* TG API: too old or already deleted */
+          break; // stop on first failure
         }
       }
     }
@@ -201,7 +201,7 @@ export function registerBotMenu(bot: Bot): void {
       .text('Отмена', `mywk:${offset}`);
     try {
       await ctx.editMessageText(`Удалить тренировку «${title}»?`, { reply_markup: kb });
-    } catch {}
+    } catch { /* TG API: message may be deleted */ }
   });
 
   // Delete workout — confirmed
@@ -347,7 +347,7 @@ export function registerBotMenu(bot: Bot): void {
     const date = hasTomorrow ? tomorrow : hasToday ? today : null;
 
     if (!date) {
-      try { await ctx.editMessageText('Нет одобренных видео.'); } catch {}
+      try { await ctx.editMessageText('Нет одобренных видео.'); } catch { /* TG API: message may be deleted */ }
       return;
     }
 
@@ -363,7 +363,7 @@ export function registerBotMenu(bot: Bot): void {
     }
     try {
       await ctx.editMessageText(report.length > 0 ? report.join('\n') : 'Нет одобренных видео.');
-    } catch {}
+    } catch { /* TG API: message may be deleted */ }
   });
 
   // Inline reset button from status message
@@ -377,7 +377,7 @@ export function registerBotMenu(bot: Bot): void {
     const total = resetApprovalSessions(today) + resetApprovalSessions(tomorrow);
     try {
       await ctx.editMessageText(`Сброшено ${total} сессий. Нажми «Неделя» для нового поиска.`);
-    } catch {}
+    } catch { /* TG API: message may be deleted */ }
   });
 
   bot.hears('📅 Неделя', async (ctx) => {
@@ -512,15 +512,15 @@ export function registerBotMenu(bot: Bot): void {
 
     const challenge = getActiveChallenge();
     if (!challenge || challenge.id !== challengeId) {
-      try { await ctx.editMessageText('Нет активного расписания.'); } catch {}
+      try { await ctx.editMessageText('Нет активного расписания.'); } catch { /* TG API: message may be deleted */ }
       return;
     }
 
     const result = await postChallengeVideo(bot, challenge, dayNumber);
     if (result === 'posted') {
-      try { await ctx.editMessageText('✅ Опубликовано!'); } catch {}
+      try { await ctx.editMessageText('✅ Опубликовано!'); } catch { /* TG API: message may be deleted */ }
     } else {
-      try { await ctx.editMessageText(`Ошибка публикации: ${result}`); } catch {}
+      try { await ctx.editMessageText(`Ошибка публикации: ${result}`); } catch { /* TG API: message may be deleted */ }
     }
   });
 
@@ -561,7 +561,7 @@ export function registerBotMenu(bot: Bot): void {
     saveUgcState(ctx.from!.id, 'cs_name');
     try {
       await ctx.editMessageText('Как назвать челлендж? Например: «Здоровая спина» или «7 дней стретчинга»');
-    } catch {
+    } catch { /* TG API: message may be deleted, fallback to reply */
       await ctx.reply('Как назвать челлендж?');
     }
   });
@@ -596,7 +596,7 @@ export function registerBotMenu(bot: Bot): void {
 
     try {
       await ctx.editMessageText(`Длительность: ${days} дней\n\nКатегория по умолчанию (можно менять для каждого дня):`, { reply_markup: kb });
-    } catch {}
+    } catch { /* TG API: message may be deleted */ }
   });
 
   // Create challenge: step 3 — default category
@@ -635,7 +635,7 @@ export function registerBotMenu(bot: Bot): void {
         `Статус: черновик\n\n` +
         `Теперь заполни расписание и активируй.`
       );
-    } catch {}
+    } catch { /* TG API: message may be deleted */ }
 
     // Show challenge view
     await sendChallengeView(ctx, seriesId);
@@ -644,7 +644,7 @@ export function registerBotMenu(bot: Bot): void {
   bot.callbackQuery('cs_cancel', async (ctx) => {
     deleteUgcState(ctx.from!.id);
     await ctx.answerCallbackQuery('Отменено');
-    try { await ctx.editMessageText('Создание челленджа отменено.'); } catch {}
+    try { await ctx.editMessageText('Создание челленджа отменено.'); } catch { /* TG API: message may be deleted */ }
   });
 
   // View a specific challenge series
@@ -660,7 +660,7 @@ export function registerBotMenu(bot: Bot): void {
     await ctx.answerCallbackQuery();
     const completed = listChallengeSeries(['completed']);
     if (completed.length === 0) {
-      try { await ctx.editMessageText('Нет завершённых челленджей.'); } catch {}
+      try { await ctx.editMessageText('Нет завершённых челленджей.'); } catch { /* TG API: message may be deleted */ }
       return;
     }
     const kb = new InlineKeyboard();
@@ -670,7 +670,7 @@ export function registerBotMenu(bot: Bot): void {
     }
     try {
       await ctx.editMessageText('*Завершённые челленджи:*', { parse_mode: 'MarkdownV2', reply_markup: kb });
-    } catch {}
+    } catch { /* TG API: message may be deleted */ }
   });
 
   // Activate / Complete / Cancel a challenge
@@ -692,7 +692,7 @@ export function registerBotMenu(bot: Bot): void {
     if (!isAdmin(ctx.from!.id)) return;
     await ctx.answerCallbackQuery('Отменён');
     updateChallengeSeriesStatus(parseInt(ctx.match[1]), 'cancelled');
-    try { await ctx.editMessageText('Челлендж отменён.'); } catch {}
+    try { await ctx.editMessageText('Челлендж отменён.'); } catch { /* TG API: message may be deleted */ }
   });
 
   // Fill a day in challenge series — run approval flow
@@ -732,16 +732,16 @@ export function registerBotMenu(bot: Bot): void {
     const dayNumber = parseInt(ctx.match[2]);
     const series = getChallengeSeries(seriesId);
     if (!series || series.status !== 'active') {
-      try { await ctx.editMessageText('Челлендж не активен.'); } catch {}
+      try { await ctx.editMessageText('Челлендж не активен.'); } catch { /* TG API: message may be deleted */ }
       return;
     }
 
     const { postChallengeSeriesVideo } = await import('./poster');
     const result = await postChallengeSeriesVideo(bot, series, dayNumber);
     if (result === 'posted') {
-      try { await ctx.editMessageText('✅ Опубликовано!'); } catch {}
+      try { await ctx.editMessageText('✅ Опубликовано!'); } catch { /* TG API: message may be deleted */ }
     } else {
-      try { await ctx.editMessageText(`Ошибка: ${result}`); } catch {}
+      try { await ctx.editMessageText(`Ошибка: ${result}`); } catch { /* TG API: message may be deleted */ }
     }
   });
 
@@ -825,12 +825,12 @@ export function registerBotMenu(bot: Bot): void {
 
     try {
       await ctx.editMessageText(`🧹 Удалено ${deleted} постов из канала. БД постов очищена.`);
-    } catch {}
+    } catch { /* TG API: message may be deleted */ }
   });
 
   bot.callbackQuery('clear_channel_cancel', async (ctx) => {
     await ctx.answerCallbackQuery('Отменено');
-    try { await ctx.editMessageText('Очистка канала отменена.'); } catch {}
+    try { await ctx.editMessageText('Очистка канала отменена.'); } catch { /* TG API: message may be deleted */ }
   });
 
   // --- "Профиль" button ---
@@ -959,7 +959,7 @@ export function registerBotMenu(bot: Bot): void {
 
     try {
       await ctx.editMessageText('Какую категорию ищем?', { reply_markup: kb });
-    } catch {
+    } catch { /* TG API: message may be deleted, fallback to reply */
       await ctx.reply('Какую категорию ищем?', { reply_markup: kb });
     }
   });
@@ -970,7 +970,7 @@ export function registerBotMenu(bot: Bot): void {
     if (!isAdmin(ctx.from!.id)) return;
     const category = ctx.match[1] as Category;
     await ctx.answerCallbackQuery('Ищу...');
-    try { await ctx.editMessageText(`🔍 Ищу видео для ${CATEGORY_RU[category]}...`); } catch {}
+    try { await ctx.editMessageText(`🔍 Ищу видео для ${CATEGORY_RU[category]}...`); } catch { /* TG API: message may be deleted */ }
 
     const { runApprovalFlow } = await import('./approval');
     const { todayMsk } = await import('./dates');
@@ -987,7 +987,7 @@ export function registerBotMenu(bot: Bot): void {
     await ctx.answerCallbackQuery('Отменено');
     try {
       await ctx.editMessageText('Отменено.');
-    } catch {}
+    } catch { /* TG API: message may be deleted */ }
   });
 
   // Back button in UGC flow — return to previous step
@@ -1000,7 +1000,7 @@ export function registerBotMenu(bot: Bot): void {
     const sub = getUgcSubmission(subId);
     if (!sub) {
       deleteUgcState(userId);
-      try { await ctx.editMessageText('Сессия устарела.'); } catch {}
+      try { await ctx.editMessageText('Сессия устарела.'); } catch { /* TG API: message may be deleted */ }
       return;
     }
 
@@ -1008,7 +1008,7 @@ export function registerBotMenu(bot: Bot): void {
       // Back to category
       saveUgcState(userId, 'waiting_category', subId);
       const kb = buildCategoryKeyboard(subId);
-      try { await ctx.editMessageText('Какой тип тренировки?', { reply_markup: kb }); } catch {}
+      try { await ctx.editMessageText('Какой тип тренировки?', { reply_markup: kb }); } catch { /* TG API: message may be deleted */ }
     } else if (currentStep === 'waiting_duration') {
       // Back to difficulty
       saveUgcState(userId, 'waiting_difficulty', subId);
@@ -1018,7 +1018,7 @@ export function registerBotMenu(bot: Bot): void {
         kb.text(btn.label, `ugc_diff:${subId}:${btn.value}`);
       });
       kb.row().text('← Назад', `ugc_back:${subId}:waiting_difficulty`).text('❌ Отмена', 'ugc_cancel');
-      try { await ctx.editMessageText('Уровень сложности?', { reply_markup: kb }); } catch {}
+      try { await ctx.editMessageText('Уровень сложности?', { reply_markup: kb }); } catch { /* TG API: message may be deleted */ }
     } else if (currentStep === 'waiting_equipment') {
       // Back to duration or difficulty (if duration was auto-detected)
       if (sub.duration_seconds) {
@@ -1030,17 +1030,17 @@ export function registerBotMenu(bot: Bot): void {
           kb.text(btn.label, `ugc_diff:${subId}:${btn.value}`);
         });
         kb.row().text('← Назад', `ugc_back:${subId}:waiting_difficulty`).text('❌ Отмена', 'ugc_cancel');
-        try { await ctx.editMessageText('Уровень сложности?', { reply_markup: kb }); } catch {}
+        try { await ctx.editMessageText('Уровень сложности?', { reply_markup: kb }); } catch { /* TG API: message may be deleted */ }
       } else {
         saveUgcState(userId, 'waiting_duration', subId);
         const kb = buildDurationKeyboard(subId);
-        try { await ctx.editMessageText('Сколько длится тренировка?', { reply_markup: kb }); } catch {}
+        try { await ctx.editMessageText('Сколько длится тренировка?', { reply_markup: kb }); } catch { /* TG API: message may be deleted */ }
       }
     } else if (currentStep === 'waiting_rubric') {
       // Back to equipment
       saveUgcState(userId, 'waiting_equipment', subId);
       const kb = buildEquipmentKeyboard(subId);
-      try { await ctx.editMessageText('Нужен ли инвентарь?', { reply_markup: kb }); } catch {}
+      try { await ctx.editMessageText('Нужен ли инвентарь?', { reply_markup: kb }); } catch { /* TG API: message may be deleted */ }
     } else if (currentStep === 'waiting_title') {
       if (isAdmin(userId)) {
         // Admin: back to rubric
@@ -1053,12 +1053,12 @@ export function registerBotMenu(bot: Bot): void {
           .row()
           .text('← Назад', `ugc_back:${subId}:waiting_rubric`)
           .text('❌ Отмена', 'ugc_cancel');
-        try { await ctx.editMessageText('Рубрика поста:', { reply_markup: rubricKb }); } catch {}
+        try { await ctx.editMessageText('Рубрика поста:', { reply_markup: rubricKb }); } catch { /* TG API: message may be deleted */ }
       } else {
         // Regular user: back to equipment
         saveUgcState(userId, 'waiting_equipment', subId);
         const kb = buildEquipmentKeyboard(subId);
-        try { await ctx.editMessageText('Нужен ли инвентарь?', { reply_markup: kb }); } catch {}
+        try { await ctx.editMessageText('Нужен ли инвентарь?', { reply_markup: kb }); } catch { /* TG API: message may be deleted */ }
       }
     }
   });
@@ -1271,7 +1271,7 @@ export function registerBotMenu(bot: Bot): void {
 
     try {
       await ctx.editMessageText('Уровень сложности?', { reply_markup: kb });
-    } catch {
+    } catch { /* TG API: message may be deleted, fallback to reply */
       await ctx.reply('Уровень сложности?', { reply_markup: kb });
     }
   });
@@ -1298,7 +1298,7 @@ export function registerBotMenu(bot: Bot): void {
       const kb = buildEquipmentKeyboard(subId);
       try {
         await ctx.editMessageText('Нужен ли инвентарь?', { reply_markup: kb });
-      } catch {
+      } catch { /* TG API: message may be deleted, fallback to reply */
         await ctx.reply('Нужен ли инвентарь?', { reply_markup: kb });
       }
     } else {
@@ -1306,7 +1306,7 @@ export function registerBotMenu(bot: Bot): void {
       const kb = buildDurationKeyboard(subId);
       try {
         await ctx.editMessageText('Сколько длится тренировка?', { reply_markup: kb });
-      } catch {
+      } catch { /* TG API: message may be deleted, fallback to reply */
         await ctx.reply('Сколько длится тренировка?', { reply_markup: kb });
       }
     }
@@ -1362,7 +1362,7 @@ export function registerBotMenu(bot: Bot): void {
         .text('❌ Отмена', 'ugc_cancel');
       try {
         await ctx.editMessageText('Рубрика поста:', { reply_markup: rubricKb });
-      } catch {
+      } catch { /* TG API: message may be deleted, fallback to reply */
         await ctx.reply('Рубрика поста:', { reply_markup: rubricKb });
       }
     } else {
@@ -1372,7 +1372,7 @@ export function registerBotMenu(bot: Bot): void {
         .text('❌ Отмена', 'ugc_cancel');
       try {
         await ctx.editMessageText('Как назвать тренировку? Напиши короткое название.', { reply_markup: titleKb });
-      } catch {
+      } catch { /* TG API: message may be deleted, fallback to reply */
         await ctx.reply('Как назвать тренировку? Напиши короткое название.', { reply_markup: titleKb });
       }
     }
@@ -1398,7 +1398,7 @@ export function registerBotMenu(bot: Bot): void {
         .text('❌ Отмена', 'ugc_cancel');
       try {
         await ctx.editMessageText('Напиши название рубрики (будет первой строкой поста):', { reply_markup: backKb });
-      } catch {
+      } catch { /* TG API: message may be deleted, fallback to reply */
         await ctx.reply('Напиши название рубрики:', { reply_markup: backKb });
       }
       return;
@@ -1620,7 +1620,7 @@ export function registerBotMenu(bot: Bot): void {
             `Ошибка: ${publishError.slice(0, 300)}`,
           ].join('\n');
           await bot.api.sendMessage(config.TELEGRAM_ADMIN_USER_ID, details);
-        } catch {}
+        } catch { /* TG API: message may be deleted */ }
       }
 
       // Update admin message
@@ -1631,7 +1631,7 @@ export function registerBotMenu(bot: Bot): void {
           `${origText}\n\n_${escV2(statusText)}_ \\· Предложил\\(а\\): ${escV2(author)}`,
           { parse_mode: 'MarkdownV2' }
         );
-      } catch {}
+      } catch { /* TG API: message may be deleted */ }
 
       // Notify author
       try {
@@ -1639,7 +1639,7 @@ export function registerBotMenu(bot: Bot): void {
           ? `Твоя тренировка «${sub.title}» одобрена и опубликована в канале!`
           : `Твоя тренировка «${sub.title}» одобрена и будет опубликована!`;
         await bot.api.sendMessage(sub.telegram_user_id, notifyText);
-      } catch {}
+      } catch { /* TG API: message may be deleted */ }
     } else {
       updateUgcSubmission(subId, { status: 'rejected' });
       await ctx.answerCallbackQuery('Отклонено');
@@ -1648,14 +1648,14 @@ export function registerBotMenu(bot: Bot): void {
           escV2(ctx.callbackQuery.message?.text ?? '') + '\n\n_Отклонено_',
           { parse_mode: 'MarkdownV2' }
         );
-      } catch {}
+      } catch { /* TG API: message may be deleted */ }
 
       try {
         await bot.api.sendMessage(
           sub.telegram_user_id,
           `К сожалению, тренировка «${sub.title}» не прошла модерацию. Обычно причина — качество видео или несоответствие формату. Попробуй предложить другую!`
         );
-      } catch {}
+      } catch { /* TG API: message may be deleted */ }
     }
   });
 
@@ -1676,7 +1676,7 @@ async function sendMyWorkouts(
   if (total === 0) {
     const text = 'У тебя пока нет тренировок.\n\nНажми «Предложить тренировку» чтобы добавить свою.';
     if (editMessageId) {
-      try { await ctx.api.editMessageText(ctx.chat!.id, editMessageId, text); } catch {}
+      try { await ctx.api.editMessageText(ctx.chat!.id, editMessageId, text); } catch { /* TG API: message may be deleted */ }
     } else {
       await ctx.reply(text);
     }
@@ -1735,7 +1735,7 @@ async function sendMyWorkouts(
   if (editMessageId) {
     try {
       await ctx.api.editMessageText(ctx.chat!.id, editMessageId, text, opts);
-    } catch {}
+    } catch { /* TG API: message may be deleted */ }
   } else {
     await ctx.reply(text, opts);
   }
@@ -1861,7 +1861,7 @@ async function sendChallengeView(ctx: any, seriesId: number): Promise<void> {
 
   try {
     await ctx.editMessageText(text, { parse_mode: 'MarkdownV2', reply_markup: kb });
-  } catch {
+  } catch { /* TG API: message may be deleted, fallback to reply */
     await ctx.reply(text, { parse_mode: 'MarkdownV2', reply_markup: kb });
   }
 }
@@ -1870,7 +1870,7 @@ async function sendFilterResults(ctx: any, videos: ReturnType<typeof filterVideo
   if (videos.length === 0) {
     try {
       await ctx.editMessageText(`Фильтр: ${label}\n\nНичего не найдено. Попробуй другой фильтр.`);
-    } catch {
+    } catch { /* TG API: message may be deleted, fallback to reply */
       await ctx.reply(`Фильтр: ${label}\n\nНичего не найдено.`);
     }
     return;
@@ -1896,7 +1896,7 @@ async function sendFilterResults(ctx: any, videos: ReturnType<typeof filterVideo
 
   try {
     await ctx.editMessageText(text, { parse_mode: 'MarkdownV2' });
-  } catch {
+  } catch { /* TG API: message may be deleted, fallback to reply */
     await ctx.reply(text, { parse_mode: 'MarkdownV2' });
   }
 }

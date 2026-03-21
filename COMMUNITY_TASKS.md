@@ -10,28 +10,28 @@
 
 ### Done
 
-- [x] **SM-801** P0 SAR distortion fix — proper scaling + always re-encode + explicit width/height в sendVideo. `downloader.ts`, `poster.ts`, `bot-menu.ts`
-- [x] **SM-802** P0 Модерация — убраны блокировки ссылок/промо, оставлен только hard spam. Antiflood 10 msg/30s. Newbie cooldown и night mode отключены. `moderation.ts`
-- [x] **SM-803** P0 Брендовая капча — 3 вопроса о Sami вместо math (Коврик / Структура / 10-20 мин). `moderation.ts`
-- [x] **SM-804** P1 dates.ts — 40 тестов (frozen MSK time + pure functions)
-- [x] **SM-805** P1 youtube.ts — 26 тестов (extractYoutubeId, computeTotalScore, detectEquipment)
-- [x] **SM-806** P1 Buffer.concat — 5 HTTP endpoints. `index.ts`
-- [x] **SM-807** P1 «Опубликовать сейчас» — rename в 2 местах. `bot-menu.ts`
-- [x] **SM-808** P1 Backlog structure — sprint наверх, done в `<details>`, справочник в `<details>`
+- [x] **SM-801 Видео пропорции** — SAR scaling + always re-encode + explicit width/height в sendVideo
+- [x] **SM-802 Смягчение модерации** — убраны блокировки ссылок/промо, оставлен только hard spam
+- [x] **SM-803 Брендовая капча** — 3 вопроса о Sami вместо math (Коврик / Структура / 10-20 мин)
+- [x] **SM-804 Тесты dates.ts** — 40 тестов (frozen MSK time + pure functions)
+- [x] **SM-805 Тесты youtube.ts** — 26 тестов (extractYoutubeId, computeTotalScore, detectEquipment)
+- [x] **SM-806 Buffer.concat** — 5 HTTP endpoints, O(n²) → O(n)
+- [x] **SM-807 «Опубликовать сейчас»** — rename «сегодня» → «сейчас» в 2 местах
+- [x] **SM-808 Backlog restructure** — sprint наверх, done в `<details>`
+- [x] **SM-810 Убрать расписание из Дашборда** — дублирует «📅 Неделя»
+- [x] **SM-811 Убрать легенду из Неделя** — очевидна из контекста
+- [x] **SM-812 Баг: видео не видно в Неделя** — markWeekSlotPosted не вызывался при ручной публикации
+- [x] **SM-813 Тесты poster.ts** — formatCaption (теги, Sami Score, escaping, series, pluralization)
+- [x] **SM-814 Sami Score текст** — сокращён до «(качество и популярность)»
+- [x] **SM-816 Silenced catches** — 63 empty catch → комментарии или log.debug/log.warn
+- [x] **SM-818 Undo hint «Я сделаль»** — «Нажми ещё раз чтобы отменить»
 
 ### Open
 
-- [x] **SM-810** P1 Убрать расписание из Дашборда — дублирует «📅 Неделя», оставить только метрики. `bot-menu.ts`
-- [x] **SM-811** P1 Убрать легенду иконок из «📅 Неделя» — очевидна из контекста. `bot-menu.ts`
-- [x] **SM-812** P1 Баг: видео не видно в «📅 Неделя» — `publish_card` вызывал `postVideoToChannel` но не `markWeekSlotPosted`. Fix: добавлен вызов в обоих путях (video + link fallback). `poster.ts`
-- [ ] **SM-813** P1 poster.ts тесты — formatCaption (теги, Sami Score, escaping). 0 тестов сейчас
-- [ ] **SM-814** P1 Sami Score объяснение — сократить «(тон, формат, просмотры, лайки, длительность)» → «(качество и популярность)»
-- [ ] **SM-815** P1 Стратег → еженедельный — daily overkill при 16 подписчиков. 500 слов вместо 3000
-- [ ] **SM-816** P2 Silenced catches — 63 empty `catch {}`, добавить log.debug/log.warn. `bot-menu.ts`, `downloader.ts`
-- [ ] **SM-817** P2 «Поделись с другом» в автокомменте — после «Я сделаль» строка «Позови друга? t.me/sami_workouts»
-- [ ] **SM-818** P2 Undo hint для «Я сделаль» — подсказка что кнопка toggle
-- [ ] **SM-819** P2 Equipment auto-suggestion — показать обнаруженный инвентарь из названия видео в поиске
-- [ ] **SM-820** P1 Документировать алгоритм поиска видео — описать в CLAUDE.md или README: как работает «📅 Неделя», scoring (brand/view/duration), blacklist, что «умного» есть и чего нет. Для владельца и будущих контрибьюторов
+- [ ] **SM-815 Стратег → еженедельный** — daily overkill при 16 подписчиках, 500 слов вместо 3000
+- [ ] **SM-817 «Поделись с другом»** — после «Я сделаль» строка «Позови друга? t.me/sami_workouts»
+- [ ] **SM-819 Equipment auto-suggestion** — показать обнаруженный инвентарь в поиске видео
+- [ ] **SM-820 Документация алгоритма поиска** — scoring, blacklist, что «умного» есть и чего нет
 
 ---
 
@@ -726,3 +726,10 @@ SAMI и Hunter технически стабильны: тесты идут, д�
 - [ ] **Mega Review:** **SAMI** — medium — db.ts split фаза 1: вынести db-approval.ts (~250L) с re-export для совместимости
 - [ ] **Mega Review:** **SAMI** — medium — Добавить тесты poster.ts: formatCaption, MarkdownV2 escaping, text fallback при ошибке скачивания
 - [ ] **Mega Review:** **Portfolio** — medium — SYNC-03: SAMI case — обновить LOC (14K+), Seasons→Challenges
+
+### Mega Review 2026-03-21
+<!-- Source: ~/Documents/Projects/Architect/code-reviews/2026-03-21.md -->
+- [ ] **Mega Review:** **SAMI** — critical — `npm run typecheck && npm run lint` локально после moderation-изменений, найти и исправить ошибку
+- [ ] **Mega Review:** **SAMI** — medium — db.ts split фаза 1: вынести `db-approval.ts` (~250L) с re-export — `db.ts`
+- [ ] **Mega Review:** **SAMI** — medium — Тесты `poster.ts`: formatCaption, MarkdownV2 escaping, text fallback при ошибке скачивания
+- [ ] **Mega Review:** **Portfolio** — medium — SYNC-03: SAMI case — LOC (14K+), Seasons→Challenges — `projects/sami.html`

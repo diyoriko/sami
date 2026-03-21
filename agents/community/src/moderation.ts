@@ -293,18 +293,18 @@ export async function cleanupExpiredCaptchas(bot: Bot): Promise<void> {
     try {
       await bot.api.banChatMember(captcha.chat_id, captcha.telegram_user_id);
       await bot.api.unbanChatMember(captcha.chat_id, captcha.telegram_user_id);
-    } catch {}
+    } catch { /* TG API: user may have left already */ }
     try {
       if (captcha.captcha_message_id) {
         await bot.api.deleteMessage(captcha.chat_id, captcha.captcha_message_id);
       }
-    } catch {}
+    } catch { /* TG API: message may be deleted */ }
     try {
       await bot.api.sendMessage(
         captcha.chat_id,
         `⏱ ${captcha.first_name} не ответил на проверку и был исключён. Он может вернуться в любой момент.`
       );
-    } catch {}
+    } catch { /* TG API: chat may be unavailable */ }
     deleteCaptcha(captcha.telegram_user_id);
   }
 }
@@ -393,11 +393,11 @@ export function registerModeration(bot: Bot): void {
       // Wrong answer → kick (can rejoin)
       try {
         await ctx.editMessageText(`❌ Неверно. Ты можешь вернуться и попробовать снова.`);
-      } catch {}
+      } catch { /* TG API: message may be deleted */ }
       try {
         await ctx.api.banChatMember(captcha.chat_id, targetUserId);
         await ctx.api.unbanChatMember(captcha.chat_id, targetUserId);
-      } catch {}
+      } catch { /* TG API: user may have left already */ }
       await ctx.answerCallbackQuery('Неверно');
       return;
     }
@@ -433,7 +433,7 @@ export function registerModeration(bot: Bot): void {
         `✅ Отлично, ты человек\\!\n\nДобро пожаловать в Sami Community — место для тех, кто возвращает движение в свой день\\. Только коврик, без лишнего шума\\.\n\n*Что тебя сюда привело?*`,
         { parse_mode: 'MarkdownV2', reply_markup: goalKeyboard }
       );
-    } catch {}
+    } catch { /* TG API: message may be deleted */ }
   });
 
   // --- Goal quiz callback ---
@@ -463,7 +463,7 @@ export function registerModeration(bot: Bot): void {
 
     try {
       await ctx.editMessageText(welcomeText, { parse_mode: 'MarkdownV2' });
-    } catch {}
+    } catch { /* TG API: message may be deleted */ }
 
     // Post-onboarding DM: explain how Sami works (sent privately)
     try {
@@ -499,7 +499,7 @@ export function registerModeration(bot: Bot): void {
     try {
       const member = await ctx.getChatMember(userId);
       if (['administrator', 'creator'].includes(member.status)) return;
-    } catch {
+    } catch { /* TG API: can't verify member status, skip moderation */
       return;
     }
 
@@ -514,7 +514,7 @@ export function registerModeration(bot: Bot): void {
 
     const limit = getAntifloodLimit(userId);
     if (timestamps.length > limit) {
-      try { await ctx.deleteMessage(); } catch {}
+      try { await ctx.deleteMessage(); } catch { /* TG API: message may be deleted */ }
       muteMember(userId, night ? 2 : 1); // 1h mute (2h at night)
       const muteHours = night ? 2 : 1;
       try {
@@ -524,7 +524,7 @@ export function registerModeration(bot: Bot): void {
           { can_send_messages: false, can_send_polls: false, can_send_other_messages: false },
           { until_date: until }
         );
-      } catch {}
+      } catch { /* TG API: restrict may fail if bot lacks permissions */ }
       logModAction(userId, 'antiflood', `${timestamps.length} msgs in 30s (limit: ${limit})${night ? ' [night]' : ''}`, text);
       const username = ctx.from?.username ? `@${ctx.from.username}` : String(userId);
       await ctx.reply(`🔇 ${username} получил мут на ${muteHours}ч за флуд.`).catch(() => {});
@@ -537,7 +537,7 @@ export function registerModeration(bot: Bot): void {
     if (isNewbie(userId) && timestamps.length >= 2) {
       const prevTimestamp = timestamps[timestamps.length - 2];
       if (now - prevTimestamp < NEWBIE_COOLDOWN_MS) {
-        try { await ctx.deleteMessage(); } catch {}
+        try { await ctx.deleteMessage(); } catch { /* TG API: message may be deleted */ }
         logModAction(userId, 'cooldown', 'newbie cooldown: <1min between messages', text);
         // Silent delete — no public warning for cooldown
         return;
@@ -551,7 +551,7 @@ export function registerModeration(bot: Bot): void {
     if (!isSpamMessage && night) {
       const capsWords = (text.match(/[A-ZА-ЯЁ]{4,}/g) ?? []).length;
       if (capsWords >= 3) {
-        try { await ctx.deleteMessage(); } catch {}
+        try { await ctx.deleteMessage(); } catch { /* TG API: message may be deleted */ }
         logModAction(userId, 'delete', 'excessive caps at night', text);
         return;
       }
@@ -560,7 +560,7 @@ export function registerModeration(bot: Bot): void {
     if (!isSpamMessage) return;
 
     // Delete and escalate
-    try { await ctx.deleteMessage(); } catch {}
+    try { await ctx.deleteMessage(); } catch { /* TG API: message may be deleted */ }
 
     const warnings = addWarning(userId);
     const username = ctx.from?.username ? `@${ctx.from.username}` : String(userId);
@@ -617,7 +617,7 @@ export function registerModeration(bot: Bot): void {
       { parse_mode: 'MarkdownV2' }
     );
     await ctx.reply('✅ Репорт отправлен.').catch(() => {});
-    try { await ctx.deleteMessage(); } catch {}
+    try { await ctx.deleteMessage(); } catch { /* TG API: message may be deleted */ }
   });
 
   // --- Auto-forward from channel → post "Я сделаль" button as comment in discussion group ---
@@ -722,7 +722,7 @@ export function registerModeration(bot: Bot): void {
             await ctx.editMessageReplyMarkup({ reply_markup: undoKeyboard });
           }
         } catch { /* message too old */ }
-        await ctx.answerCallbackQuery('Отметка снята');
+        await ctx.answerCallbackQuery('↩️ Отметка снята.');
         return;
       }
 
@@ -753,8 +753,8 @@ export function registerModeration(bot: Bot): void {
 
       try {
         await ctx.editMessageText('Сделал(а) тренировку? Нажми кнопку:', { reply_markup: keyboard });
-      } catch {
-        try { await ctx.editMessageReplyMarkup({ reply_markup: keyboard }); } catch {}
+      } catch { /* TG API: message may be deleted */
+        try { await ctx.editMessageReplyMarkup({ reply_markup: keyboard }); } catch { /* TG API: fallback also failed */ }
       }
 
       // Post celebratory comment in discussion group
@@ -772,7 +772,7 @@ export function registerModeration(bot: Bot): void {
         log.warn('failed to post streak comment', { error: String(err) });
       }
 
-      await ctx.answerCallbackQuery('Тренировка записана.');
+      await ctx.answerCallbackQuery('✅ Отмечено! Нажми ещё раз чтобы отменить.');
 
       // Buddy invite check
       const { completions } = getMemberLevel(userId);
@@ -785,7 +785,7 @@ export function registerModeration(bot: Bot): void {
             `можешь поделиться ссылкой на сообщество:\nhttps://t.me/sami_workouts\n\n` +
             `Вместе проще держать темп.`
           );
-        } catch {}
+        } catch { /* TG API: user may have blocked DMs */ }
       }
     } else {
       // Post not in DB — graceful degradation, just acknowledge
@@ -827,7 +827,7 @@ export function registerModeration(bot: Bot): void {
           await ctx.editMessageReplyMarkup({ reply_markup: keyboard });
         }
       } catch { /* message too old */ }
-      await ctx.answerCallbackQuery('Отметка снята');
+      await ctx.answerCallbackQuery('↩️ Отметка снята.');
       return;
     }
 
@@ -883,7 +883,7 @@ export function registerModeration(bot: Bot): void {
       } else {
         await ctx.editMessageReplyMarkup({ reply_markup: keyboard });
       }
-    } catch {
+    } catch { /* TG API: message may be deleted */
       try {
         await ctx.editMessageReplyMarkup({ reply_markup: keyboard });
       } catch { /* message too old, that's ok */ }
@@ -904,7 +904,7 @@ export function registerModeration(bot: Bot): void {
       log.warn('failed to post streak comment', { error: String(err) });
     }
 
-    await ctx.answerCallbackQuery('Тренировка записана.');
+    await ctx.answerCallbackQuery('✅ Отмечено! Нажми ещё раз чтобы отменить.');
   });
 
 
