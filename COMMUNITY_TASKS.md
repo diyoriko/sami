@@ -4,42 +4,33 @@
 
 ---
 
-## SPRINT 8 — Tests + Growth + Quality
+## SPRINT 8 — Quality + UX + Moderation
 
 Статус: **в работе** | Начало: 20.03.2026
 
-### P0: Видео пропорции — DONE (20.03)
+### Done
 
-- [x] **SAR distortion fix** — `setsar=1:1` без масштабирования → `scale=trunc(iw*sar/2)*2:trunc(ih/2)*2,setsar=1:1`. Файл: `downloader.ts`
-- [x] **Always re-encode** — убран early return, каждое видео проходит ffmpeg (чистый контейнер, consistent tkhd + stream metadata). Файл: `downloader.ts`
-- [x] **Explicit width/height в sendVideo** — Telegram неправильно auto-detect'ил размеры из MP4 → вытянутый preview на всех клиентах. Fix: передаём `width` и `height` из ffprobe в `sendVideo`. 3 места: poster (обычные), poster (series), bot-menu (UGC). Файлы: `poster.ts`, `bot-menu.ts`
+- [x] **SM-801** P0 SAR distortion fix — proper scaling + always re-encode + explicit width/height в sendVideo. `downloader.ts`, `poster.ts`, `bot-menu.ts`
+- [x] **SM-802** P0 Модерация — убраны блокировки ссылок/промо, оставлен только hard spam. Antiflood 10 msg/30s. Newbie cooldown и night mode отключены. `moderation.ts`
+- [x] **SM-803** P0 Брендовая капча — 3 вопроса о Sami вместо math (Коврик / Структура / 10-20 мин). `moderation.ts`
+- [x] **SM-804** P1 dates.ts — 40 тестов (frozen MSK time + pure functions)
+- [x] **SM-805** P1 youtube.ts — 26 тестов (extractYoutubeId, computeTotalScore, detectEquipment)
+- [x] **SM-806** P1 Buffer.concat — 5 HTTP endpoints. `index.ts`
+- [x] **SM-807** P1 «Опубликовать сейчас» — rename в 2 местах. `bot-menu.ts`
+- [x] **SM-808** P1 Backlog structure — sprint наверх, done в `<details>`, справочник в `<details>`
 
-### P1: Тесты — критические пробелы
+### Open
 
-- [x] **dates.ts** — 40 тестов: все time-функции с frozen MSK time + pure functions
-- [x] **youtube.ts + extractYoutubeId** — 26 тестов: extractYoutubeId (13 URL-форматов), computeTotalScore (веса, граничные значения), detectEquipment (гантели, резинка, скакалка, case insensitive, multi-equipment)
-- [ ] **poster.ts** — 0 тестов: formatCaption (теги, MarkdownV2 escaping, Sami Score), text fallback при ошибке скачивания
-
-### P1: Growth — фичи
-
-- [ ] **Welcome DM: "Как ты нас нашёл?"** — кнопки (рекомендация / поиск / другое) → запись в DB → аналитика. При вступлении в группу
-- [ ] **Trackable invite links** — бот создаёт 3-5 уникальных invite ссылок для разных каналов (личные, ВК, чаты). DB: таблица `invite_links(id, label, url, clicks, joins)`
-
-### P0: Модерация — смягчить правила — DONE (21.03)
-
-- [x] **Ревью + смягчение модерации** — убраны: блокировка всех ссылок (кроме YouTube/t.me/sami), блокировка «подпишись», блокировка t.me/* промо. Оставлены только: финансы/крипто, adult/dating, MLM. Antiflood: 5→10 msg/30s. Newbie cooldown: отключён. Night mode: отключён. Файл: `moderation.ts`
-- [x] **Брендовая капча** — math-captcha заменена на 3 вопроса о Sami: «Что нужно для тренировки?» (🧘 Коврик), «Девиз Sami?» (Не мотивация. Структура.), «Сколько минут?» (10-20). Рандомный выбор, shuffle кнопок. Файл: `moderation.ts`
-
-### P1: UX — Дашборд и Неделя
-
-- [ ] **Убрать расписание недели из Дашборда** — расписание (Пн-Вс со статусами) дублирует кнопку «📅 Неделя». В дашборде оставить только метрики (подписчики, посты, выполнения, retention, стратег, аптайм). Файл: `bot-menu.ts`
-- [ ] **Убрать легенду иконок из «📅 Неделя»** — строка «✅ опубликовано · 📋 в очереди · ⬜ пусто · 👈 сегодня» занимает место и очевидна из контекста. Файл: `bot-menu.ts`
-- [ ] **Баг: опубликованное видео не отображается в «📅 Неделя»** — видео по дыханию (Сб) опубликовано через «Неделя» flow, но в расписании Сб показывается пустым (⬜). Видимо `markWeekSlotPosted` или `recordPost` не записывает слот корректно при ручной публикации. Нужна диагностика: проверить DB (weekly_schedule) после публикации. Файлы: `bot-menu.ts`, `db.ts`, `approval.ts`
-
-### P2: Code quality
-
-- [ ] **Silenced catches** — 63 empty `catch {}` без логирования (31 в bot-menu.ts — expected TG API errors → `log.debug`, остальные → `log.warn`). Перенесено из Sprint 7
-- [ ] **db.ts split фаза 1** — вынести analytics или challenges из db.ts (2399 строк). Re-export для совместимости
+- [ ] **SM-810** P1 Убрать расписание из Дашборда — дублирует «📅 Неделя», оставить только метрики. `bot-menu.ts`
+- [ ] **SM-811** P1 Убрать легенду иконок из «📅 Неделя» — очевидна из контекста. `bot-menu.ts`
+- [ ] **SM-812** P1 Баг: видео не видно в «📅 Неделя» — Сб дыхание опубликовано, но слот пустой. Диагностика weekly_schedule. `bot-menu.ts`, `db.ts`
+- [ ] **SM-813** P1 poster.ts тесты — formatCaption (теги, Sami Score, escaping). 0 тестов сейчас
+- [ ] **SM-814** P1 Sami Score объяснение — сократить «(тон, формат, просмотры, лайки, длительность)» → «(качество и популярность)»
+- [ ] **SM-815** P1 Стратег → еженедельный — daily overkill при 16 подписчиков. 500 слов вместо 3000
+- [ ] **SM-816** P2 Silenced catches — 63 empty `catch {}`, добавить log.debug/log.warn. `bot-menu.ts`, `downloader.ts`
+- [ ] **SM-817** P2 «Поделись с другом» в автокомменте — после «Я сделаль» строка «Позови друга? t.me/sami_workouts»
+- [ ] **SM-818** P2 Undo hint для «Я сделаль» — подсказка что кнопка toggle
+- [ ] **SM-819** P2 Equipment auto-suggestion — показать обнаруженный инвентарь из названия видео в поиске
 
 ---
 
@@ -609,66 +600,42 @@
 
 ## Бэклог (не в спринте)
 
-> Задачи ниже отложены до явного решения вытащить в спринт. Приоритизированы по 5 ревью от 17.03.
+### Growth
 
-### Growth — P1: ручная работа (блокирует всё остальное)
+- [ ] **SM-900** P1 Написать 10 знакомым лично — 1/10. «Нашёл канал с домашними тренировками — без рекламы, только коврик»
+- [ ] **SM-901** P1 Разобраться откуда +12 подписчиков 16.03 — DM последним вступившим
+- [ ] **SM-902** P1 Trackable invite links — 3-5 ссылок для разных каналов
+- [ ] **SM-903** P1 Welcome DM «Как нашёл?» — кнопки → DB → аналитика
+- [ ] **SM-904** P2 Telegram Stories reminder — крон-напоминание админу «Опубликуй Story»
+- [ ] **SM-905** P2 Опрос «Зачем тренируешься?» — poll в канале
+- [ ] **SM-906** P2 Статья VC.ru — после 20+ подписчиков
+- [ ] **SM-907** P2 Cross-promo с 3 микро-каналами — ЗОЖ/фитнес 100-500 подписчиков
 
-> **"SAMI solved the wrong problem perfectly."** Product 9/10, Distribution 1/10.
-> Следующие 4 недели: outreach > фичи. Цель: 30 подписчиков к 14 апреля.
+### Architecture
 
-- [ ] **Написать 10 знакомым лично** — 1/10 сделано. Шаблон: "Нашёл канал с домашними тренировками — без рекламы, только коврик. t.me/sami_workouts"
-- [ ] **Разобраться откуда +12 подписчиков 16.03** — DM последним вступившим: "Как нашёл Sami?"
-- [ ] **Trackable invite links** — 3-5 ссылок для разных каналов (личные, ВК, чаты). 30 мин
-- [ ] **Welcome DM: "Как ты нас нашёл?"** — кнопки (рекомендация / поиск / другое) → аналитика
-- [ ] **Outreach-трекер** — таблица: имя → написал → ответ → вступил. В COMMUNITY_TASKS.md или spreadsheet
-- [ ] **Cross-promo с 3 микро-каналами** — найти каналы 100-500 подписчиков в нише ЗОЖ/фитнес
+- [ ] **SM-920** P1 db.ts split — 2399 строк → 5 модулей. Re-export для совместимости
+- [ ] **SM-921** P2 Schema version tracking — таблица `schema_info(version, name, applied_at)`
 
-### Growth — виральность и вовлечение (стратег, 19.03)
+### Tests
 
-- [ ] **P1: Telegram Stories — анонс тренировки дня** — 15-сек превью тренировки в Stories канала. Stories видят даже незнакомые пользователи в рекомендациях Telegram — бесплатный органический охват. Ограничение: Bot API не поддерживает Stories, только ручная публикация или MTProto (TDLib). Вариант: крон-напоминание админу «Опубликуй Story» со ссылкой на сегодняшний пост
-- [ ] **P2: «Поделись с другом» в автокомменте** — после «Я сделаль» бот добавляет в комментарий строку: «Позови друга? t.me/sami_workouts». Один клик — одно приглашение. Виральный цикл без сложностей
-- [ ] **P2: Опрос «Зачем ты тренируешься?»** — разовый poll в канале: гибкость / сила / восстановление / привычка / другое. Даёт реальные данные о целях аудитории + вовлечение без контента
+- [ ] **SM-930** P2 approval.ts callbacks — 0 тестов
+- [ ] **SM-931** P2 downloader.ts — 0 тестов
+- [ ] **SM-932** P2 analytics.ts — 0 тестов расчётов
 
-### Growth — статья на VC.ru
+### UX
 
-- [ ] **Статья "Как я сделал Telegram-бота для тренировок за 2 недели с Claude"** — после 20+ подписчиков
-
-### Architecture — db.ts split (P1, arch review)
-
-- [ ] **Разделить db.ts** — 2122 строки, 161 export. План: `db-videos.ts` (~150), `db-posts.ts` (~150), `db-approval.ts` (~250), `db-members.ts` (~400), `db-challenges.ts` (~350). Re-export для совместимости. 3-4 сессии
-- [ ] **Schema version tracking** — таблица `schema_info (version, name, applied_at)` для аудита миграций
-
-### Tests — критические пробелы (test review)
-
-- [x] **youtube.ts** — 26 тестов (Sprint 8): extractYoutubeId (13 URL-форматов), computeTotalScore, detectEquipment
-- [ ] **poster.ts** — 0 тестов: formatCaption (теги, MarkdownV2 escaping, Sami Score), text fallback при ошибке скачивания
-- [ ] **approval.ts callbacks** — 0 тестов: approve/reject/unapprove/refresh button handlers
-- [ ] **downloader.ts** — 0 тестов: downloadVideo, isYtDlpAvailable
-- [x] **dates.ts** — 40 тестов (Sprint 8): todayMsk, tomorrowMsk, yesterdayMsk, moscowHour, dayOfWeekMsk, thisMondayMsk, nextMondayMsk, dateDiffDays, addDaysMsk
-- [ ] **analytics.ts** — только mock в scheduler.test.ts, нет тестов расчётов
-
-### UX — P2 (UX review)
-
-- [ ] **Equipment auto-suggestion** — показать обнаруженный инвентарь из названия видео
-- [ ] **Title length feedback** — "Название: ${current}/200 символов" вместо голой ошибки
-- [ ] **Muscle detection: показать результат** — "Обнаружены мышцы: спина, плечи"
-- [ ] **Sami Score объяснение** — сократить "(тон, формат, просмотры, лайки, длительность)" → "(popularity + engagement)"
-- [ ] **Undo hint для "Я сделаль"** — подсказка что кнопка toggle
-- [ ] **Drafts editable** — черновики в "Мои тренировки": кнопка "Доделать" вместо только "Удалить"
-- [ ] **«Мои тренировки» — rich UI** — после 30+ участников
-
-### Стратег — оптимизация (strategic review)
-
-- [ ] **Стратег → еженедельный** — daily overkill при 15 подписчиков. Формат: результаты недели → 3 приоритета → цели. 500 слов вместо 3000
-- ~~**Убрать poll_results**~~ — таблица активно используется (moderation.ts:944, upsertPollResult при каждом опросе)
+- [ ] **SM-940** P2 Title length feedback — «Название: N/200 символов»
+- [ ] **SM-941** P2 Muscle detection: показать результат — «Обнаружены: спина, плечи»
+- [ ] **SM-942** P2 Drafts editable — кнопка «Доделать» в «Мои тренировки»
+- [ ] **SM-943** P3 «Мои тренировки» — rich UI (после 30+ участников)
 
 ### Отложено (после 50+ участников)
 
-- [ ] Монетизация: опрос в группе, архитектура premium
-- [ ] Weekly personal stats DM
-- [ ] Attribution flow для тренеров
-- [ ] Лендинг Sami
-- [ ] Тип "Челлендж" — DB-схема + UX для текстовых челленджей
+- [ ] **SM-950** P3 Монетизация
+- [ ] **SM-951** P3 Weekly personal stats DM
+- [ ] **SM-952** P3 Attribution flow для тренеров
+- [ ] **SM-953** P3 Лендинг Sami
+- [ ] **SM-954** P3 Тип «Челлендж» — текстовые челленджи без видео
 
 ---
 
@@ -751,3 +718,10 @@ SAMI и Hunter технически стабильны: тесты идут, д�
 - [x] **Backlog structure fix** — Sprint 8 наверх, Sprint 6-7 и Сделано в `<details>`. Как у Hunter: open sprint сверху, done внизу
 
 </details>
+
+### Mega Review 2026-03-21
+<!-- Source: ~/Documents/Projects/Architect/code-reviews/2026-03-21.md -->
+- [ ] **Mega Review:** **SAMI** — critical — Починить CI: `npm run typecheck && npm run lint` локально, найти ошибку после moderation изменений
+- [ ] **Mega Review:** **SAMI** — medium — db.ts split фаза 1: вынести db-approval.ts (~250L) с re-export для совместимости
+- [ ] **Mega Review:** **SAMI** — medium — Добавить тесты poster.ts: formatCaption, MarkdownV2 escaping, text fallback при ошибке скачивания
+- [ ] **Mega Review:** **Portfolio** — medium — SYNC-03: SAMI case — обновить LOC (14K+), Seasons→Challenges
