@@ -665,7 +665,7 @@
 <details>
 <summary>Справочник (инструменты, деплой, идентификаторы, code reviews)</summary>
 
-## Инструменты Claude Code для Sami
+### Инструменты Claude Code для Sami
 
 | Инструмент | Применение | Когда использовать |
 |---|---|---|
@@ -677,7 +677,7 @@
 
 ---
 
-## Качество — приоритет
+### Качество — приоритет
 
 Каждый элемент должен соответствовать бренду:
 - Тон: спокойно, конкретно, методично
@@ -687,7 +687,7 @@
 
 ---
 
-## Деплой
+### Деплой
 
 | Параметр | Значение |
 |---|---|
@@ -697,7 +697,7 @@
 | GitHub репо | `https://github.com/diyoriko/sami` |
 | Public URL | `https://courageous-happiness-production.up.railway.app` |
 
-## Идентификаторы
+### Идентификаторы
 
 | Параметр | Значение |
 |---|---|
@@ -706,7 +706,7 @@
 | Группа | "Сами Daily" -> `-1003604276410` |
 | Admin user ID | `85013206` |
 
-## Платные сервисы
+### Платные сервисы
 
 | Сервис | Назначение | Стоимость |
 |--------|-----------|-----------|
@@ -752,6 +752,6 @@ SAMI и Hunter технически стабильны: тесты идут, д�
 
 ### Mega Review 2026-03-23
 <!-- Source: ~/Documents/Projects/Architect/code-reviews/2026-03-23.md -->
-- [ ] **Mega Review:** **SAMI** — medium — SM-1010: вынести videos, posts, members, challenges из `db.ts` (остаток ~1800L после db-approval.ts) — фаза 2-5
-- [ ] **Mega Review:** **SAMI** — medium — Вынести `sendMyWorkouts`, `sendChallengeView`, `sendFilterResults` из `bot-menu.ts:1745,1875,1950` в отдельный файл
-- [ ] **Mega Review:** **SAMI** — medium — Написать оставшимся 9 знакомым (SM-1000: 1/10 за 2 недели) — единственный рычаг роста при 16 подписчиках
+- [x] **Mega Review:** **SAMI** — medium — db.ts split фазы 2-5 — done (SM-1010)
+- [x] **Mega Review:** **SAMI** — medium — bot-menu.ts split — done (SM-1011)
+- [x] **Mega Review:** **SAMI** — medium — Outreach 9 знакомым — перенесено в SM-1000
