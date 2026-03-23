@@ -218,6 +218,81 @@ export function registerBotMenu(bot: Bot): void {
     await sendMyWorkouts(ctx, ctx.from!.id, offset, ctx.callbackQuery.message?.message_id);
   });
 
+  // Resume draft workout — re-enter UGC flow from where user left off
+  bot.callbackQuery(/^ugc_resume:(\d+):(\d+)$/, async (ctx) => {
+    const subId = parseInt(ctx.match[1]);
+    const offset = parseInt(ctx.match[2]);
+    const userId = ctx.from!.id;
+    const sub = getUgcSubmission(subId);
+    if (!sub || sub.telegram_user_id !== userId) {
+      await ctx.answerCallbackQuery('Не найдено');
+      return;
+    }
+    if (sub.status !== 'draft') {
+      await ctx.answerCallbackQuery('Эта тренировка уже не черновик');
+      return;
+    }
+    await ctx.answerCallbackQuery();
+
+    const config = getConfig();
+    const isAdminUser = userId === config.TELEGRAM_ADMIN_USER_ID;
+
+    // Determine which step to resume based on filled fields
+    let resumeStep: UgcStep;
+    let prompt: string;
+    let kb: InlineKeyboard;
+
+    if (!sub.category) {
+      resumeStep = 'waiting_category';
+      prompt = 'Какой тип тренировки?';
+      kb = buildCategoryKeyboard(subId);
+    } else if (!sub.difficulty) {
+      resumeStep = 'waiting_difficulty';
+      prompt = 'Уровень сложности?';
+      kb = new InlineKeyboard();
+      DIFFICULTY_BUTTONS.forEach((btn, i) => {
+        if (i > 0) kb.row();
+        kb.text(btn.label, `ugc_diff:${subId}:${btn.value}`);
+      });
+      kb.row().text('← Назад', `ugc_back:${subId}:waiting_difficulty`).text('❌ Отмена', 'ugc_cancel');
+    } else if (!sub.duration_seconds) {
+      resumeStep = 'waiting_duration';
+      prompt = 'Сколько длится тренировка?';
+      kb = buildDurationKeyboard(subId);
+    } else if (!sub.equipment) {
+      resumeStep = 'waiting_equipment';
+      prompt = 'Нужен ли инвентарь?';
+      kb = buildEquipmentKeyboard(subId);
+    } else if (isAdminUser && sub.rubric === null) {
+      // Admin rubric step (rubric is null = not yet set)
+      resumeStep = 'waiting_rubric';
+      prompt = 'Рубрика поста:';
+      kb = new InlineKeyboard()
+        .text('📅 Челлендж', `ugc_rubric:${subId}:challenge`)
+        .text('👤 От участника', `ugc_rubric:${subId}:ugc`)
+        .row()
+        .text('✏️ Своя рубрика', `ugc_rubric:${subId}:custom`)
+        .row()
+        .text('← Назад', `ugc_back:${subId}:waiting_rubric`)
+        .text('❌ Отмена', 'ugc_cancel');
+    } else {
+      // All fields filled except title, or title is default — go to title step
+      resumeStep = 'waiting_title';
+      prompt = 'Как назвать тренировку? Напиши короткое название (до 200 символов).';
+      kb = new InlineKeyboard()
+        .text('← Назад', `ugc_back:${subId}:waiting_title`)
+        .text('❌ Отмена', 'ugc_cancel');
+    }
+
+    saveUgcState(userId, resumeStep, subId);
+
+    try {
+      await ctx.editMessageText(prompt, { reply_markup: kb });
+    } catch { /* TG API: message may be deleted, fallback to reply */
+      await ctx.reply(prompt, { reply_markup: kb });
+    }
+  });
+
   // --- Admin buttons ---
   bot.hears('📊 Дашборд', async (ctx) => {
     if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
@@ -1714,14 +1789,17 @@ async function sendMyWorkouts(
   const text = header + '\n' + lines.join('\n\n');
 
   const kb = new InlineKeyboard();
-  // Delete buttons for each item
-  items.forEach((item, i) => {
+  // Action buttons for each item: drafts get "Доделать" + "Удалить", others get "Удалить" only
+  items.forEach((item) => {
     const title = item.title ? decodeHtmlEntities(item.title) : 'Без названия';
     const shortTitle = title.length > 15 ? title.slice(0, 12) + '…' : title;
+    const isDraft = item.status === 'draft' && !item.published_at;
+    if (isDraft) {
+      kb.text(`✏️ ${shortTitle}`, `ugc_resume:${item.id}:${offset}`);
+    }
     kb.text(`🗑 ${shortTitle}`, `ugc_del:${item.id}:${offset}`);
-    if (i % 2 === 1) kb.row();
+    kb.row();
   });
-  if (items.length % 2 === 1) kb.row();
   // Pagination
   if (offset > 0) {
     kb.text('← Назад', `mywk:${Math.max(0, offset - PAGE_SIZE)}`);

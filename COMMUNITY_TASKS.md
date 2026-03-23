@@ -4,6 +4,39 @@
 
 ---
 
+## SPRINT 10 — Бэклог
+
+Статус: **в работе** | Начало: 23.03.2026
+
+> Всё что осталось после Sprint 8-9. Только ручная работа и P3 (после 50+ подписчиков).
+
+### Growth (ручная работа)
+
+- [ ] **SM-1000 Написать 10 знакомым** — 1/10. «Канал с домашними тренировками — без рекламы, только коврик»
+- [ ] **SM-1001 Разобраться откуда +12 подписчиков 16.03** — DM последним вступившим
+- [ ] **SM-1002 Trackable invite links** — 3-5 ссылок для разных каналов
+- [ ] **SM-1003 Welcome DM «Как нашёл?»** — кнопки → DB → аналитика
+- [ ] **SM-1004 Stories reminder** — крон-напоминание «Опубликуй Story»
+- [ ] **SM-1005 Cross-promo** — 3 микро-канала ЗОЖ/фитнес
+- [ ] **SM-1006 Статья VC.ru** — после 20+ подписчиков
+
+### Architecture
+
+- [ ] **SM-1010 db.ts split фазы 2-5** — вынести videos, posts, members, challenges (~1800L ещё)
+
+### Отложено (после 50+ участников)
+
+- [ ] **SM-1020 Монетизация** — опрос + архитектура premium
+- [ ] **SM-1021 Weekly personal stats DM**
+- [ ] **SM-1022 Attribution flow для тренеров**
+- [ ] **SM-1023 Лендинг Sami**
+- [ ] **SM-1024 Тип «Челлендж»** — текстовые челленджи без видео
+
+---
+
+<details>
+<summary>Sprint 9 — CI + Tests + UX + Architecture (23.03) — DONE</summary>
+
 ## SPRINT 9 — CI + Tests + UX + Architecture
 
 Статус: **завершён** | 23.03.2026
@@ -17,8 +50,17 @@
 - [x] **SM-904 Mega Review cleanup** — дубликаты закрыты, backlog triage done
 
 - [x] **SM-905 db.ts split фаза 1** — вынести approval в db-approval.ts (148L, 16 exports). db.ts: 2399→2280 строк
+- [x] **SM-906 Schema version tracking** — таблица schema_info, recordMigration(), getSchemaVersion()
+- [x] **SM-907 downloader.ts тесты** — 5 тестов (isYtDlpAvailable, initCookies, setAdminNotifier)
+- [x] **SM-908 analytics.ts тесты** — 10 тестов (retention, delta, top videos, DM format, edge cases)
+- [x] **SM-909 Drafts editable** — кнопка «✏️ Доделать» в «Мои тренировки», resume UGC flow с нужного шага
 
 ---
+
+</details>
+
+<details>
+<summary>Sprint 8 — Quality + UX + Moderation (20-23.03) — DONE</summary>
 
 ## SPRINT 8 — Quality + UX + Moderation
 
@@ -48,6 +90,8 @@
 - [x] **SM-820 Документация алгоритма поиска** — новая секция в CLAUDE.md: scoring, blacklist, ограничения
 
 ---
+
+</details>
 
 <details>
 <summary>Сделано — релизы v0.1.0–v0.14.0</summary>
@@ -607,50 +651,11 @@
 - [x] **Retention bounds check** — `Math.min(100, ...)` в обоих местах. Файл: `analytics.ts`
 - [x] **English "done." в celebration** — «done.» → «сделано.». Файл: `moderation.ts`
 - [x] **HTTP body buffering** — `body += chunk` O(n²). Fix: `Buffer.concat(chunks)` во всех 5 endpoints. Файл: `index.ts`
-- [ ] **Silenced catches** — множественные `catch {}` без логирования. Fix: добавить `log.warn`. Файлы: `downloader.ts:132`, `bot-menu.ts` и др.
+- [x] **Silenced catches** — 63 catch {} → комментарии или log.debug/log.warn (SM-816, Sprint 8)
 
 ---
 
 </details>
-
-## Бэклог (не в спринте)
-
-### Growth
-
-- [ ] **SM-900** P1 Написать 10 знакомым лично — 1/10. «Нашёл канал с домашними тренировками — без рекламы, только коврик»
-- [ ] **SM-901** P1 Разобраться откуда +12 подписчиков 16.03 — DM последним вступившим
-- [ ] **SM-902** P1 Trackable invite links — 3-5 ссылок для разных каналов
-- [ ] **SM-903** P1 Welcome DM «Как нашёл?» — кнопки → DB → аналитика
-- [ ] **SM-904** P2 Telegram Stories reminder — крон-напоминание админу «Опубликуй Story»
-- [ ] **SM-905** P2 Опрос «Зачем тренируешься?» — poll в канале
-- [ ] **SM-906** P2 Статья VC.ru — после 20+ подписчиков
-- [ ] **SM-907** P2 Cross-promo с 3 микро-каналами — ЗОЖ/фитнес 100-500 подписчиков
-
-### Architecture
-
-- [ ] **SM-920** P1 db.ts split — 2399 строк → 5 модулей. Re-export для совместимости
-- [ ] **SM-921** P2 Schema version tracking — таблица `schema_info(version, name, applied_at)`
-
-### Tests
-
-- [ ] **SM-930** P2 approval.ts callbacks — 0 тестов
-- [ ] **SM-931** P2 downloader.ts — 0 тестов
-- [ ] **SM-932** P2 analytics.ts — 0 тестов расчётов
-
-### UX
-
-- [ ] **SM-940** P2 Title length feedback — «Название: N/200 символов»
-- [ ] **SM-941** P2 Muscle detection: показать результат — «Обнаружены: спина, плечи»
-- [ ] **SM-942** P2 Drafts editable — кнопка «Доделать» в «Мои тренировки»
-- [ ] **SM-943** P3 «Мои тренировки» — rich UI (после 30+ участников)
-
-### Отложено (после 50+ участников)
-
-- [ ] **SM-950** P3 Монетизация
-- [ ] **SM-951** P3 Weekly personal stats DM
-- [ ] **SM-952** P3 Attribution flow для тренеров
-- [ ] **SM-953** P3 Лендинг Sami
-- [ ] **SM-954** P3 Тип «Челлендж» — текстовые челленджи без видео
 
 ---
 

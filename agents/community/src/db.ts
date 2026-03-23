@@ -634,6 +634,36 @@ function migrate(db: Database.Database): void {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
+
+  // Schema version tracking
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS schema_info (
+      version INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  // Seed initial schema version if table is empty
+  const row = db.prepare('SELECT MAX(version) as v FROM schema_info').get() as { v: number | null } | undefined;
+  if (!row || row.v === null) {
+    db.prepare('INSERT INTO schema_info (version, name) VALUES (?, ?)').run(1, 'initial schema');
+  }
+}
+
+// ─── Schema version helpers ─────────────────────────────────────────────────
+
+/** Record a migration version. Idempotent — duplicate versions are ignored. */
+export function recordMigration(version: number, name: string): void {
+  getDb().prepare(
+    'INSERT OR IGNORE INTO schema_info (version, name) VALUES (?, ?)'
+  ).run(version, name);
+}
+
+/** Return the highest applied schema version, or 0 if none. */
+export function getSchemaVersion(): number {
+  const row = getDb().prepare('SELECT MAX(version) as v FROM schema_info').get() as { v: number | null } | undefined;
+  return row?.v ?? 0;
 }
 
 // --- Captcha state (persistent) ---
