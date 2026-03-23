@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Сами — одна тренировка в день</title>
+  <meta name="description" content="Telegram-канал с ежедневными тренировками. Стретчинг, сила, мобильность, йога. Только коврик. Без мотивации — структура.">
+  <meta property="og:title" content="Сами — одна тренировка в день">
+  <meta property="og:description" content="Telegram-канал с ежедневными тренировками. Только коврик.">
+  <meta property="og:type" content="website">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700&family=Raleway:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #FAF6F0;
+      --surface: #FFFFFF;
+      --text: #2D2A26;
+      --text-muted: #8C8580;
+      --accent: #3D6B5E;
+      --accent-light: #E8F0ED;
+      --warm: #D4A574;
+      --warm-light: #F5EDE4;
+      --radius: 16px;
+      --font-head: 'Lora', Georgia, serif;
+      --font-body: 'Raleway', -apple-system, sans-serif;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Layout */
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    section {
+      padding: 80px 0;
+    }
+
+    /* Nav */
+    nav {
+      padding: 20px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo {
+      font-family: var(--font-head);
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text);
+      text-decoration: none;
+      letter-spacing: -0.5px;
+    }
+
+    .nav-link {
+      font-size: 14px;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .nav-link:hover { color: var(--text); }
+
+    /* Hero */
+    .hero {
+      padding: 120px 0 80px;
+      text-align: center;
+    }
+
+    .hero-tag {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: var(--accent-light);
+      padding: 6px 16px;
+      border-radius: 20px;
+      margin-bottom: 32px;
+    }
+
+    .hero h1 {
+      font-family: var(--font-head);
+      font-size: clamp(36px, 6vw, 56px);
+      font-weight: 600;
+      line-height: 1.15;
+      letter-spacing: -1px;
+      color: var(--text);
+      margin-bottom: 24px;
+    }
+
+    .hero p {
+      font-size: 18px;
+      color: var(--text-muted);
+      max-width: 480px;
+      margin: 0 auto 40px;
+      line-height: 1.8;
+    }
+
+    .cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-body);
+      font-size: 16px;
+      font-weight: 500;
+      color: #fff;
+      background: var(--accent);
+      padding: 16px 36px;
+      border-radius: 60px;
+      text-decoration: none;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .cta:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(61, 107, 94, 0.25);
+    }
+
+    .cta-arrow { font-size: 18px; }
+
+    .hero-note {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 16px;
+    }
+
+    /* How it works */
+    .how {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 48px 40px;
+      margin-bottom: 24px;
+    }
+
+    .section-label {
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      font-family: var(--font-head);
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: -0.5px;
+      margin-bottom: 32px;
+    }
+
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    .step {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+    }
+
+    .step-num {
+      width: 40px;
+      height: 40px;
+      background: var(--accent-light);
+      color: var(--accent);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-head);
+      font-size: 18px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .step-text h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .step-text p {
+      font-size: 15px;
+      color: var(--text-muted);
+    }
+
+    /* Categories */
+    .categories {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-top: 32px;
+    }
+
+    .cat {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 20px 16px;
+      text-align: center;
+      transition: transform 0.2s;
+    }
+
+    .cat:hover { transform: translateY(-2px); }
+
+    .cat-emoji { font-size: 28px; margin-bottom: 8px; }
+
+    .cat-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .cat-day {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* Values */
+    .values-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 32px;
+    }
+
+    .value-card {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 24px;
+    }
+
+    .value-card h3 {
+      font-family: var(--font-head);
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .value-card p {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.7;
+    }
+
+    /* Quote */
+    .quote-section {
+      text-align: center;
+      padding: 60px 0;
+    }
+
+    .quote {
+      font-family: var(--font-head);
+      font-size: clamp(24px, 4vw, 36px);
+      font-weight: 400;
+      font-style: italic;
+      color: var(--text);
+      line-height: 1.5;
+      max-width: 560px;
+      margin: 0 auto;
+    }
+
+    .quote-author {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-top: 16px;
+    }
+
+    /* Final CTA */
+    .final-cta {
+      text-align: center;
+      padding: 80px 0 120px;
+    }
+
+    .final-cta h2 {
+      font-family: var(--font-head);
+      font-size: clamp(28px, 5vw, 40px);
+      font-weight: 600;
+      letter-spacing: -0.5px;
+      margin-bottom: 16px;
+    }
+
+    .final-cta p {
+      font-size: 16px;
+      color: var(--text-muted);
+      margin-bottom: 32px;
+    }
+
+    /* Footer */
+    footer {
+      padding: 32px 0;
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-muted);
+      border-top: 1px solid rgba(0,0,0,0.06);
+    }
+
+    footer a {
+      color: var(--text-muted);
+      text-decoration: none;
+    }
+
+    footer a:hover { color: var(--text); }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      section { padding: 60px 0; }
+      .hero { padding: 80px 0 60px; }
+      .how { padding: 32px 24px; }
+      .values-grid { grid-template-columns: 1fr; }
+      .categories { grid-template-columns: repeat(3, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <nav>
+      <a href="#" class="logo">сами</a>
+      <a href="https://t.me/sami_workouts" class="nav-link" target="_blank" rel="noopener">Открыть канал</a>
+    </nav>
+  </div>
+
+  <!-- Hero -->
+  <div class="container">
+    <section class="hero">
+      <div class="hero-tag">Telegram-канал</div>
+      <h1>Одна тренировка<br>в день</h1>
+      <p>Стретчинг, сила, мобильность, йога, дыхание. Нужен только коврик. Каждый день новое видео. Без лишнего.</p>
+      <a href="https://t.me/sami_workouts" class="cta" target="_blank" rel="noopener">
+        Подписаться <span class="cta-arrow">&rarr;</span>
+      </a>
+      <div class="hero-note">Бесплатно. Без регистрации.</div>
+    </section>
+  </div>
+
+  <!-- How it works -->
+  <div class="container">
+    <div class="how">
+      <div class="section-label">Как это работает</div>
+      <div class="section-title">Три шага. Каждый день.</div>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-text">
+            <h3>Открой канал</h3>
+            <p>Утром появляется одно видео. Уже выбрано за тебя.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-text">
+            <h3>Сделай тренировку</h3>
+            <p>От 6 до 30 минут. Дома, в поездке, в перерыве.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-text">
+            <h3>Нажми &laquo;Я сделаль&raquo;</h3>
+            <p>Бот считает серию дней. Для себя, не для рейтинга.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Categories -->
+  <div class="container">
+    <section>
+      <div class="section-label">Семь категорий</div>
+      <div class="section-title">Каждый день &mdash; своя тема</div>
+      <div class="categories">
+        <div class="cat">
+          <div class="cat-emoji">&#x1F9D8;</div>
+          <div class="cat-name">Стретчинг</div>
+          <div class="cat-day">Понедельник</div>
+        </div>
+        <div class="cat">
+          <div class="cat-emoji">&#x1F4AA;</div>
+          <div class="cat-name">Сила</div>
+          <div class="cat-day">Вторник</div>
+        </div>
+        <div class="cat">
+          <div class="cat-emoji">&#x1F30A;</div>
+          <div class="cat-name">Мобильность</div>
+          <div class="cat-day">Среда</div>
+        </div>
+        <div class="cat">
+          <div class="cat-emoji">&#x1F54A;</div>
+          <div class="cat-name">Йога</div>
+          <div class="cat-day">Четверг</div>
+        </div>
+        <div class="cat">
+          <div class="cat-emoji">&#x1F32C;</div>
+          <div class="cat-name">Дыхание</div>
+          <div class="cat-day">Пятница</div>
+        </div>
+        <div class="cat">
+          <div class="cat-emoji">&#x1F525;</div>
+          <div class="cat-name">Кардио</div>
+          <div class="cat-day">Суббота</div>
+        </div>
+        <div class="cat">
+          <div class="cat-emoji">&#x1F33F;</div>
+          <div class="cat-name">Восстановление</div>
+          <div class="cat-day">Воскресенье</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Values -->
+  <div class="container">
+    <section>
+      <div class="section-label">Философия</div>
+      <div class="section-title">Не мотивация. Структура.</div>
+      <div class="values-grid">
+        <div class="value-card">
+          <h3>Без выбора</h3>
+          <p>Не нужно решать что делать. Одно видео в день &mdash; уже выбрано.</p>
+        </div>
+        <div class="value-card">
+          <h3>Без инвентаря</h3>
+          <p>Только коврик. Никаких гантелей, резинок, турников.</p>
+        </div>
+        <div class="value-card">
+          <h3>Без давления</h3>
+          <p>Тело &mdash; партнёр, не проект. Пропустил &mdash; ок. Вернулся &mdash; хорошо.</p>
+        </div>
+        <div class="value-card">
+          <h3>Без рейтинга</h3>
+          <p>Серия дней &mdash; для себя. Никаких таблиц лидеров и соревнований.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Quote -->
+  <div class="container">
+    <div class="quote-section">
+      <div class="quote">&laquo;Шесть минут, чтобы плечи сказали спасибо.&raquo;</div>
+      <div class="quote-author">Тон канала Сами</div>
+    </div>
+  </div>
+
+  <!-- Final CTA -->
+  <div class="container">
+    <section class="final-cta">
+      <h2>Начни сегодня</h2>
+      <p>Подпишись на канал. Завтра утром будет первая тренировка.</p>
+      <a href="https://t.me/sami_workouts" class="cta" target="_blank" rel="noopener">
+        Открыть в Telegram <span class="cta-arrow">&rarr;</span>
+      </a>
+    </section>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <a href="https://t.me/sami_workouts" target="_blank" rel="noopener">@sami_workouts</a> &middot;
+      <a href="https://t.me/sami_workout_bot" target="_blank" rel="noopener">Бот</a> &middot;
+      <a href="https://diyor.design/projects/sami.html" target="_blank" rel="noopener">Кейс</a>
+    </div>
+  </footer>
+
+</body>
+</html>
