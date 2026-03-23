@@ -4,29 +4,30 @@
 
 ---
 
-## SPRINT 10 — Growth + Architecture
+## SPRINT 10 — Growth + Architecture + Неделя
 
-Статус: **открыт** | Начало: 23.03.2026
+Статус: **в работе** | Начало: 23.03.2026 | Тесты: 391
 
-> Кодовых P0/P1 задач нет. Фокус: growth (ручная работа) + architecture (по желанию).
-> Все Sprint 8-9 задачи закрыты (29/29). Тесты: 387.
+### Done
 
-### P1: Growth (ручная работа — не код)
+- [x] **SM-1002 Trackable invite links** — DB таблица, `/invites` команда, `/invites add`. 4 теста
+- [x] **SM-1003 Welcome DM «Как нашёл?»** — кнопки (знакомый/поиск/соцсети/другое) → join_source в DB
+- [x] **SM-1004 Stories reminder** — крон 09:00 МСК, DM админу со ссылкой на сегодняшний пост
+- [x] **SM-1010 db.ts split фазы 2-5** — 5 модулей: db-approval, db-videos, db-posts, db-members, db-challenges. db.ts: 2320→897 строк
+- [x] **SM-1011 bot-menu.ts split** — bot-menu-views.ts (291L): sendMyWorkouts, sendUgcToAdmin, sendChallengeView, sendFilterResults. bot-menu: 2051→1808 строк
 
-- [ ] **SM-1000 Написать 10 знакомым** — 1/10. «Канал с домашними тренировками — без рекламы, только коврик»
-- [ ] **SM-1001 Откуда +12 подписчиков 16.03** — DM последним вступившим: «Как нашёл Sami?»
-- [ ] **SM-1002 Trackable invite links** — 3-5 ссылок для разных каналов (код: 30 мин)
-- [ ] **SM-1003 Welcome DM «Как нашёл?»** — кнопки → DB → аналитика (код: 1-2ч)
+### Open
 
-### P2: Growth (можно позже)
+- [ ] **SM-1030 Ревью «Неделя»** — Вт показывает ✅ (posted) хотя видео не выбиралось и не постилось. Диагностика: проверить weekly_schedule в DB, понять откуда фантомный статус
+- [ ] **SM-1031 Автопубликация по расписанию** — выбранное видео на день должно публиковаться автоматически в 08:00 МСК. Сейчас нужно нажимать «Опубликовать сейчас» вручную
+- [ ] **SM-1032 Уведомление «видео не выбрано»** — если после 22:00 на завтра нет видео в очереди, DM админу: «На завтра (Ср, мобильность) нет тренировки. Выбери!»
 
-- [ ] **SM-1004 Stories reminder** — крон-напоминание «Опубликуй Story» (Bot API не поддерживает Stories)
-- [ ] **SM-1005 Cross-promo** — 3 микро-канала ЗОЖ/фитнес 100-500 подписчиков
+### P1: Growth (ручная работа — только ты)
+
+- [ ] **SM-1000 Написать 10 знакомым** — 1/10
+- [ ] **SM-1001 Откуда +12 подписчиков 16.03** — DM последним вступившим
+- [ ] **SM-1005 Cross-promo** — 3 микро-канала ЗОЖ/фитнес
 - [ ] **SM-1006 Статья VC.ru** — после 20+ подписчиков
-
-### P2: Architecture
-
-- [ ] **SM-1010 db.ts split фазы 2-5** — вынести videos, posts, members, challenges (~1800L)
 
 ### P3: Отложено (после 50+ участников)
 
@@ -750,3 +751,9 @@ SAMI и Hunter технически стабильны: тесты идут, д�
 - [x] **Mega Review:** **SAMI** — medium — db.ts split фаза 1 — done (SM-905)
 - [x] **Mega Review:** **Portfolio** — SYNC-03 (не SAMI проект)
 
+
+### Mega Review 2026-03-23
+<!-- Source: ~/Documents/Projects/Architect/code-reviews/2026-03-23.md -->
+- [ ] **Mega Review:** **SAMI** — medium — SM-1010: вынести videos, posts, members, challenges из `db.ts` (остаток ~1800L после db-approval.ts) — фаза 2-5
+- [ ] **Mega Review:** **SAMI** — medium — Вынести `sendMyWorkouts`, `sendChallengeView`, `sendFilterResults` из `bot-menu.ts:1745,1875,1950` в отдельный файл
+- [ ] **Mega Review:** **SAMI** — medium — Написать оставшимся 9 знакомым (SM-1000: 1/10 за 2 недели) — единственный рычаг роста при 16 подписчиках

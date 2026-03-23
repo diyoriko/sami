@@ -791,3 +791,51 @@ describe('challenges: weekly schedule management', () => {
     expect(next).toBeFalsy();
   });
 });
+
+describe('invite links', () => {
+  it('creates, lists, and increments counters', async () => {
+    const db = await import('../db');
+
+    // Initially empty
+    expect(db.getInviteLinks()).toEqual([]);
+
+    // Create two links
+    const id1 = db.createInviteLink('instagram', 'https://t.me/+Abc123');
+    const id2 = db.createInviteLink('youtube', 'https://t.me/+Xyz789');
+    expect(id1).toBeGreaterThan(0);
+    expect(id2).toBeGreaterThan(0);
+
+    // List returns newest first
+    const links = db.getInviteLinks();
+    expect(links).toHaveLength(2);
+    expect(links[0].label).toBe('youtube');
+    expect(links[1].label).toBe('instagram');
+    expect(links[0].clicks).toBe(0);
+    expect(links[0].joins).toBe(0);
+  });
+
+  it('increments clicks and joins', async () => {
+    const db = await import('../db');
+
+    db.incrementInviteLinkClicks('https://t.me/+Abc123');
+    db.incrementInviteLinkClicks('https://t.me/+Abc123');
+    db.incrementInviteLinkJoins('https://t.me/+Abc123');
+
+    const links = db.getInviteLinks();
+    const link = links.find(l => l.label === 'instagram')!;
+    expect(link.clicks).toBe(2);
+    expect(link.joins).toBe(1);
+  });
+
+  it('rejects duplicate URLs', async () => {
+    const db = await import('../db');
+    expect(() => db.createInviteLink('duplicate', 'https://t.me/+Abc123')).toThrow(/UNIQUE/);
+  });
+
+  it('no-op increment for unknown URL', async () => {
+    const db = await import('../db');
+    // Should not throw
+    db.incrementInviteLinkClicks('https://t.me/+nonexistent');
+    db.incrementInviteLinkJoins('https://t.me/+nonexistent');
+  });
+});

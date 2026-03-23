@@ -40,8 +40,9 @@ describe('UX smoke: bot-menu handlers', () => {
 
   it('UGC flow: admin approval buttons', () => {
     expect(botMenuSource).toContain('ugc_decide:');
-    expect(botMenuSource).toContain('Одобрить');
-    expect(botMenuSource).toContain('Отклонить');
+    const viewsSource = readSrc('bot-menu-views.ts');
+    expect(viewsSource).toContain('Одобрить');
+    expect(viewsSource).toContain('Отклонить');
   });
 });
 
@@ -203,14 +204,15 @@ describe('UX smoke: approval flow', () => {
 });
 
 describe('UX smoke: rating formula', () => {
+  const dbVideosSource = readSrc('db-videos.ts');
   const dbSource = readSrc('db.ts');
 
   it('computeRating uses YouTube metrics', () => {
-    expect(dbSource).toContain('normalizeViews');
-    expect(dbSource).toContain('normalizeLikeRatio');
-    expect(dbSource).toContain('RATING_VIEW_WEIGHT');
-    expect(dbSource).toContain('RATING_LIKE_WEIGHT');
-    expect(dbSource).toContain('RATING_CHANNEL_WEIGHT');
+    expect(dbVideosSource).toContain('normalizeViews');
+    expect(dbVideosSource).toContain('normalizeLikeRatio');
+    expect(dbVideosSource).toContain('RATING_VIEW_WEIGHT');
+    expect(dbVideosSource).toContain('RATING_LIKE_WEIGHT');
+    expect(dbVideosSource).toContain('RATING_CHANNEL_WEIGHT');
   });
 
   it('DB migration for new categories', () => {

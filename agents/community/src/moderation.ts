@@ -8,7 +8,7 @@ import { incrementNewMembers } from './scheduler';
 
 const log = createLogger('moderation');
 import {
-  upsertMember, setMemberGoal, addWarning, muteMember,
+  upsertMember, setMemberGoal, setMemberJoinSource, addWarning, muteMember,
   recordCompletion, removeCompletion, getCompletionCount, hasUserCompleted,
   getPostByMessageId, getLatestPostByVideoId, getPostByGroupCommentId, setGroupCommentId, getLastCompletionTime,
   getUserStreak,
@@ -193,6 +193,16 @@ const GOAL_RESPONSES: Record<string, string> = {
   observer: `Хорошее начало. Смотри, пробуй, пиши как дела — здесь никто не торопит.\n\nКаждый день в канале выходит тренировка. Когда будешь готов — просто нажми play.`,
 };
 
+// ─── JOIN SOURCE QUIZ ─────────────────────────────────────────────────────
+// Shown after goal quiz. Non-blocking analytics — welcome DM is sent immediately.
+
+const SOURCE_OPTIONS = [
+  { text: '👥 От знакомого', data: 'source:friend' },
+  { text: '🔍 Нашёл сам', data: 'source:search' },
+  { text: '📱 Соцсети', data: 'source:social' },
+  { text: '🤷 Другое', data: 'source:other' },
+];
+
 // ─── SPAM PATTERNS ───────────────────────────────────────────────────────────
 
 // Spam patterns — only clear-cut spam. Links are ALLOWED (community is small,
@@ -308,6 +318,51 @@ export async function cleanupExpiredCaptchas(bot: Bot): Promise<void> {
       );
     } catch { /* TG API: chat may be unavailable */ }
     deleteCaptcha(captcha.telegram_user_id);
+  }
+}
+
+// ─── WELCOME DM ──────────────────────────────────────────────────────────
+// Post-onboarding DM: explain how Sami works (sent privately).
+// Extracted so it can be called from goal quiz (non-blocking — source answer is optional).
+
+async function sendWelcomeDM(
+  bot: Bot,
+  userId: number,
+  config: ReturnType<typeof getConfig>,
+): Promise<void> {
+  // Build welcome message with link to today's training if available
+  const { todayMsk } = await import('./dates');
+  const latestPost = getLatestPostForDate(todayMsk());
+
+  let todayLink = '';
+  if (latestPost) {
+    const catLabel = CATEGORY_RU[latestPost.category as Category] ?? latestPost.category;
+    const channelHandle = config.TELEGRAM_CHANNEL_ID.startsWith('@')
+      ? config.TELEGRAM_CHANNEL_ID.slice(1)
+      : `c/${config.TELEGRAM_CHANNEL_ID.replace(/^-100/, '')}`;
+    const postLink = `https://t.me/${channelHandle}/${latestPost.channel_message_id}`;
+    todayLink = `\n\n*Сегодняшняя тренировка \\(${escV2(catLabel)}\\):*\n[Перейти к видео](${postLink})`;
+  }
+
+  try {
+    await bot.api.sendMessage(
+      userId,
+      `*Как устроен Sami*\n\n` +
+      `Каждый день в канале @sami\\_workouts появляются видео\\-тренировки: стретчинг, силовая, мобильность и другие\\.\n\n` +
+      `*Что делать:*\n` +
+      `1\\. Открой видео в канале, сделай тренировку\n` +
+      `2\\. Нажми *Я сделаль* под постом — это отмечает выполнение\n` +
+      `3\\. Счётчик показывает сколько людей уже сделали\n\n` +
+      `_Нажми «Я сделаль» под видео, когда закончишь тренировку\\._` +
+      todayLink +
+      `\n\n*Кнопки бота:*\n` +
+      `• _🏋️ Мои тренировки_ — история выполнений\n` +
+      `• _💡 Предложить тренировку_ — поделись своей находкой\n\n` +
+      `Вопросы? Пиши в группу — поможем\\.`,
+      { parse_mode: 'MarkdownV2' }
+    );
+  } catch {
+    // User may have blocked DMs — that's ok
   }
 }
 
@@ -449,43 +504,37 @@ export function registerModeration(bot: Bot): void {
 
     const response = GOAL_RESPONSES[goal] ?? 'Добро пожаловать! Рады тебя видеть.';
 
-    // Build welcome message with link to today's training if available
-    const { todayMsk } = await import('./dates');
-    const latestPost = getLatestPostForDate(todayMsk());
-
-    let welcomeText = `${escV2(response)}\n\n_Нажми «Я сделаль» под видео, когда закончишь тренировку\\._`;
-    if (latestPost) {
-      const catLabel = CATEGORY_RU[latestPost.category as Category] ?? latestPost.category;
-      const channelHandle = config.TELEGRAM_CHANNEL_ID.startsWith('@')
-        ? config.TELEGRAM_CHANNEL_ID.slice(1)
-        : `c/${config.TELEGRAM_CHANNEL_ID.replace(/^-100/, '')}`;
-      const postLink = `https://t.me/${channelHandle}/${latestPost.channel_message_id}`;
-      welcomeText += `\n\n*Сегодняшняя тренировка \\(${escV2(catLabel)}\\):*\n[Перейти к видео](${postLink})`;
-    }
+    // Show goal response + source question (non-blocking analytics)
+    const sourceKeyboard = new InlineKeyboard();
+    SOURCE_OPTIONS.forEach((opt, i) => {
+      sourceKeyboard.text(opt.text, opt.data);
+      if (i % 2 === 1) sourceKeyboard.row();
+    });
 
     try {
-      await ctx.editMessageText(welcomeText, { parse_mode: 'MarkdownV2' });
+      await ctx.editMessageText(
+        `${escV2(response)}\n\n*Как ты нас нашёл? 🙂*`,
+        { parse_mode: 'MarkdownV2', reply_markup: sourceKeyboard }
+      );
     } catch { /* TG API: message may be deleted */ }
 
-    // Post-onboarding DM: explain how Sami works (sent privately)
+    // Send welcome DM immediately — don't block onboarding on source answer
+    await sendWelcomeDM(bot, userId, config);
+  });
+
+  // --- Join source callback (analytics only) ---
+  bot.callbackQuery(/^source:(.+)$/, async (ctx) => {
+    const source = ctx.match[1];
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    setMemberJoinSource(userId, source);
+    await ctx.answerCallbackQuery('Спасибо! 🙏');
+
+    // Update the group message to remove buttons
     try {
-      await bot.api.sendMessage(
-        userId,
-        `*Как устроен Sami*\n\n` +
-        `Каждый день в канале @sami\\_workouts появляются видео\\-тренировки: стретчинг, силовая, мобильность и другие\\.\n\n` +
-        `*Что делать:*\n` +
-        `1\\. Открой видео в канале, сделай тренировку\n` +
-        `2\\. Нажми *Я сделаль* под постом — это отмечает выполнение\n` +
-        `3\\. Счётчик показывает сколько людей уже сделали\n\n` +
-        `*Кнопки бота:*\n` +
-        `• _🏋️ Мои тренировки_ — история выполнений\n` +
-        `• _💡 Предложить тренировку_ — поделись своей находкой\n\n` +
-        `Вопросы? Пиши в группу — поможем\\.`,
-        { parse_mode: 'MarkdownV2' }
-      );
-    } catch {
-      // User may have blocked DMs — that's ok
-    }
+      await ctx.editMessageReplyMarkup({ reply_markup: undefined });
+    } catch { /* TG API: message may be deleted */ }
   });
 
   // --- Spam + antiflood + cooldown filter ---

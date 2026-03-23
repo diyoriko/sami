@@ -118,7 +118,8 @@ describe('scheduler: startScheduler registers cron jobs', () => {
     // 7. Stability wall (0 16 * * 5)
     // 8. 48h inactivity reminder (0 10 * * *)
     // 9. Owner reminder (0 15 * * *)
-    expect(scheduledJobs.length).toBe(9);
+    // 10. Stories reminder (0 9 * * *)
+    expect(scheduledJobs.length).toBe(10);
   });
 
   it('all cron jobs use Europe/Moscow timezone', async () => {
