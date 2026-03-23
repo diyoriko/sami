@@ -148,11 +148,17 @@ export async function postVideoToChannel(
               recordPost(date, category, video.id, msg.message_id, 'video');
               markApprovalPosted(date, category);
               // Also mark weekly schedule slot as posted (SM-812)
+              // Only if the slot was actually queued with this video (SM-1030)
               try {
                 const ch = getActiveChallenge();
                 if (ch) {
                   const dayNum = getChallengeDay(ch.start_date, date);
-                  if (dayNum >= 1) markWeekSlotPosted(ch.id, dayNum);
+                  if (dayNum >= 1) {
+                    const slot = getWeekSlotForDay(ch.id, dayNum);
+                    if (slot && slot.status === 'queued' && slot.video_id === video.id) {
+                      markWeekSlotPosted(ch.id, dayNum);
+                    }
+                  }
                 }
               } catch { /* no challenge */ }
             });
@@ -201,12 +207,17 @@ export async function postVideoToChannel(
       withTransaction(() => {
         recordPost(date, category, video.id, msg.message_id, 'link');
         markApprovalPosted(date, category);
-        // Also mark weekly schedule slot as posted (SM-812)
+        // Also mark weekly schedule slot as posted (SM-812, SM-1030)
         try {
           const ch = getActiveChallenge();
           if (ch) {
             const dayNum = getChallengeDay(ch.start_date, date);
-            if (dayNum >= 1) markWeekSlotPosted(ch.id, dayNum);
+            if (dayNum >= 1) {
+              const slot = getWeekSlotForDay(ch.id, dayNum);
+              if (slot && slot.status === 'queued' && slot.video_id === video.id) {
+                markWeekSlotPosted(ch.id, dayNum);
+              }
+            }
           }
         } catch { /* no challenge */ }
       });

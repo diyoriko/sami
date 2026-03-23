@@ -118,6 +118,39 @@ export function startScheduler(bot: Bot): void {
     }
   }, { timezone: 'Europe/Moscow' });
 
+  // ---- 22:00 MSK — notify admin if tomorrow has no video ----
+  cron.schedule('0 22 * * *', async () => {
+    try {
+      const { ensureActiveChallenge, getChallengeDay, getWeekSlotForDay } = require('./db') as typeof import('./db');
+      const { thisMondayMsk, addDaysMsk } = require('./dates') as typeof import('./dates');
+      const { DAY_CATEGORY_MAP, CATEGORY_RU, CATEGORY_EMOJI, CHALLENGE_DURATION } = require('./shared') as typeof import('./shared');
+
+      const tomorrow = addDaysMsk(todayMsk(), 1);
+      const tomorrowMonday = thisMondayMsk(); // may shift if tomorrow is Monday
+      const challenge = ensureActiveChallenge(tomorrow, tomorrowMonday);
+      if (challenge.status !== 'active') return;
+
+      const dayNumber = getChallengeDay(challenge.start_date, tomorrow);
+      if (dayNumber < 1 || dayNumber > CHALLENGE_DURATION) return;
+
+      const slot = getWeekSlotForDay(challenge.id, dayNumber);
+      if (slot && (slot.status === 'queued' || slot.status === 'posted')) return; // video ready
+
+      const dow = new Date(tomorrow + 'T00:00:00').getDay();
+      const cat = DAY_CATEGORY_MAP[dow];
+      const catRu = cat ? CATEGORY_RU[cat] : '?';
+      const catEmoji = cat ? CATEGORY_EMOJI[cat] : '❓';
+
+      await bot.api.sendMessage(
+        config.TELEGRAM_ADMIN_USER_ID,
+        `⚠️ На завтра (${catEmoji} ${catRu}) нет тренировки.\nВыбери видео через «📅 Неделя»!`
+      );
+      log.info(`notified admin: no video for tomorrow (${catRu})`);
+    } catch (err) {
+      log.error('tomorrow video check failed', { error: String(err) });
+    }
+  }, { timezone: 'Europe/Moscow' });
+
   // 23:55 — write daily report for strategist
   cron.schedule('55 23 * * *', () => {
     log.info('writing daily community report');
