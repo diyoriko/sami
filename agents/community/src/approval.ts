@@ -394,6 +394,14 @@ export function registerApprovalCallbacks(bot: Bot): void {
 
     const label = `${CATEGORY_EMOJI[session.category as Category] ?? ''} ${CATEGORY_RU[session.category as Category] ?? session.category}`;
     if (result === 'posted') {
+      // Mark the correct weekly schedule slot using stored challenge context
+      try {
+        const challengeCtx = getChallengeContext(sessionId);
+        if (challengeCtx) {
+          const { markWeekSlotPosted } = await import('./db');
+          markWeekSlotPosted(challengeCtx.challengeId, challengeCtx.dayNumber);
+        }
+      } catch { /* no context = not from week flow */ }
       const doneKeyboard = new InlineKeyboard().text('✅ Опубликовано', 'noop');
       await editKeyboard(ctx as any, doneKeyboard);
     } else {
