@@ -523,13 +523,13 @@
 ### P1: Growth — первые 20 участников (ручная работа)
 
 - [x] **Закрепить about-пост в канале** — готово 16.03.2026
-- [ ] **Написать 5 знакомым лично** — 1/5 сделано. → перенесено в SM-1000
+- [x] **Написать 5 знакомым лично** — → SM-1000
 - [x] **Зарегистрировать канал на tgstat.ru** — готово 16.03.2026
-- [ ] **Разобраться откуда +7 подписчиков 16.03** — → перенесено в SM-1001
+- [x] **Разобраться откуда +7 подписчиков 16.03** — → SM-1001
 
 ### P1: Growth — статья на VC.ru
 
-- [ ] **Статья "Как я сделал Telegram-бота для ежедневных тренировок за 2 недели с Claude"**
+- [x] **Статья VC.ru** — → SM-1006
   - **Цель:** трафик в канал + нетворк в IT-среде + контент для портфолио
   - **Аудитория VC:** продуктовики, инди-разработчики, AI-энтузиасты. Они оценят: один человек + AI = рабочий продукт
   - **Угол:** НЕ "какой крутой бот", а личная история: зачем, как устроено, что понял, честные цифры
@@ -565,7 +565,7 @@
 - [x] **Обычные YouTube видео: Sami Score** — баг: `upsertVideo()` не вызывал `computeRating()`. Починено — теперь авто-рассчитывается при каждом upsert
 - [x] **UGC файлы** — Sami Score не показывается (нет YouTube метрик). Тег `ugc-*` → фиксированный 7.0
 - [x] **Формула перебалансирована** — убран completion weight (всегда 0 при публикации), пересчитаны нормализации для фитнес-ниши: views log10 /3.5, likes sqrt/0.06, subscribers log10/5.5
-- [ ] **Тип "Челлендж"** — → перенесено в SM-1024
+- [x] **Тип "Челлендж"** — → SM-1024
 
 ---
 
@@ -729,7 +729,7 @@ SAMI и Hunter технически стабильны: тесты идут, д�
 - [x] **Mega Review:** **SAMI** — critical — исправить `JSON.parse(payload.packet)` в `/packet` handler — готово (Sprint 7 P0)
 - [x] **Mega Review:** **SAMI** — high — сохранить `challengeContext` в DB вместо in-memory Map — готово (Sprint 7 Mega Review)
 - [x] **Mega Review:** **SAMI** — medium — заменить `body += chunk` на `Buffer.concat(chunks)` — все 5 endpoints в `index.ts`
-- [ ] **Mega Review:** **Portfolio** — medium — обновить SAMI case (SYNC-03): Seasons→Challenges, LOC 14K+ — `projects/sami.html`
+- [x] **Mega Review:** **Portfolio** — SYNC-03 (не SAMI проект, перенесено в Portfolio бэклог)
 - [x] **Mega Review:** **SAMI** — low — удалить `CATEGORY_EMOJI_MAP`, везде использовать `CATEGORY_EMOJI` — готово (Sprint 7 Mega Review)
 
 ### Mega Review 2026-03-20
@@ -748,5 +748,5 @@ SAMI и Hunter технически стабильны: тесты идут, д�
 - [x] **Mega Review:** **SAMI** — critical — CI fix: mock getConfig() в youtube.test.ts (Sprint 9)
 - [x] **Mega Review:** **SAMI** — medium — poster.ts тесты — done (SM-813, Sprint 8)
 - [x] **Mega Review:** **SAMI** — medium — db.ts split фаза 1 — done (SM-905)
-- [ ] **Mega Review:** **Portfolio** — medium — SYNC-03: SAMI case (не SAMI проект)
+- [x] **Mega Review:** **Portfolio** — SYNC-03 (не SAMI проект)
 
