@@ -26,13 +26,13 @@ const log = createLogger('approval');
 
 const APPROVAL_SEND_DELAY_MS = 300; // Telegram rate-limit safety
 
-function formatViews(n: number): string {
+export function formatViews(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${Math.round(n / 1_000)}K`;
   return String(n);
 }
 
-async function formatApprovalMessage(video: ScoredVideo, category: Category): Promise<string> {
+export async function formatApprovalMessage(video: ScoredVideo, category: Category): Promise<string> {
   const emoji = CATEGORY_EMOJI[category];
   const rawCategoryRu = CATEGORY_RU[category] ?? category;
   const categoryRu = rawCategoryRu.charAt(0).toUpperCase() + rawCategoryRu.slice(1);
@@ -71,7 +71,7 @@ async function formatApprovalMessage(video: ScoredVideo, category: Category): Pr
 }
 
 // Send approval card with Markdown fallback to plain text
-async function sendApprovalCard(
+export async function sendApprovalCard(
   api: { sendPhoto: Function; sendMessage: Function },
   chatId: number, thumbnailUrl: string | null, text: string, keyboard: InlineKeyboard
 ) {

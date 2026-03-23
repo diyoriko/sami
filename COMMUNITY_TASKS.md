@@ -1,6 +1,24 @@
 # COMMUNITY_TASKS.md — Бэклог Sami Community
 
-Последнее обновление: 20 марта 2026, 17:20
+Формат задач: `SAMI-NNN`. Последнее обновление: 20 марта 2026, 17:20
+
+---
+
+## SPRINT 9 — CI + Tests + UX + Architecture
+
+Статус: **в работе** | Начало: 23.03.2026
+
+### Done
+
+- [x] **SM-900 CI fix** — mock getConfig() в youtube.test.ts, CI был красный с 21.03
+- [x] **SM-901 approval.ts тесты** — 22 тестов: formatViews, formatApprovalMessage, sendApprovalCard
+- [x] **SM-902 Title length feedback** — «Название: N/200 символов» в UGC flow
+- [x] **SM-903 Muscle detection показать** — «Обнаружены: спина, плечи» после ввода названия
+- [x] **SM-904 Mega Review cleanup** — дубликаты закрыты, backlog triage done
+
+### Open
+
+- [ ] **SM-905 db.ts split фаза 1** — вынести approval (~250L) с re-export
 
 ---
 
@@ -709,9 +727,9 @@ SAMI и Hunter технически стабильны: тесты идут, д�
 
 ### Mega Review 2026-03-20
 <!-- Source: ~/Documents/Projects/Architect/code-reviews/2026-03-20.md -->
-- [ ] **db.ts split фаза 1** — вынести analytics или approval из db.ts (2399 строк, план есть)
-- [ ] **pre-release checklist в CLAUDE.md** — typecheck + test перед каждым feat-релизом
-- [ ] **backlog triage** — 43 open задач: sprint assignment, закрыть нерелевантные, цель ≤15 open
+- [ ] **db.ts split фаза 1** (= SM-920)
+- [x] **pre-release checklist** — документировано в CLAUDE.md (Quality Gate секция)
+- [x] **backlog triage** — done Sprint 8, SM-номера, ≤20 open
 
 ### Architect Review 2026-03-20
 - [x] **Backlog structure fix** — Sprint 8 наверх, Sprint 6-7 и Сделано в `<details>`. Как у Hunter: open sprint сверху, done внизу
@@ -720,8 +738,8 @@ SAMI и Hunter технически стабильны: тесты идут, д�
 
 ### Mega Review 2026-03-21
 <!-- Source: ~/Documents/Projects/Architect/code-reviews/2026-03-21.md -->
-- [ ] **Mega Review:** **SAMI** — critical — Починить CI: `npm run typecheck && npm run lint` локально, найти ошибку после moderation изменений
-- [ ] **Mega Review:** **SAMI** — medium — db.ts split фаза 1: вынести db-approval.ts (~250L) с re-export для совместимости
-- [ ] **Mega Review:** **SAMI** — medium — Добавить тесты poster.ts: formatCaption, MarkdownV2 escaping, text fallback при ошибке скачивания
-- [ ] **Mega Review:** **Portfolio** — medium — SYNC-03: SAMI case — обновить LOC (14K+), Seasons→Challenges
+- [x] **Mega Review:** **SAMI** — critical — CI fix: mock getConfig() в youtube.test.ts (Sprint 9)
+- [x] **Mega Review:** **SAMI** — medium — poster.ts тесты — done (SM-813, Sprint 8)
+- [ ] **Mega Review:** **SAMI** — medium — db.ts split фаза 1 (= SM-920)
+- [ ] **Mega Review:** **Portfolio** — medium — SYNC-03: SAMI case (не SAMI проект)
 

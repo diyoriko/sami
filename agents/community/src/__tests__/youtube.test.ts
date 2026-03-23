@@ -1,4 +1,19 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+// Mock config to avoid process.exit in CI (no env vars)
+vi.mock('../config', () => ({
+  getConfig: () => ({
+    SCORE_BRAND_WEIGHT: 0.5,
+    SCORE_VIEW_WEIGHT: 0.35,
+    SCORE_DURATION_WEIGHT: 0.15,
+    VIDEO_PENALTY_CAP: 60,
+    VIDEO_MIN_DURATION: 240,
+    VIDEO_IDEAL_MIN: 480,
+    VIDEO_IDEAL_MAX: 1200,
+    VIDEO_MAX_DURATION: 1800,
+  }),
+}));
+
 import { computeTotalScore, detectEquipment } from '../youtube';
 import { extractYoutubeId } from '../bot-menu';
 

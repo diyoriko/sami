@@ -1206,14 +1206,14 @@ export function registerBotMenu(bot: Bot): void {
       const titleKb = new InlineKeyboard()
         .text('← Назад', `ugc_back:${state.submission_id!}:waiting_title`)
         .text('❌ Отмена', 'ugc_cancel');
-      await ctx.reply('Как назвать тренировку? Напиши короткое название.', { reply_markup: titleKb });
+      await ctx.reply('Как назвать тренировку? Напиши короткое название (до 200 символов).', { reply_markup: titleKb });
       return;
     }
 
     // Step 5: waiting for title (free text) — last step before submission
     if (state.step === 'waiting_title') {
       if (text.length < 3 || text.length > 200) {
-        await ctx.reply('Название должно быть от 3 до 200 символов.');
+        await ctx.reply(`Название слишком ${text.length < 3 ? 'короткое' : 'длинное'} (${text.length}/200)`);
         return;
       }
 
@@ -1237,8 +1237,11 @@ export function registerBotMenu(bot: Bot): void {
       // Send to admin for review
       await sendUgcToAdmin(bot, sub);
 
+      const muscleHint = detectedMuscles.length > 0
+        ? `\nОбнаружены мышцы: ${muscles}`
+        : '';
       await ctx.reply(
-        'Спасибо! Тренировка отправлена на модерацию. Ты получишь уведомление, когда она будет опубликована.',
+        `Спасибо! Тренировка отправлена на модерацию.${muscleHint}\nТы получишь уведомление, когда она будет опубликована.`,
         { reply_markup: mainKeyboard(isAdmin(ctx.from!.id)) }
       );
       return;
@@ -1371,9 +1374,9 @@ export function registerBotMenu(bot: Bot): void {
         .text('← Назад', `ugc_back:${subId}:waiting_title`)
         .text('❌ Отмена', 'ugc_cancel');
       try {
-        await ctx.editMessageText('Как назвать тренировку? Напиши короткое название.', { reply_markup: titleKb });
+        await ctx.editMessageText('Как назвать тренировку? Напиши короткое название (до 200 символов).', { reply_markup: titleKb });
       } catch { /* TG API: message may be deleted, fallback to reply */
-        await ctx.reply('Как назвать тренировку? Напиши короткое название.', { reply_markup: titleKb });
+        await ctx.reply('Как назвать тренировку? Напиши короткое название (до 200 символов).', { reply_markup: titleKb });
       }
     }
   });
@@ -1413,9 +1416,9 @@ export function registerBotMenu(bot: Bot): void {
       .text('← Назад', `ugc_back:${subId}:waiting_title`)
       .text('❌ Отмена', 'ugc_cancel');
     try {
-      await ctx.editMessageText('Как назвать тренировку? Напиши короткое название.', { reply_markup: titleKb });
+      await ctx.editMessageText('Как назвать тренировку? Напиши короткое название (до 200 символов).', { reply_markup: titleKb });
     } catch {
-      await ctx.reply('Как назвать тренировку? Напиши короткое название.', { reply_markup: titleKb });
+      await ctx.reply('Как назвать тренировку? Напиши короткое название (до 200 символов).', { reply_markup: titleKb });
     }
   });
 

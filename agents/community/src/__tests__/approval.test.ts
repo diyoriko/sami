@@ -1,10 +1,18 @@
 /**
  * Approval module tests: DB-level approval queue operations,
- * state transitions, edge cases, and formatViews helper.
+ * state transitions, edge cases, formatViews helper,
+ * formatApprovalMessage card format, and sendApprovalCard fallback.
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
+
+// Mock translate module to avoid HTTP calls in formatApprovalMessage tests.
+// rewriteTitle and formatChannelName return MarkdownV2-escaped text.
+vi.mock('../translate', () => ({
+  rewriteTitle: vi.fn(async (title: string) => title.replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, '\\$&')),
+  formatChannelName: vi.fn(async (name: string) => name.replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, '\\$&')),
+}));
 
 const TEST_DB_PATH = path.join(__dirname, '..', '..', 'test-approval.db');
 
@@ -540,5 +548,282 @@ describe('multi-category approval for same date', () => {
     expect(categories).toContain('mobility');
     expect(categories).not.toContain('strength');
     expect(queue.length).toBe(2);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// formatViews — pure helper
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('formatViews', () => {
+  let formatViews: typeof import('../approval')['formatViews'];
+
+  beforeAll(async () => {
+    const mod = await import('../approval');
+    formatViews = mod.formatViews;
+  });
+
+  it('formats millions with one decimal', () => {
+    expect(formatViews(1_000_000)).toBe('1.0M');
+    expect(formatViews(2_500_000)).toBe('2.5M');
+    expect(formatViews(12_300_000)).toBe('12.3M');
+  });
+
+  it('formats thousands rounded to whole number', () => {
+    expect(formatViews(1_000)).toBe('1K');
+    expect(formatViews(1_499)).toBe('1K');
+    expect(formatViews(1_500)).toBe('2K');
+    expect(formatViews(50_000)).toBe('50K');
+    expect(formatViews(999_999)).toBe('1000K');
+  });
+
+  it('returns raw number for values below 1000', () => {
+    expect(formatViews(0)).toBe('0');
+    expect(formatViews(1)).toBe('1');
+    expect(formatViews(500)).toBe('500');
+    expect(formatViews(999)).toBe('999');
+  });
+
+  it('handles boundary at exactly 1M', () => {
+    expect(formatViews(1_000_000)).toBe('1.0M');
+  });
+
+  it('handles boundary at exactly 1K', () => {
+    expect(formatViews(1_000)).toBe('1K');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// formatApprovalMessage — card format
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('formatApprovalMessage', () => {
+  let formatApprovalMessage: typeof import('../approval')['formatApprovalMessage'];
+
+  beforeAll(async () => {
+    const mod = await import('../approval');
+    formatApprovalMessage = mod.formatApprovalMessage;
+  });
+
+  function makeScoredVideo(overrides: Partial<import('../youtube').ScoredVideo> = {}): import('../youtube').ScoredVideo {
+    return {
+      youtube_id: 'test123',
+      title: 'Morning Stretching',
+      channel_name: 'FitChannel',
+      channel_url: null,
+      duration_seconds: 600,
+      duration_label: '10:00',
+      difficulty: 'beginner',
+      category: 'stretching',
+      muscles: '["hamstrings","back"]',
+      thumbnail_url: 'https://img.youtube.com/vi/test123/0.jpg',
+      video_url: 'https://youtube.com/watch?v=test123',
+      view_count: 150_000,
+      rating: 0,
+      like_ratio: 0.95,
+      channel_subscribers: 50_000,
+      search_query: 'stretching routine',
+      brand_score: 75,
+      total_score: 80,
+      equipment: [],
+      ...overrides,
+    } as any;
+  }
+
+  it('starts with category emoji and bold category name', async () => {
+    const text = await formatApprovalMessage(makeScoredVideo(), 'stretching');
+    // First line: 🧘 *Стретчинг*
+    const firstLine = text.split('\n')[0];
+    expect(firstLine).toContain('🧘');
+    expect(firstLine).toContain('*');
+  });
+
+  it('contains YouTube link', async () => {
+    const text = await formatApprovalMessage(makeScoredVideo(), 'stretching');
+    expect(text).toContain('[YouTube]');
+    expect(text).toContain('youtube.com');
+  });
+
+  it('shows duration label', async () => {
+    const text = await formatApprovalMessage(makeScoredVideo({ duration_label: '15:30' }), 'strength');
+    expect(text).toContain('15:30');
+  });
+
+  it('shows difficulty in Russian', async () => {
+    const text = await formatApprovalMessage(makeScoredVideo({ difficulty: 'beginner' }), 'stretching');
+    // DIFFICULTY_RU['beginner'] = 'начинающий', escaped and capitalized
+    expect(text).toMatch(/ачинающий/); // partial match, escaped chars
+  });
+
+  it('shows view count formatted', async () => {
+    const text = await formatApprovalMessage(makeScoredVideo({ view_count: 150_000 }), 'stretching');
+    expect(text).toContain('150K');
+    expect(text).toContain('просмотров');
+  });
+
+  it('shows "Только коврик" when no equipment', async () => {
+    const text = await formatApprovalMessage(makeScoredVideo({ equipment: [] }), 'stretching');
+    expect(text).toContain('Только коврик');
+  });
+
+  it('shows equipment list when present', async () => {
+    const video = makeScoredVideo({ equipment: ['гантели', 'резинка'] });
+    const text = await formatApprovalMessage(video, 'strength');
+    expect(text).toContain('гантели');
+    expect(text).toContain('резинка');
+  });
+
+  it('shows search score as X.X/10', async () => {
+    const text = await formatApprovalMessage(makeScoredVideo({ total_score: 80, brand_score: 75 }), 'stretching');
+    expect(text).toContain('8\\.0');  // 80/10 = 8.0, escaped dot
+    expect(text).toContain('7\\.5');  // 75/10 = 7.5
+  });
+
+  it('parses muscles from JSON string', async () => {
+    const text = await formatApprovalMessage(makeScoredVideo({ muscles: '["hamstrings","back"]' }), 'stretching');
+    expect(text).toContain('hamstrings');
+    expect(text).toContain('back');
+  });
+
+  it('shows em-dash when duration_label is null', async () => {
+    const text = await formatApprovalMessage(makeScoredVideo({ duration_label: null }), 'stretching');
+    // duration_label ?? '—' -> escV2('—') -> '—' (em-dash is not a MarkdownV2 special char)
+    expect(text).toContain('—');
+  });
+
+  it('uses correct emoji for each category', async () => {
+    const stretching = await formatApprovalMessage(makeScoredVideo(), 'stretching');
+    expect(stretching).toContain('🧘');
+
+    const strength = await formatApprovalMessage(makeScoredVideo(), 'strength');
+    expect(strength).toContain('💪');
+
+    const mobility = await formatApprovalMessage(makeScoredVideo(), 'mobility');
+    expect(mobility).toContain('🐍');
+  });
+
+  it('escapes closing parenthesis in video URL', async () => {
+    const video = makeScoredVideo({ video_url: 'https://youtube.com/watch?v=abc(123)' });
+    const text = await formatApprovalMessage(video, 'stretching');
+    // The linkUrl regex only escapes ) and \ in URLs
+    expect(text).toContain('abc(123\\)');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// sendApprovalCard — Markdown fallback logic
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('sendApprovalCard', () => {
+  let sendApprovalCard: typeof import('../approval')['sendApprovalCard'];
+
+  beforeAll(async () => {
+    const mod = await import('../approval');
+    sendApprovalCard = mod.sendApprovalCard;
+  });
+
+  it('sends photo when thumbnail URL is provided', async () => {
+    const sendPhoto = vi.fn().mockResolvedValue({ message_id: 1 });
+    const sendMessage = vi.fn();
+    const api = { sendPhoto, sendMessage };
+    const keyboard = {} as any;
+
+    const result = await sendApprovalCard(api, 123, 'https://img.example.com/thumb.jpg', 'Hello', keyboard);
+
+    expect(sendPhoto).toHaveBeenCalledTimes(1);
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(result.message_id).toBe(1);
+    expect(sendPhoto.mock.calls[0][2]).toMatchObject({
+      caption: 'Hello',
+      parse_mode: 'MarkdownV2',
+    });
+  });
+
+  it('sends text message when thumbnail URL is null', async () => {
+    const sendPhoto = vi.fn();
+    const sendMessage = vi.fn().mockResolvedValue({ message_id: 2 });
+    const api = { sendPhoto, sendMessage };
+    const keyboard = {} as any;
+
+    const result = await sendApprovalCard(api, 123, null, 'Hello', keyboard);
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendPhoto).not.toHaveBeenCalled();
+    expect(result.message_id).toBe(2);
+    expect(sendMessage.mock.calls[0][2]).toMatchObject({
+      parse_mode: 'MarkdownV2',
+    });
+  });
+
+  it('falls back to plain text when MarkdownV2 parse fails on photo', async () => {
+    const mkv2Error = new Error('Bad Request') as any;
+    mkv2Error.description = "can't parse entities";
+
+    const sendPhoto = vi.fn()
+      .mockRejectedValueOnce(mkv2Error) // first call with MarkdownV2 fails
+      .mockResolvedValueOnce({ message_id: 3 }); // second call with undefined parse_mode succeeds
+    const sendMessage = vi.fn();
+    const api = { sendPhoto, sendMessage };
+    const keyboard = {} as any;
+
+    const result = await sendApprovalCard(api, 123, 'https://img.example.com/thumb.jpg', 'Bad *markdown', keyboard);
+
+    expect(sendPhoto).toHaveBeenCalledTimes(2);
+    // First call: MarkdownV2
+    expect(sendPhoto.mock.calls[0][2].parse_mode).toBe('MarkdownV2');
+    // Second call: no parse_mode
+    expect(sendPhoto.mock.calls[1][2].parse_mode).toBeUndefined();
+    expect(result.message_id).toBe(3);
+  });
+
+  it('falls back to plain text when MarkdownV2 parse fails on text message', async () => {
+    const mkv2Error = new Error('Bad Request') as any;
+    mkv2Error.description = "can't parse entities";
+
+    const sendPhoto = vi.fn();
+    const sendMessage = vi.fn()
+      .mockRejectedValueOnce(mkv2Error)
+      .mockResolvedValueOnce({ message_id: 4 });
+    const api = { sendPhoto, sendMessage };
+    const keyboard = {} as any;
+
+    const result = await sendApprovalCard(api, 123, null, 'Bad *markdown', keyboard);
+
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(sendMessage.mock.calls[0][2].parse_mode).toBe('MarkdownV2');
+    expect(sendMessage.mock.calls[1][2].parse_mode).toBeUndefined();
+    expect(result.message_id).toBe(4);
+  });
+
+  it('throws non-parse errors immediately without fallback', async () => {
+    const networkError = new Error('Network timeout');
+
+    const sendPhoto = vi.fn().mockRejectedValue(networkError);
+    const sendMessage = vi.fn();
+    const api = { sendPhoto, sendMessage };
+    const keyboard = {} as any;
+
+    await expect(
+      sendApprovalCard(api, 123, 'https://img.example.com/thumb.jpg', 'Hello', keyboard)
+    ).rejects.toThrow('Network timeout');
+
+    // Only one attempt — no fallback for non-parse errors
+    expect(sendPhoto).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws when both MarkdownV2 and plain text fail', async () => {
+    const mkv2Error = new Error('Bad Request') as any;
+    mkv2Error.description = "can't parse entities";
+    const secondError = new Error('Still broken');
+
+    const sendMessage = vi.fn()
+      .mockRejectedValueOnce(mkv2Error)
+      .mockRejectedValueOnce(secondError);
+    const api = { sendPhoto: vi.fn(), sendMessage };
+    const keyboard = {} as any;
+
+    await expect(
+      sendApprovalCard(api, 123, null, 'Bad', keyboard)
+    ).rejects.toThrow('Still broken');
   });
 });

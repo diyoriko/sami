@@ -187,6 +187,14 @@ bash agents/uninstall-1x-daily-mac.sh              # удалить cron
 - Новые задачи/баги, найденные в ходе работы — добавить в COMMUNITY_TASKS.md с приоритетом
 - В конце сессии: обновить COMMUNITY_TASKS.md (отметить сделанное, добавить новое)
 
+## Sprint → Release Process
+
+1. **Sprint** — задачи в текущей секции COMMUNITY_TASKS.md
+2. **Реализация** — код + тесты
+3. **Деплой** — `git push origin main` → Railway auto-deploy + version bump (vX.Y.Z)
+4. **Архивация** — закрытый спринт в `<details>`, открытые переносятся с причиной
+5. **Max 3 релиза в неделю** — батчевать коммиты, каждый релиз = Railway restart
+
 ## Quality Gate
 
 - `npm run typecheck` + `npm test` перед каждым деплоем (из `agents/community/`)
