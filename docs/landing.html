@@ -4,481 +4,412 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Сами — одна тренировка в день</title>
-  <meta name="description" content="Telegram-канал с ежедневными тренировками. Стретчинг, сила, мобильность, йога. Только коврик. Без мотивации — структура.">
+  <meta name="description" content="Telegram-канал с ежедневными тренировками. Стретчинг, сила, мобильность, йога. Только коврик.">
   <meta property="og:title" content="Сами — одна тренировка в день">
-  <meta property="og:description" content="Telegram-канал с ежедневными тренировками. Только коврик.">
+  <meta property="og:description" content="Telegram-канал с ежедневными тренировками. Только коврик. Не мотивация — структура.">
   <meta property="og:type" content="website">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700&family=Raleway:wght@300;400;500;600&display=swap" rel="stylesheet">
   <style>
+    @font-face {
+      font-family: 'PP Right Grotesk';
+      src: url('https://fonts.cdnfonts.com/css/pp-right-grotesk-wide') format('woff2');
+      font-weight: 700;
+      font-display: swap;
+    }
+
     :root {
-      --bg: #FFFFFF;
-      --surface: #F5F5F5;
-      --text: #111111;
-      --text-muted: #777777;
-      --accent: #111111;
-      --accent-light: #F0F0F0;
-      --warm: #999999;
-      --warm-light: #F5F5F5;
-      --radius: 16px;
-      --font-head: 'Lora', Georgia, serif;
-      --font-body: 'Raleway', -apple-system, sans-serif;
+      --black: #0A0A0A;
+      --white: #FAFAFA;
+      --gray: #888;
+      --gray-light: #E5E5E5;
+      --font: 'PP Right Grotesk', 'Arial Black', 'Helvetica Neue', sans-serif;
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
+    html { scroll-behavior: smooth; }
+
     body {
-      font-family: var(--font-body);
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.7;
+      font-family: var(--font);
+      background: var(--white);
+      color: var(--black);
       -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
     }
 
-    /* Layout */
-    .container {
-      max-width: 720px;
-      margin: 0 auto;
-      padding: 0 24px;
-    }
+    a { color: inherit; text-decoration: none; }
 
-    section {
-      padding: 80px 0;
-    }
-
-    /* Nav */
-    nav {
-      padding: 20px 0;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .logo {
-      font-family: var(--font-head);
-      font-size: 20px;
-      font-weight: 600;
-      color: var(--text);
-      text-decoration: none;
-      letter-spacing: -0.5px;
-    }
-
-    .nav-link {
-      font-size: 14px;
-      color: var(--text-muted);
-      text-decoration: none;
-      transition: color 0.2s;
-    }
-
-    .nav-link:hover { color: var(--text); }
-
-    /* Hero */
+    /* ─── Hero ─── */
     .hero {
-      padding: 120px 0 80px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
       text-align: center;
+      padding: 24px;
+      position: relative;
     }
 
-    .hero-tag {
-      display: inline-block;
-      font-size: 12px;
-      font-weight: 500;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--accent);
-      background: var(--accent-light);
-      padding: 6px 16px;
-      border-radius: 20px;
-      margin-bottom: 32px;
+    .hero-logo {
+      position: relative;
+      width: clamp(280px, 50vw, 520px);
+      margin-bottom: 48px;
+      animation: fadeUp 0.8s ease-out both;
     }
 
-    .hero h1 {
-      font-family: var(--font-head);
-      font-size: clamp(36px, 6vw, 56px);
-      font-weight: 600;
-      line-height: 1.15;
-      letter-spacing: -1px;
-      color: var(--text);
-      margin-bottom: 24px;
+    .hero-logo svg {
+      width: 100%;
+      height: auto;
     }
 
-    .hero p {
-      font-size: 18px;
-      color: var(--text-muted);
-      max-width: 480px;
-      margin: 0 auto 40px;
-      line-height: 1.8;
+    .hero-logo-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: clamp(56px, 12vw, 120px);
+      font-weight: 700;
+      letter-spacing: -0.06em;
+      line-height: 1;
+      color: var(--black);
+    }
+
+    .hero-sub {
+      font-size: clamp(16px, 2.5vw, 22px);
+      font-weight: 400;
+      color: var(--gray);
+      max-width: 440px;
+      line-height: 1.6;
+      letter-spacing: -0.01em;
+      margin-bottom: 48px;
+      animation: fadeUp 0.8s ease-out 0.15s both;
     }
 
     .cta {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      font-family: var(--font-body);
+      display: inline-block;
+      font-family: var(--font);
       font-size: 16px;
-      font-weight: 500;
-      color: #fff;
-      background: var(--accent);
-      padding: 16px 36px;
-      border-radius: 60px;
-      text-decoration: none;
-      transition: transform 0.2s, box-shadow 0.2s;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--white);
+      background: var(--black);
+      padding: 18px 48px;
+      border: 2px solid var(--black);
+      cursor: pointer;
+      transition: background 0.25s, color 0.25s;
+      animation: fadeUp 0.8s ease-out 0.3s both;
     }
 
     .cta:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+      background: transparent;
+      color: var(--black);
     }
 
-    .cta-arrow { font-size: 18px; }
-
-    .hero-note {
-      font-size: 13px;
-      color: var(--text-muted);
-      margin-top: 16px;
+    .hero-scroll {
+      position: absolute;
+      bottom: 32px;
+      font-size: 12px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--gray);
+      animation: fadeUp 0.8s ease-out 0.5s both;
     }
 
-    /* How it works */
-    .how {
-      background: var(--surface);
-      border-radius: var(--radius);
-      padding: 48px 40px;
-      margin-bottom: 24px;
+    .hero-scroll::after {
+      content: '';
+      display: block;
+      width: 1px;
+      height: 32px;
+      background: var(--gray-light);
+      margin: 8px auto 0;
+      animation: scrollLine 1.5s ease-in-out infinite;
+    }
+
+    /* ─── Sections ─── */
+    .section {
+      padding: 120px 24px;
+      max-width: 680px;
+      margin: 0 auto;
     }
 
     .section-label {
-      font-size: 12px;
-      font-weight: 500;
-      letter-spacing: 2px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.2em;
       text-transform: uppercase;
-      color: var(--accent);
-      margin-bottom: 12px;
+      color: var(--gray);
+      margin-bottom: 20px;
     }
 
-    .section-title {
-      font-family: var(--font-head);
-      font-size: 28px;
-      font-weight: 600;
-      letter-spacing: -0.5px;
-      margin-bottom: 32px;
+    .section h2 {
+      font-size: clamp(28px, 4vw, 42px);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      margin-bottom: 16px;
     }
 
+    .section p {
+      font-size: 17px;
+      font-weight: 400;
+      color: var(--gray);
+      line-height: 1.7;
+    }
+
+    /* ─── How ─── */
     .steps {
+      margin-top: 48px;
       display: flex;
       flex-direction: column;
-      gap: 28px;
+      gap: 40px;
     }
 
     .step {
       display: flex;
-      gap: 20px;
-      align-items: flex-start;
+      gap: 24px;
+      align-items: baseline;
     }
 
     .step-num {
-      width: 40px;
-      height: 40px;
-      background: var(--accent-light);
-      color: var(--accent);
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: var(--font-head);
-      font-size: 18px;
-      font-weight: 600;
+      font-size: 48px;
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      color: var(--gray-light);
+      line-height: 1;
       flex-shrink: 0;
     }
 
-    .step-text h3 {
-      font-size: 16px;
-      font-weight: 600;
+    .step h3 {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
       margin-bottom: 4px;
     }
 
-    .step-text p {
+    .step p {
       font-size: 15px;
-      color: var(--text-muted);
+      color: var(--gray);
+      line-height: 1.6;
     }
 
-    /* Categories */
-    .categories {
+    /* ─── Schedule ─── */
+    .schedule {
+      margin-top: 48px;
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 12px;
-      margin-top: 32px;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+      border-top: 2px solid var(--black);
+      border-bottom: 2px solid var(--black);
     }
 
-    .cat {
-      background: var(--surface);
-      border-radius: 12px;
-      padding: 20px 16px;
+    .day {
+      padding: 20px 0;
       text-align: center;
-      transition: transform 0.2s;
+      border-right: 1px solid var(--gray-light);
     }
 
-    .cat:hover { transform: translateY(-2px); }
+    .day:last-child { border-right: none; }
 
-    .cat-emoji { font-size: 28px; margin-bottom: 8px; }
-
-    .cat-name {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--text);
-    }
-
-    .cat-day {
+    .day-name {
       font-size: 11px;
-      color: var(--text-muted);
-      margin-top: 2px;
-    }
-
-    /* Values */
-    .values-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      margin-top: 32px;
-    }
-
-    .value-card {
-      background: var(--surface);
-      border-radius: 12px;
-      padding: 24px;
-    }
-
-    .value-card h3 {
-      font-family: var(--font-head);
-      font-size: 18px;
-      font-weight: 600;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--gray);
       margin-bottom: 8px;
     }
 
-    .value-card p {
+    .day-cat {
       font-size: 14px;
-      color: var(--text-muted);
-      line-height: 1.7;
+      font-weight: 700;
+      letter-spacing: -0.02em;
     }
 
-    /* Quote */
-    .quote-section {
+    /* ─── Values ─── */
+    .values {
+      margin-top: 48px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px 40px;
+    }
+
+    .value h3 {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+
+    .value p {
+      font-size: 15px;
+      color: var(--gray);
+      line-height: 1.6;
+    }
+
+    /* ─── Motto ─── */
+    .motto {
+      padding: 120px 24px;
       text-align: center;
-      padding: 60px 0;
     }
 
-    .quote {
-      font-family: var(--font-head);
-      font-size: clamp(24px, 4vw, 36px);
-      font-weight: 400;
-      font-style: italic;
-      color: var(--text);
-      line-height: 1.5;
-      max-width: 560px;
-      margin: 0 auto;
+    .motto h2 {
+      font-size: clamp(36px, 7vw, 72px);
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      line-height: 1.1;
     }
 
-    .quote-author {
-      font-size: 14px;
-      color: var(--text-muted);
-      margin-top: 16px;
-    }
-
-    /* Final CTA */
-    .final-cta {
+    /* ─── Final CTA ─── */
+    .final {
+      padding: 80px 24px 160px;
       text-align: center;
-      padding: 80px 0 120px;
     }
 
-    .final-cta h2 {
-      font-family: var(--font-head);
-      font-size: clamp(28px, 5vw, 40px);
-      font-weight: 600;
-      letter-spacing: -0.5px;
-      margin-bottom: 16px;
+    .final p {
+      font-size: 17px;
+      color: var(--gray);
+      margin-bottom: 40px;
     }
 
-    .final-cta p {
-      font-size: 16px;
-      color: var(--text-muted);
-      margin-bottom: 32px;
-    }
-
-    /* Footer */
+    /* ─── Footer ─── */
     footer {
-      padding: 32px 0;
+      padding: 32px 24px;
       text-align: center;
-      font-size: 13px;
-      color: var(--text-muted);
-      border-top: 1px solid rgba(0,0,0,0.06);
+      font-size: 12px;
+      letter-spacing: 0.05em;
+      color: var(--gray);
+      border-top: 1px solid var(--gray-light);
     }
 
-    footer a {
-      color: var(--text-muted);
-      text-decoration: none;
+    footer a { transition: color 0.2s; }
+    footer a:hover { color: var(--black); }
+
+    /* ─── Animations ─── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
-    footer a:hover { color: var(--text); }
+    @keyframes scrollLine {
+      0%, 100% { opacity: 0.3; transform: scaleY(0.5); }
+      50% { opacity: 1; transform: scaleY(1); }
+    }
 
-    /* Responsive */
-    @media (max-width: 600px) {
-      section { padding: 60px 0; }
-      .hero { padding: 80px 0 60px; }
-      .how { padding: 32px 24px; }
-      .values-grid { grid-template-columns: 1fr; }
-      .categories { grid-template-columns: repeat(3, 1fr); }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; }
+    }
+
+    /* ─── Responsive ─── */
+    @media (max-width: 640px) {
+      .section { padding: 80px 20px; }
+      .schedule { grid-template-columns: repeat(4, 1fr); }
+      .day:nth-child(n+5) { border-top: 1px solid var(--gray-light); }
+      .values { grid-template-columns: 1fr; gap: 32px; }
+      .motto { padding: 80px 20px; }
+      .step-num { font-size: 36px; }
     }
   </style>
 </head>
 <body>
 
-  <div class="container">
-    <nav>
-      <a href="#" class="logo">сами</a>
-      <a href="https://t.me/sami_workouts" class="nav-link" target="_blank" rel="noopener">Открыть канал</a>
-    </nav>
-  </div>
-
-  <!-- Hero -->
-  <div class="container">
-    <section class="hero">
-      <div class="hero-tag">Telegram-канал</div>
-      <h1>Одна тренировка<br>в день</h1>
-      <p>Стретчинг, сила, мобильность, йога, дыхание. Нужен только коврик. Каждый день новое видео. Без лишнего.</p>
-      <a href="https://t.me/sami_workouts" class="cta" target="_blank" rel="noopener">
-        Подписаться <span class="cta-arrow">&rarr;</span>
-      </a>
-      <div class="hero-note">Бесплатно. Без регистрации.</div>
-    </section>
-  </div>
+  <!-- Hero: brand + one headline + one CTA -->
+  <section class="hero">
+    <div class="hero-logo">
+      <svg viewBox="0 0 762 316" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <ellipse cx="381" cy="158" rx="363" ry="140" stroke="black" stroke-width="36"/>
+      </svg>
+      <span class="hero-logo-text">сами</span>
+    </div>
+    <p class="hero-sub">Одна тренировка в день. Только коврик. Каждый день новое видео в Telegram.</p>
+    <a href="https://t.me/sami_workouts" class="cta" target="_blank" rel="noopener">Подписаться</a>
+    <div class="hero-scroll">Подробнее</div>
+  </section>
 
   <!-- How it works -->
-  <div class="container">
-    <div class="how">
-      <div class="section-label">Как это работает</div>
-      <div class="section-title">Три шага. Каждый день.</div>
-      <div class="steps">
-        <div class="step">
-          <div class="step-num">1</div>
-          <div class="step-text">
-            <h3>Открой канал</h3>
-            <p>Утром появляется одно видео. Уже выбрано за тебя.</p>
-          </div>
+  <div class="section">
+    <div class="section-label">Как это работает</div>
+    <h2>Три шага. Каждый день.</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div>
+          <h3>Открой канал</h3>
+          <p>Утром появляется одно видео. Уже выбрано за тебя.</p>
         </div>
-        <div class="step">
-          <div class="step-num">2</div>
-          <div class="step-text">
-            <h3>Сделай тренировку</h3>
-            <p>От 6 до 30 минут. Дома, в поездке, в перерыве.</p>
-          </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div>
+          <h3>Сделай тренировку</h3>
+          <p>От 6 до 30 минут. Дома, в поездке, в перерыве.</p>
         </div>
-        <div class="step">
-          <div class="step-num">3</div>
-          <div class="step-text">
-            <h3>Нажми &laquo;Я сделаль&raquo;</h3>
-            <p>Бот считает серию дней. Для себя, не для рейтинга.</p>
-          </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div>
+          <h3>Нажми &laquo;Я сделаль&raquo;</h3>
+          <p>Бот считает серию дней. Для себя, не для рейтинга.</p>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Categories -->
-  <div class="container">
-    <section>
-      <div class="section-label">Семь категорий</div>
-      <div class="section-title">Каждый день &mdash; своя тема</div>
-      <div class="categories">
-        <div class="cat">
-          <div class="cat-emoji">&#x1F9D8;</div>
-          <div class="cat-name">Стретчинг</div>
-          <div class="cat-day">Понедельник</div>
-        </div>
-        <div class="cat">
-          <div class="cat-emoji">&#x1F4AA;</div>
-          <div class="cat-name">Сила</div>
-          <div class="cat-day">Вторник</div>
-        </div>
-        <div class="cat">
-          <div class="cat-emoji">&#x1F30A;</div>
-          <div class="cat-name">Мобильность</div>
-          <div class="cat-day">Среда</div>
-        </div>
-        <div class="cat">
-          <div class="cat-emoji">&#x1F54A;</div>
-          <div class="cat-name">Йога</div>
-          <div class="cat-day">Четверг</div>
-        </div>
-        <div class="cat">
-          <div class="cat-emoji">&#x1F32C;</div>
-          <div class="cat-name">Дыхание</div>
-          <div class="cat-day">Пятница</div>
-        </div>
-        <div class="cat">
-          <div class="cat-emoji">&#x1F525;</div>
-          <div class="cat-name">Кардио</div>
-          <div class="cat-day">Суббота</div>
-        </div>
-        <div class="cat">
-          <div class="cat-emoji">&#x1F33F;</div>
-          <div class="cat-name">Восстановление</div>
-          <div class="cat-day">Воскресенье</div>
-        </div>
-      </div>
-    </section>
+  <!-- Schedule -->
+  <div class="section">
+    <div class="section-label">Расписание</div>
+    <h2>Каждый день &mdash; своя тема</h2>
+    <div class="schedule">
+      <div class="day"><div class="day-name">Пн</div><div class="day-cat">Стретчинг</div></div>
+      <div class="day"><div class="day-name">Вт</div><div class="day-cat">Сила</div></div>
+      <div class="day"><div class="day-name">Ср</div><div class="day-cat">Мобильность</div></div>
+      <div class="day"><div class="day-name">Чт</div><div class="day-cat">Йога</div></div>
+      <div class="day"><div class="day-name">Пт</div><div class="day-cat">Кардио</div></div>
+      <div class="day"><div class="day-name">Сб</div><div class="day-cat">Дыхание</div></div>
+      <div class="day"><div class="day-name">Вс</div><div class="day-cat">Recovery</div></div>
+    </div>
   </div>
 
   <!-- Values -->
-  <div class="container">
-    <section>
-      <div class="section-label">Философия</div>
-      <div class="section-title">Не мотивация. Структура.</div>
-      <div class="values-grid">
-        <div class="value-card">
-          <h3>Без выбора</h3>
-          <p>Не нужно решать что делать. Одно видео в день &mdash; уже выбрано.</p>
-        </div>
-        <div class="value-card">
-          <h3>Без инвентаря</h3>
-          <p>Только коврик. Никаких гантелей, резинок, турников.</p>
-        </div>
-        <div class="value-card">
-          <h3>Без давления</h3>
-          <p>Тело &mdash; партнёр, не проект. Пропустил &mdash; ок. Вернулся &mdash; хорошо.</p>
-        </div>
-        <div class="value-card">
-          <h3>Без рейтинга</h3>
-          <p>Серия дней &mdash; для себя. Никаких таблиц лидеров и соревнований.</p>
-        </div>
+  <div class="section">
+    <div class="section-label">Философия</div>
+    <h2>Без лишнего</h2>
+    <div class="values">
+      <div class="value">
+        <h3>Без выбора</h3>
+        <p>Не нужно решать что делать. Одно видео в день.</p>
       </div>
-    </section>
-  </div>
-
-  <!-- Quote -->
-  <div class="container">
-    <div class="quote-section">
-      <div class="quote">&laquo;Шесть минут, чтобы плечи сказали спасибо.&raquo;</div>
-      <div class="quote-author">Тон канала Сами</div>
+      <div class="value">
+        <h3>Без инвентаря</h3>
+        <p>Только коврик. Никаких гантелей и турников.</p>
+      </div>
+      <div class="value">
+        <h3>Без давления</h3>
+        <p>Тело &mdash; партнёр, не проект. Пропустил &mdash; ок.</p>
+      </div>
+      <div class="value">
+        <h3>Без рейтинга</h3>
+        <p>Серия дней &mdash; для себя. Без соревнований.</p>
+      </div>
     </div>
   </div>
 
+  <!-- Motto -->
+  <div class="motto">
+    <h2>Не мотивация.<br>Структура.</h2>
+  </div>
+
   <!-- Final CTA -->
-  <div class="container">
-    <section class="final-cta">
-      <h2>Начни сегодня</h2>
-      <p>Подпишись на канал. Завтра утром будет первая тренировка.</p>
-      <a href="https://t.me/sami_workouts" class="cta" target="_blank" rel="noopener">
-        Открыть в Telegram <span class="cta-arrow">&rarr;</span>
-      </a>
-    </section>
+  <div class="final">
+    <p>Подпишись на канал. Завтра утром будет первая тренировка.</p>
+    <a href="https://t.me/sami_workouts" class="cta" target="_blank" rel="noopener">Открыть в Telegram</a>
   </div>
 
   <!-- Footer -->
   <footer>
-    <div class="container">
-      <a href="https://t.me/sami_workouts" target="_blank" rel="noopener">@sami_workouts</a> &middot;
-      <a href="https://t.me/sami_workout_bot" target="_blank" rel="noopener">Бот</a> &middot;
-      <a href="https://diyor.design/projects/sami.html" target="_blank" rel="noopener">Кейс</a>
-    </div>
+    <a href="https://t.me/sami_workouts" target="_blank" rel="noopener">@sami_workouts</a> &nbsp;&middot;&nbsp;
+    <a href="https://t.me/sami_workout_bot" target="_blank" rel="noopener">Бот</a> &nbsp;&middot;&nbsp;
+    <a href="https://diyor.design/projects/sami.html" target="_blank" rel="noopener">Кейс</a>
   </footer>
 
 </body>
