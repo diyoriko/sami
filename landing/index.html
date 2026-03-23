@@ -58,27 +58,15 @@
     }
 
     .hero-logo {
-      position: relative;
-      width: clamp(280px, 50vw, 520px);
+      width: clamp(240px, 45vw, 440px);
       margin-bottom: 48px;
       animation: fadeUp 0.8s ease-out both;
     }
 
-    .hero-logo svg {
+    .hero-logo img {
       width: 100%;
       height: auto;
-    }
-
-    .hero-logo-text {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      font-size: clamp(56px, 12vw, 120px);
-      font-weight: 700;
-      letter-spacing: -0.06em;
-      line-height: 1;
-      color: var(--black);
+      display: block;
     }
 
     .hero-sub {
@@ -323,10 +311,7 @@
   <!-- Hero: brand + one headline + one CTA -->
   <section class="hero">
     <div class="hero-logo">
-      <svg viewBox="0 0 762 316" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <ellipse cx="381" cy="158" rx="363" ry="140" stroke="black" stroke-width="36"/>
-      </svg>
-      <span class="hero-logo-text">сами</span>
+      <img src="logo.png" alt="Сами" width="1000" height="460">
     </div>
     <p class="hero-sub">Одна тренировка в день. Только коврик. Каждый день новое видео в Telegram.</p>
     <a href="https://t.me/sami_workouts" class="cta" target="_blank" rel="noopener">Подписаться</a>
