@@ -6,7 +6,7 @@
 
 ## SPRINT 9 — CI + Tests + UX + Architecture
 
-Статус: **в работе** | Начало: 23.03.2026
+Статус: **завершён** | 23.03.2026
 
 ### Done
 
@@ -16,9 +16,7 @@
 - [x] **SM-903 Muscle detection показать** — «Обнаружены: спина, плечи» после ввода названия
 - [x] **SM-904 Mega Review cleanup** — дубликаты закрыты, backlog triage done
 
-### Open
-
-- [ ] **SM-905 db.ts split фаза 1** — вынести approval (~250L) с re-export
+- [x] **SM-905 db.ts split фаза 1** — вынести approval в db-approval.ts (148L, 16 exports). db.ts: 2399→2280 строк
 
 ---
 
