@@ -20,7 +20,7 @@ import {
 import { searchAllCategories, searchVideos, detectEquipment, Category, ScoredVideo } from './youtube';
 import { rewriteTitle, formatChannelName } from './translate';
 import { createLogger, generateCorrelationId } from './logger';
-import { CATEGORIES, CATEGORY_RU, DIFFICULTY_RU, CATEGORY_EMOJI, escV2, parseMuscles } from './shared';
+import { CATEGORIES, CATEGORY_RU, DIFFICULTY_RU, CATEGORY_EMOJI, EQUIPMENT_NO_GEAR, escV2, parseMuscles } from './shared';
 
 const log = createLogger('approval');
 
@@ -42,6 +42,11 @@ async function formatApprovalMessage(video: ScoredVideo, category: Category): Pr
     ? `Нужна экипировка: ${escV2(video.equipment.join(', '))}`
     : `Только коврик`;
 
+  const detectedGear = detectEquipment(video.title, '');
+  const gearLine = detectedGear.length > 0
+    ? `🎾 Инвентарь: ${escV2(detectedGear.join(', '))}`
+    : `🎾 Инвентарь: ${escV2(EQUIPMENT_NO_GEAR)}`;
+
   // rewriteTitle/formatChannelName already return MarkdownV2-escaped text
   const title = await rewriteTitle(video.title);
   const channel = await formatChannelName(video.channel_name);
@@ -58,6 +63,7 @@ async function formatApprovalMessage(video: ScoredVideo, category: Category): Pr
     `${escV2(video.duration_label ?? '—')}  \\·  ${diffLabel}`,
     `${escV2(muscles)}`,
     equipmentLine,
+    gearLine,
     `${escV2(formatViews(video.view_count))} просмотров`,
     '',
     `Рейтинг поиска: ${escV2(String((video.total_score / 10).toFixed(1)))}/10 _\\(бренд: ${escV2(String((video.brand_score / 10).toFixed(1)))}\\)_`,

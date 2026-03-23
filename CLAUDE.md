@@ -31,14 +31,14 @@ One-liner: "Не мотивация. Структура."
 
 | # | Агент | Платформа | Модель | Расписание |
 |---|---|---|---|---|
-| 1 | **Strategist** | Mac launchd (GitHub Actions готов при наличии API key) | Claude Sonnet 4.6 | 12:30 МСК |
+| 1 | **Strategist** | Mac launchd (GitHub Actions готов при наличии API key) | Claude Sonnet 4.6 | вс 09:30 МСК |
 | 2 | **Community** | Railway 24/7 | — | Поиск и посты вручную через бота |
 | 3 | **Analytics** | модуль в community | — | 00:30 ежедневно + вс 10:00 + при старте |
 
 ### Как агенты связаны
 
 ```
-Strategist (Mac launchd, 12:30 МСК)
+Strategist (Mac launchd, вс 09:30 МСК)
   |- curl -> Railway /report/community, /report/analytics
   |- читает: STRATEGIST_BRIEF.md, COMMUNITY_TASKS.md, PRD и т.д.
   |- пишет: reports/strategist/*.md + COMMUNITY_PACKET
@@ -100,7 +100,7 @@ git add . && git commit -m "..." && git push origin main
 - Платформа: Mac launchd (GitHub Actions workflow готов, нужен ANTHROPIC_API_KEY)
 - Уведомления: только Telegram DM
 - Бриф: `STRATEGIST_BRIEF.md`
-- Расписание: 12:30 МСК ежедневно
+- Расписание: вс 09:30 МСК еженедельно
 
 Команды:
 ```bash
@@ -109,6 +109,44 @@ STRATEGIST_DRY_RUN=1 bash agents/strategist.sh     # dry-run
 bash agents/install-1x-daily-mac.sh                # установить cron
 bash agents/uninstall-1x-daily-mac.sh              # удалить cron
 ```
+
+---
+
+## Алгоритм поиска видео
+
+Когда админ нажимает "Неделя" в боте, для каждого дня определяется категория
+(shared.ts `DAY_CATEGORY_MAP`: Пн=stretching, Вт=strength, ..., Вс=recovery).
+Бот берёт случайный запрос из `CATEGORY_QUERIES[category]` (8-11 вариантов на RU/EN),
+шлёт в YouTube Data API (`videoDuration=medium`, `maxResults=20`, `videoEmbeddable=true`),
+затем скорит и показывает топ-3 для ручного выбора админом.
+
+### Скоринг (youtube.ts)
+
+`totalScore = brand * 0.50 + views * 0.35 + duration * 0.15` (веса в config.ts)
+
+**Brand alignment** (0-100, базовый балл 50):
+- Штрафы (вычитаются из 50, cap=60): weight loss (+25), fix body (+20), heavy equipment (+20),
+  hype/clickbait (+15), competition (+15), wrong audience (+50), ALL CAPS title (+20)
+- Бонусы (прибавляются): bodyweight/дома (+12), calm instructional (+8), SAMI pillars
+  (mobility, flexibility, breathing, posture) (+6)
+
+**Views** (0-100): бэнды 1M=100, 500K=85, 100K=70, 50K=55, 10K=40, 1K=20, иначе 5
+
+**Duration** (0-100): ideal 8-20 мин=100, 4-8 мин=65, 20-25 мин=70, 25-30 мин=40, иначе=15.
+Жёсткий фильтр: < 4 мин или > 30 мин — отбрасывается.
+
+### Фильтры
+
+- `wasPostedEver(videoId)` — SQLite blacklist, ранее опубликованные видео не повторяются
+- `isVideoRejected(videoId)` — видео, отклонённые админом
+- Дедупликация по каналу: макс 1 видео на YouTube-канал в выдаче
+- Определение инвентаря: `detectEquipment` (гантели, штанга, резинка и т.д.)
+
+### Чего НЕ делает
+
+- Не учится на выборе админа (нет feedback loop)
+- Не учитывает completion rate пользователей
+- Не персонализирует выдачу под аудиторию
 
 ---
 

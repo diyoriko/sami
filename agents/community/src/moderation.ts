@@ -119,6 +119,8 @@ function buildCelebrationComment(firstName: string, streak: number, completionCo
     text += `\n${cp(completionCount)}`;
   }
 
+  text += `\nПозови друга? t.me/sami_workouts`;
+
   return text;
 }
 
