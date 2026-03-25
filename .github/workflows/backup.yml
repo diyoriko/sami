@@ -8,6 +8,7 @@ on:
 
 env:
   COMMUNITY_AGENT_URL: https://courageous-happiness-production.up.railway.app
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   backup-sami:
@@ -27,7 +28,7 @@ jobs:
           ls -lh "community-${DATE}.db"
 
       - name: Upload backup artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: sami-backup-${{ github.run_number }}
           path: "*.db"

@@ -14,6 +14,7 @@ import { startScheduler } from './scheduler';
 import { upgradeYtDlp, logYtDlpStatus, initCookies, setAdminNotifier, runDiagnostic } from './downloader';
 import { migrateStrategist, savePacketFromExternal, registerStrategistCallbacks, sendActionToAdmin, getActionById } from './strategist';
 import { registerRubricHandlers } from './rubrics';
+import { sendAdminMessage } from './notify-admin';
 import { recordDeploy, getLatestDeploy, getLatestPost, listImplTasks, getNextImplTask, getImplTask, updateImplTaskStatus, createImplTask, saveProposal, getApprovedProposals, deleteProposals } from './db';
 import { isYtDlpAvailable as isYtDlpAvailableCheck } from './downloader';
 import type { ImplTaskStatus, ImplTaskSource } from './db';
@@ -141,11 +142,12 @@ async function sendDeployReport(
   lines.push('');
   lines.push(`_Кнопки: 📊 Дашборд · 📅 Неделя_`);
 
-  await bot.api.sendMessage(
-    config.TELEGRAM_ADMIN_USER_ID,
-    lines.join('\n'),
-    { parse_mode: 'MarkdownV2' },
-  );
+  // Send via unified bot (plain text — strip MarkdownV2 escapes)
+  const plainText = lines.join('\n')
+    .replace(/\\([.!>=#{}()|~_-])/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1');
+  await sendAdminMessage(plainText);
 }
 
 async function main(): Promise<void> {
