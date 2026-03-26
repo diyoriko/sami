@@ -1,5 +1,5 @@
 #!/bin/bash
-# Fetch approved proposals from bot API and add them to COMMUNITY_TASKS.md
+# Fetch approved proposals from bot API and add them to BACKLOG.md
 # Called at the beginning of each strategist run
 #
 # Usage:
@@ -38,7 +38,7 @@ fi
 
 echo "Found $PROPOSAL_COUNT approved proposals"
 
-# Process each proposal and add to COMMUNITY_TASKS.md
+# Process each proposal and add to BACKLOG.md
 echo "$RESPONSE" | python3 -c "
 import json, sys, re
 
@@ -81,7 +81,7 @@ for p in proposals:
     if not clean_task.startswith('- ['):
         clean_task = f'- [ ] {clean_task.lstrip(\"- \")}'
 
-    # Find target section in COMMUNITY_TASKS.md
+    # Find target section in BACKLOG.md
     # Look for P1/P2 sections under current sprint
     target = f'### {priority}:'
 

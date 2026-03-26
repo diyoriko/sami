@@ -89,9 +89,9 @@ if [[ -f "$SYNC_PROPOSALS_SCRIPT" ]] && command -v node >/dev/null 2>&1; then
   fi
 fi
 
-# Apply approved proposals to COMMUNITY_TASKS.md before building prompt (non-critical)
+# Apply approved proposals to BACKLOG.md before building prompt (non-critical)
 APPLY_PROPOSALS_SCRIPT="${SAMI_AGENTS_DIR:-$SCRIPT_DIR}/apply-proposals.sh"
-TASKS_FILE="$CONTEXT_ROOT/COMMUNITY_TASKS.md"
+TASKS_FILE="$CONTEXT_ROOT/BACKLOG.md"
 API_KEY_FOR_PROPOSALS="${STRATEGIST_API_KEY:-${TELEGRAM_BOT_TOKEN:-}}"
 if [[ -z "$API_KEY_FOR_PROPOSALS" ]]; then
   API_KEY_FOR_PROPOSALS="$(grep -m1 'STRATEGIST_API_KEY=' "$HOME/.config/sami/community.env" 2>/dev/null | cut -d= -f2- || true)"
@@ -109,7 +109,7 @@ fi
 
 CONTEXT_FILES=(
   "$CONTEXT_ROOT/STRATEGIST_BRIEF.md"
-  "$CONTEXT_ROOT/COMMUNITY_TASKS.md"
+  "$CONTEXT_ROOT/BACKLOG.md"
   "$COMMUNITY_REPORT_LOCAL"
   "$ANALYTICS_REPORT_LOCAL"
   "$RECENT_SUMMARIES"
@@ -361,7 +361,7 @@ prompt = f"""Ты стратегический агент проекта Sami. �
 - [sprint:2|3|4|5] [priority:P1|P2] Краткое описание задачи — зачем и что конкретно сделать
 - [sprint:3] [priority:P1] Пример: добавить welcome-quiz после капчи — повысит retention новичков
 // BACKLOG_PROPOSALS_END
-Правила: только новые задачи (не дублируй то что уже в COMMUNITY_TASKS.md). Максимум 5 предложений. Учитывай owner-decisions.json.
+Правила: только новые задачи (не дублируй то что уже в BACKLOG.md). Максимум 5 предложений. Учитывай owner-decisions.json.
 ВАЖНО: В контексте есть proposal-status.md — статусы твоих прошлых предложений (done/accepted/pending). НЕ повторяй accepted и done предложения. Сфокусируйся на новых идеях.
 
 Обязательно в конце добавь блок:
@@ -373,7 +373,7 @@ prompt = f"""Ты стратегический агент проекта Sami. �
 Каждое действие: {{ type, description, params }}
 Типы: "create_poll", "update_welcome", "limit_posts", "send_digest", "update_stop_list", "create_impl_task", "backlog_proposal"
 Для backlog_proposal: params: {{ task: "**Название** — описание", priority: "P1" или "P2" }}
-При одобрении задача автоматически добавится в COMMUNITY_TASKS.md через GitHub API.
+При одобрении задача автоматически добавится в BACKLOG.md через GitHub API.
 Если нет предложений — actions: []
 
 Формат: валидный Markdown. Заголовок: "# Sami Strategist Report — YYYY-MM-DD".

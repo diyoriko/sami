@@ -4,7 +4,7 @@ const log = createLogger('github');
 
 const REPO_OWNER = 'diyoriko';
 const REPO_NAME = 'sami';
-const BACKLOG_PATH = 'COMMUNITY_TASKS.md';
+const BACKLOG_PATH = 'BACKLOG.md';
 const BRANCH = 'main';
 
 function getToken(): string | null {
@@ -68,7 +68,7 @@ async function putFile(filePath: string, content: string, sha: string, message: 
 }
 
 /**
- * Insert a task into COMMUNITY_TASKS.md under the appropriate priority section.
+ * Insert a task into BACKLOG.md under the appropriate priority section.
  * Returns the updated file content or null if insertion point not found.
  */
 export function insertTaskIntoBacklog(markdown: string, task: string, priority: string): string | null {
@@ -136,7 +136,7 @@ export function insertTaskIntoBacklog(markdown: string, task: string, priority: 
 }
 
 /**
- * Add a task to COMMUNITY_TASKS.md via GitHub API.
+ * Add a task to BACKLOG.md via GitHub API.
  * Returns true if successful, error message if not.
  */
 export async function addTaskToBacklog(task: string, priority: string): Promise<{ ok: boolean; error?: string }> {
@@ -147,7 +147,7 @@ export async function addTaskToBacklog(task: string, priority: string): Promise<
 
   const file = await getFile(BACKLOG_PATH);
   if (!file) {
-    return { ok: false, error: 'Не удалось получить COMMUNITY_TASKS.md из GitHub' };
+    return { ok: false, error: 'Не удалось получить BACKLOG.md из GitHub' };
   }
 
   const currentContent = Buffer.from(file.content, 'base64').toString('utf-8');

@@ -40,7 +40,7 @@ One-liner: "Не мотивация. Структура."
 ```
 Strategist (Mac launchd, вс 09:30 МСК)
   |- curl -> Railway /report/community, /report/analytics
-  |- читает: STRATEGIST_BRIEF.md, COMMUNITY_TASKS.md, PRD и т.д.
+  |- читает: STRATEGIST_BRIEF.md, BACKLOG.md, PRD и т.д.
   |- пишет: reports/strategist/*.md + COMMUNITY_PACKET
   |- Telegram DM -> admin
 
@@ -154,7 +154,7 @@ bash agents/uninstall-1x-daily-mac.sh              # удалить cron
 
 | Файл | Что содержит |
 |---|---|
-| `COMMUNITY_TASKS.md` | Бэклог: спринты, приоритеты, задачи |
+| `BACKLOG.md` | Бэклог: спринты, приоритеты, задачи |
 | `STRATEGIST_BRIEF.md` | Контекст и задание для стратега |
 
 ---
@@ -176,20 +176,20 @@ bash agents/uninstall-1x-daily-mac.sh              # удалить cron
 - Модульно, но без over-engineering
 
 ## Dashboard
-- Architect Dashboard (localhost:3333) читает COMMUNITY_TASKS.md **live** при каждом запросе
-- Дашборд НЕ статический — изменения в COMMUNITY_TASKS.md видны на localhost:3333/sami-backlog.html через ≤30 секунд
+- Architect Dashboard (localhost:3333) читает BACKLOG.md **live** при каждом запросе
+- Дашборд НЕ статический — изменения в BACKLOG.md видны на localhost:3333/sami-backlog.html через ≤30 секунд
 - Не нужно "пересобирать" дашборд — он всегда актуален
 
 ## Backlog & Session Discipline
 
-- `COMMUNITY_TASKS.md` — единственный источник правды для задач
-- При завершении задачи — отметить `[x]` в COMMUNITY_TASKS.md
-- Новые задачи/баги, найденные в ходе работы — добавить в COMMUNITY_TASKS.md с приоритетом
-- В конце сессии: обновить COMMUNITY_TASKS.md (отметить сделанное, добавить новое)
+- `BACKLOG.md` — единственный источник правды для задач
+- При завершении задачи — отметить `[x]` в BACKLOG.md
+- Новые задачи/баги, найденные в ходе работы — добавить в BACKLOG.md с приоритетом
+- В конце сессии: обновить BACKLOG.md (отметить сделанное, добавить новое)
 
 ## Sprint → Release Process
 
-1. **Sprint** — задачи в текущей секции COMMUNITY_TASKS.md
+1. **Sprint** — задачи в текущей секции BACKLOG.md
 2. **Реализация** — код + тесты
 3. **Деплой** — `git push origin main` → Railway auto-deploy + version bump (vX.Y.Z)
 4. **Архивация** — закрытый спринт в `<details>`, открытые переносятся с причиной
@@ -200,7 +200,7 @@ bash agents/uninstall-1x-daily-mac.sh              # удалить cron
 - `npm run typecheck` + `npm test` перед каждым деплоем (из `agents/community/`)
 - Pre-commit hook: `tsc --noEmit` (настроен через `.githooks/`)
 - CI: GitHub Actions `ci.yml` — typecheck + tests на каждый push/PR
-- CodeRabbit: автоматический ревью PR → замечания попадают в `COMMUNITY_TASKS.md` через `coderabbit-to-backlog.yml`
+- CodeRabbit: автоматический ревью PR → замечания попадают в `BACKLOG.md` через `coderabbit-to-backlog.yml`
 - Coverage: `npm run test:coverage` — отчёт покрытия (@vitest/coverage-v8)
 
 ## Guardrails

@@ -221,7 +221,7 @@ export function savePacketFromExternal(
 function buildPrompt(): string {
   const contextFiles = [
     path.resolve(__dirname, '../../../STRATEGIST_BRIEF.md'),
-    path.resolve(__dirname, '../../../COMMUNITY_TASKS.md'),
+    path.resolve(__dirname, '../../../BACKLOG.md'),
   ];
 
   const contextParts: string[] = [];
@@ -348,7 +348,7 @@ function buildPrompt(): string {
 - "send_digest" — отправить дайджест в канал. params: { text: string }
 - "update_stop_list" — обновить стоп-лист спам-фраз. params: { add?: string[], remove?: string[] }
 - "create_impl_task" — создать задачу для имплементор-агента (автокод). params: { title: string, spec: string, priority?: "P0"|"P1"|"P2"|"P3" }. spec: что изменить, какие файлы, ожидаемый результат, ограничения.
-- "backlog_proposal" — предложить задачу в бэклог (COMMUNITY_TASKS.md). params: { task: string, priority: "P1"|"P2" }. task: **Название** — описание в формате бэклога. При одобрении автоматически добавится в бэклог через GitHub API.
+- "backlog_proposal" — предложить задачу в бэклог (BACKLOG.md). params: { task: string, priority: "P1"|"P2" }. task: **Название** — описание в формате бэклога. При одобрении автоматически добавится в бэклог через GitHub API.
 Если нет предложений — actions: []
 
 Формат: валидный Markdown. Заголовок: "# Sami Strategist Report — YYYY-MM-DD".

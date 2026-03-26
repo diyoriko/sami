@@ -35,7 +35,7 @@ if [[ -f "$ROOT_DIR/agents/google-oauth-client.json" ]]; then
   cp "$ROOT_DIR/agents/google-oauth-client.json" "$RUNTIME_GOOGLE_OAUTH_CLIENT_PATH"
 fi
 cp "$ROOT_DIR/STRATEGIST_BRIEF.md" "$RUNTIME_CONTEXT_DIR/STRATEGIST_BRIEF.md"
-cp "$ROOT_DIR/COMMUNITY_TASKS.md" "$RUNTIME_CONTEXT_DIR/COMMUNITY_TASKS.md"
+cp "$ROOT_DIR/BACKLOG.md" "$RUNTIME_CONTEXT_DIR/BACKLOG.md"
 
 cat > "$RUNTIME_RUNNER_PATH" <<RUNNER
 #!/bin/bash
