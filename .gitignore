@@ -22,7 +22,8 @@ nohup.out
 .DS_Store
 
 # Reports internal state
-reports/**/.internal/
+reports/
+docs/research/
 
 # Google OAuth credentials
 agents/google-oauth-client.json
