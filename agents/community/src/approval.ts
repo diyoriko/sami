@@ -10,11 +10,12 @@ import {
   softDeletePendingSessions,
   recordRejection,
   setWeekSlotVideo,
+  clearWeekSlot,
   storeChallengeContext,
   getChallengeContext,
   clearChallengeContext,
-  getChallengeSeries,
   setChallengeSeriesDayVideo,
+  clearChallengeSeriesDaySlot,
   getDb,
 } from './db';
 import { searchAllCategories, searchVideos, detectEquipment, Category, ScoredVideo } from './youtube';
@@ -101,7 +102,7 @@ export async function runApprovalFlow(
   bot: Bot,
   date: string,
   singleCategory?: Category,
-  challengeContext?: { challengeId: number; dayNumber: number },
+  challengeContext?: { challengeId: number; dayNumber: number; type?: 'weekly' | 'series' },
   customKeywords?: { stretching?: string; strength?: string; mobility?: string },
   correlationId?: string,
 ): Promise<void> {
@@ -111,12 +112,12 @@ export async function runApprovalFlow(
   const categories: Category[] = singleCategory ? [singleCategory] : [...CATEGORIES];
 
   let challengeLabel = '';
-  if (challengeContext) {
+  if (challengeContext && challengeContext.type === 'series') {
+    const { getChallengeSeries } = require('./db') as typeof import('./db');
     const series = getChallengeSeries(challengeContext.challengeId);
     if (series) {
       challengeLabel = ` (${series.name}, день ${challengeContext.dayNumber})`;
     }
-    // Weekly schedule — no extra label, category name is enough
   }
 
   flowLog.info('starting approval flow', { date, categories: categories.length, challenge: !!challengeContext });
@@ -168,7 +169,7 @@ export async function runApprovalFlow(
 
     // Store challenge context in session metadata for use on approve callback
     if (challengeContext) {
-      storeChallengeContext(sessionId, challengeContext.challengeId, challengeContext.dayNumber);
+      storeChallengeContext(sessionId, challengeContext.challengeId, challengeContext.dayNumber, challengeContext.type);
     }
 
     const text = await formatApprovalMessage(v, category);
@@ -241,31 +242,47 @@ export function registerApprovalCallbacks(bot: Bot): void {
     setApprovalStatus(session.id, 'approved');
 
     // If this approval is for a challenge slot, fill the queue
-    if (session.video_id) {
-      const cctx = getChallengeContext(session.id);
-      if (cctx) {
-        // Check if challengeId refers to a challenge_series or weekly challenge
-        const series = getChallengeSeries(cctx.challengeId);
-        if (series) {
-          setChallengeSeriesDayVideo(cctx.challengeId, cctx.dayNumber, session.video_id);
-        } else {
-          setWeekSlotVideo(cctx.challengeId, cctx.dayNumber, session.video_id);
-        }
-        clearChallengeContext(session.id);
+    const cctx = session.video_id ? getChallengeContext(session.id) : undefined;
+    if (cctx && session.video_id) {
+      // Use type field to determine target table (avoids ID collision between challenges and challenge_series)
+      if (cctx.type === 'series') {
+        setChallengeSeriesDayVideo(cctx.challengeId, cctx.dayNumber, session.video_id);
+      } else {
+        setWeekSlotVideo(cctx.challengeId, cctx.dayNumber, session.video_id);
       }
+      // Don't clear context — needed for unapprove to undo slot fill
     }
 
-    const newKeyboard = new InlineKeyboard()
-      .text('✅ Выбрано', 'noop').text('↩️ Отменить', `unapprove:${session.id}`)
-      .row()
-      .text('📢 Опубликовать', `publish_card:${session.id}`);
+    let newKeyboard: InlineKeyboard;
+    if (cctx) {
+      // Week/series flow — no publish button, auto-publish handles it
+      newKeyboard = new InlineKeyboard()
+        .text('✅ В очереди', 'noop').text('↩️ Отменить', `unapprove:${session.id}`);
+    } else {
+      // Regular search flow — show publish button
+      newKeyboard = new InlineKeyboard()
+        .text('✅ Выбрано', 'noop').text('↩️ Отменить', `unapprove:${session.id}`)
+        .row()
+        .text('📢 Опубликовать', `publish_card:${session.id}`);
+    }
 
     await editKeyboard(ctx as any, newKeyboard);
-    await ctx.answerCallbackQuery('Выбрано!');
+    await ctx.answerCallbackQuery(cctx ? 'В очереди на автопубликацию!' : 'Выбрано!');
   });
 
   bot.callbackQuery(/^unapprove:(\d+)$/, async (ctx) => {
     const sessionId = parseInt(ctx.match[1]);
+
+    // Undo slot fill if this was from a week/series flow
+    const cctx = getChallengeContext(sessionId);
+    if (cctx) {
+      if (cctx.type === 'series') {
+        clearChallengeSeriesDaySlot(cctx.challengeId, cctx.dayNumber);
+      } else {
+        clearWeekSlot(cctx.challengeId, cctx.dayNumber);
+      }
+    }
+
     setApprovalStatus(sessionId, 'pending');
 
     const keyboard = new InlineKeyboard()
@@ -300,6 +317,9 @@ export function registerApprovalCallbacks(bot: Bot): void {
     const refreshLog = log.withCorrelation();
     refreshLog.info('refresh requested', { category: session.category, sessionId });
 
+    // Save challenge context BEFORE soft-delete (soft-delete makes it unreachable)
+    const challengeCtx = getChallengeContext(session.id);
+
     // Record rejection: blocklist the old video so it won't appear again
     try {
       const oldVideo = getDb().prepare(
@@ -332,6 +352,12 @@ export function registerApprovalCallbacks(bot: Bot): void {
     // Soft-delete the old pending session before creating replacement
     softDeletePendingSessions(session.date, session.category);
     const newSessionId = createApprovalSession(session.date, session.category as Category, videoId);
+
+    // Transfer challenge context to the new session (fixes lost context on refresh)
+    if (challengeCtx) {
+      storeChallengeContext(newSessionId, challengeCtx.challengeId, challengeCtx.dayNumber, challengeCtx.type);
+      refreshLog.info('transferred challenge context to new session', { newSessionId, ...challengeCtx });
+    }
     const text = await formatApprovalMessage(v, session.category as Category);
     const keyboard = new InlineKeyboard()
       .text('✅ Выбрать', `approve:${newSessionId}`)

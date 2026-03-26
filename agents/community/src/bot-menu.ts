@@ -517,15 +517,6 @@ export function registerBotMenu(bot: Bot): void {
 
     const kb = new InlineKeyboard();
 
-    // Publish button if today's slot is queued
-    if (challenge.status === 'active' && challengeDay >= 1) {
-      const todaySlot = slots.find(s => s.day_number === challengeDay);
-      if (todaySlot && todaySlot.status === 'queued') {
-        kb.text('📤 Опубликовать сейчас', `challenge_pub:${challenge.id}:${challengeDay}`);
-        kb.row();
-      }
-    }
-
     // Per-day buttons: fill empty / replace queued
     const DAY_LABELS_SHORT = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
     let buttonsInRow = 0;
@@ -573,7 +564,7 @@ export function registerBotMenu(bot: Bot): void {
     if (!category) return;
 
     const date = tomorrowMsk();
-    await runApprovalFlow(bot, date, category, { challengeId, dayNumber });
+    await runApprovalFlow(bot, date, category, { challengeId, dayNumber, type: 'weekly' });
   });
 
   // Manual challenge publish for today
@@ -796,7 +787,7 @@ export function registerBotMenu(bot: Bot): void {
 
     // Store series context — reuse challenge context mechanism
     // We'll search and then on approve, fill the series slot
-    await runApprovalFlow(bot, todayMsk(), category, { challengeId: seriesId, dayNumber }, undefined, undefined);
+    await runApprovalFlow(bot, todayMsk(), category, { challengeId: seriesId, dayNumber, type: 'series' }, undefined, undefined);
   });
 
   // Publish a specific challenge series day

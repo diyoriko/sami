@@ -67,12 +67,12 @@ export function markApprovalPosted(date: string, category: string): number {
   return result.changes;
 }
 
-export function storeChallengeContext(sessionId: number, challengeId: number, dayNumber: number): void {
-  const json = JSON.stringify({ challengeId, dayNumber });
+export function storeChallengeContext(sessionId: number, challengeId: number, dayNumber: number, type?: 'weekly' | 'series'): void {
+  const json = JSON.stringify({ challengeId, dayNumber, type: type ?? 'weekly' });
   getDb().prepare(`UPDATE approval_sessions SET challenge_context = ? WHERE id = ? AND deleted_at IS NULL`).run(json, sessionId);
 }
 
-export function getChallengeContext(sessionId: number): { challengeId: number; dayNumber: number } | undefined {
+export function getChallengeContext(sessionId: number): { challengeId: number; dayNumber: number; type?: 'weekly' | 'series' } | undefined {
   const row = getDb().prepare(
     `SELECT challenge_context FROM approval_sessions WHERE id = ? AND deleted_at IS NULL`
   ).get(sessionId) as { challenge_context: string | null } | undefined;
