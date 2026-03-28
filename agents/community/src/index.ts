@@ -697,9 +697,15 @@ async function main(): Promise<void> {
     createLogger('http').info(`report server on :${port} — /report/community /report/analytics /packet /health /impl/* /proposal /proposals`);
   });
 
-  // Graceful shutdown (Railway sends SIGTERM on redeploy)
+  // Graceful shutdown (Railway sends SIGTERM on redeploy, 10s before SIGKILL)
+  let shuttingDown = false;
   const shutdown = async (signal: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     log.info(`${signal} received, shutting down...`);
+    // Force exit after 8s (Railway SIGKILL at 10s)
+    const forceTimer = setTimeout(() => { log.info('force exit'); process.exit(0); }, 8000);
+    forceTimer.unref();
     try { await bot.stop(); } catch {}
     httpServer.close();
     closeDb();
