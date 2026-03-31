@@ -73,7 +73,10 @@ export async function formatApprovalMessage(video: ScoredVideo, category: Catego
 
 // Send approval card with Markdown fallback to plain text
 export async function sendApprovalCard(
-  api: { sendPhoto: Function; sendMessage: Function },
+  api: {
+    sendPhoto: (chatId: number, photo: string, other: { caption: string; parse_mode?: 'MarkdownV2'; reply_markup: InlineKeyboard }) => Promise<{ message_id: number }>;
+    sendMessage: (chatId: number, text: string, other: { parse_mode?: 'MarkdownV2'; reply_markup: InlineKeyboard }) => Promise<{ message_id: number }>;
+  },
   chatId: number, thumbnailUrl: string | null, text: string, keyboard: InlineKeyboard
 ) {
   for (const parseMode of ['MarkdownV2', undefined] as const) {
@@ -211,7 +214,11 @@ export async function runApprovalFlow(
 }
 
 async function editKeyboard(
-  ctx: { editMessageReplyMarkup: Function; editMessageCaption: Function; callbackQuery: { message?: { caption?: string } } },
+  ctx: {
+    editMessageReplyMarkup: (other: { reply_markup: InlineKeyboard }) => Promise<unknown>;
+    editMessageCaption: (other: { caption: string; parse_mode?: string; reply_markup: InlineKeyboard }) => Promise<unknown>;
+    callbackQuery: { message?: { caption?: string } };
+  },
   keyboard: InlineKeyboard
 ): Promise<void> {
   try {
