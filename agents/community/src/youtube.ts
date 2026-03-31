@@ -84,11 +84,11 @@ const BODYWEIGHT_PATTERNS = [
 const CALM_INSTRUCTIONAL_PATTERNS = [
   /практика|программа|комплекс|система/i,
   /routine|practice|program|tutorial|guide|flow/i,
-  /для начинающих|beginner/i,
   /ежедневн|каждый день|daily/i,
   /восстановление|recovery/i,
-  /постепенно|медленно|gentle|slow/i,
   /правильная техника|proper form|техника выполнения/i,
+  /прогрессия|progression|разбор|breakdown/i,
+  /наука|science.based|биомеханика|biomechanics/i,
 ];
 
 // SAMI content pillars
@@ -133,14 +133,16 @@ function scoreBrandAlignment(title: string, description: string): number {
   return Math.max(0, Math.min(100, score));
 }
 
+// Hidden gems scoring: peak at 10K-200K views (quality but not mainstream)
 function scoreViewCount(viewCount: number): number {
-  if (viewCount >= 1_000_000) return 100;
-  if (viewCount >= 500_000) return 85;
-  if (viewCount >= 100_000) return 70;
-  if (viewCount >= 50_000) return 55;
-  if (viewCount >= 10_000) return 40;
-  if (viewCount >= 1_000) return 20;
-  return 5;
+  if (viewCount >= 50_000 && viewCount < 200_000) return 100; // sweet spot
+  if (viewCount >= 10_000 && viewCount < 50_000) return 90;   // hidden gems
+  if (viewCount >= 200_000 && viewCount < 500_000) return 70;
+  if (viewCount >= 5_000 && viewCount < 10_000) return 65;
+  if (viewCount >= 500_000 && viewCount < 1_000_000) return 50;
+  if (viewCount >= 1_000 && viewCount < 5_000) return 45;
+  if (viewCount >= 1_000_000) return 35;                       // too mainstream
+  return 15;
 }
 
 function scoreDuration(seconds: number): number {

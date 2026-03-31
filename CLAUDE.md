@@ -130,7 +130,8 @@ bash agents/uninstall-1x-daily-mac.sh              # удалить cron
 - Бонусы (прибавляются): bodyweight/дома (+12), calm instructional (+8), SAMI pillars
   (mobility, flexibility, breathing, posture) (+6)
 
-**Views** (0-100): бэнды 1M=100, 500K=85, 100K=70, 50K=55, 10K=40, 1K=20, иначе 5
+**Views** (0-100, "hidden gems" кривая): 50K-200K=100 (sweet spot), 10K-50K=90,
+200K-500K=70, 5K-10K=65, 500K-1M=50, 1K-5K=45, 1M+=35 (слишком попсово), <1K=15
 
 **Duration** (0-100): ideal 8-20 мин=100, 4-8 мин=65, 20-25 мин=70, 25-30 мин=40, иначе=15.
 Жёсткий фильтр: < 4 мин или > 30 мин — отбрасывается.
@@ -202,6 +203,8 @@ bash agents/uninstall-1x-daily-mac.sh              # удалить cron
 - CI: GitHub Actions `ci.yml` — typecheck + tests на каждый push/PR
 - CodeRabbit: автоматический ревью PR → замечания попадают в `BACKLOG.md` через `coderabbit-to-backlog.yml`
 - Coverage: `npm run test:coverage` — отчёт покрытия (@vitest/coverage-v8)
+- CI coverage delta gate: warning при Δ% > -2% на PR (cache-based baseline)
+- `index.ts` coverage 0% — ожидаемо: тесты через bot.handleUpdate() mock, не direct import (index.ts вызывает main() at top level)
 
 ## Guardrails
 
