@@ -1,4 +1,4 @@
-import { execFile } from 'child_process';
+import { execFile, execFileSync } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -67,11 +67,10 @@ let cachedYtDlpBin: string | null = null;
 function findYtDlp(): string {
   if (cachedYtDlpBin) return cachedYtDlpBin;
 
-  const candidates = [...YT_DLP_CANDIDATES];
+  const candidates: string[] = [...YT_DLP_CANDIDATES];
 
   // Add PATH-discovered location
   try {
-    const { execFileSync } = require('child_process');
     const fromPath = execFileSync('which', ['yt-dlp'], { encoding: 'utf8' }).trim();
     if (fromPath && !candidates.includes(fromPath)) {
       candidates.push(fromPath);
@@ -83,7 +82,6 @@ function findYtDlp(): string {
   // Find all working binaries, pick the newest version (semver-safe comparison)
   let bestBin = '';
   let bestVer = '';
-  const { execFileSync } = require('child_process');
   for (const bin of candidates) {
     try {
       const ver = execFileSync(bin, ['--version'], { encoding: 'utf8' }).trim();
@@ -125,7 +123,7 @@ export async function upgradeYtDlp(): Promise<void> {
 export function logYtDlpStatus(): void {
   try {
     const bin = findYtDlp();
-    const ver = require('child_process').execFileSync(bin, ['--version'], { encoding: 'utf8' }).trim();
+    const ver = execFileSync(bin, ['--version'], { encoding: 'utf8' }).trim();
     const proxy = process.env.YT_PROXY ? 'yes' : 'no';
     const cookieFile = [COOKIES_PATH, path.join(os.tmpdir(), 'yt-cookies.txt')].find(p => fs.existsSync(p));
     const cookieSize = cookieFile ? fs.statSync(cookieFile).size : 0;
@@ -145,7 +143,7 @@ export async function runDiagnostic(): Promise<string> {
   let bin: string;
   try {
     bin = findYtDlp();
-    const ver = require('child_process').execFileSync(bin, ['--version'], { encoding: 'utf8' }).trim();
+    const ver = execFileSync(bin, ['--version'], { encoding: 'utf8' }).trim();
     log(`yt-dlp: ${bin} (${ver})`);
   } catch {
     log('FAIL: yt-dlp not found');
@@ -178,7 +176,7 @@ export async function runDiagnostic(): Promise<string> {
       log(`OK with client=${client || 'default'}`);
       // Cleanup
       try {
-        const files = require('fs').readdirSync(os.tmpdir()).filter((f: string) => f.startsWith('sami-diag'));
+        const files = fs.readdirSync(os.tmpdir()).filter((f: string) => f.startsWith('sami-diag'));
         files.forEach((f: string) => fs.unlinkSync(path.join(os.tmpdir(), f)));
       } catch { /* cleanup */ }
       return lines.join('\n');
