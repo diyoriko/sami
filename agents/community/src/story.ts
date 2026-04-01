@@ -122,14 +122,15 @@ export async function generateStory(data: StoryData): Promise<Buffer> {
   ctx.ellipse(50, H - 100, 450, 350, 0, 0, Math.PI * 2);
   ctx.stroke();
 
-  // ── Sanitize text for Oceanic font (missing glyphs: / — – : ; … etc.) ──
+  // ── Sanitize: keep only chars that Oceanic font can render ──
+  // Whitelist: Cyrillic, Latin, digits, basic punctuation
   const sanitize = (t: string) => t
-    .replace(/[/\\|]/g, ' ')
-    .replace(/[–—−]/g, ' - ')
-    .replace(/[…]/g, '...')
-    .replace(/[:;]/g, '.')
-    .replace(/[""„«»]/g, '"')
-    .replace(/[''‹›]/g, "'")
+    .replace(/[а-яА-ЯёЁa-zA-Z0-9\s.,!?\-()'"]+|./g, (ch) => {
+      // Keep whitelisted chars (matched by the first alternative)
+      if (/[а-яА-ЯёЁa-zA-Z0-9\s.,!?\-()'"]/u.test(ch)) return ch;
+      // Replace everything else with space
+      return ' ';
+    })
     .replace(/\s{2,}/g, ' ')
     .trim();
 
