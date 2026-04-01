@@ -122,6 +122,19 @@ export async function generateStory(data: StoryData): Promise<Buffer> {
   ctx.ellipse(50, H - 100, 450, 350, 0, 0, Math.PI * 2);
   ctx.stroke();
 
+  // ── Sanitize text for Oceanic font (missing glyphs: / — – : ; … etc.) ──
+  const sanitize = (t: string) => t
+    .replace(/[/\\|]/g, ' ')
+    .replace(/[–—−]/g, ' - ')
+    .replace(/[…]/g, '...')
+    .replace(/[:;]/g, '.')
+    .replace(/[""„«»]/g, '"')
+    .replace(/[''‹›]/g, "'")
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  data.title = sanitize(data.title);
+
   // ── Category tag ──
   ctx.font = '52px OceanicReg, sans-serif';
   ctx.fillStyle = '#666666';
