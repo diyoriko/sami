@@ -95,7 +95,7 @@ export async function formatCaption(video: VideoRow, challengeInfo?: ChallengeIn
 export type PostResult = 'posted' | 'skipped' | 'no_video' | 'error';
 
 /** Fire-and-forget: generate story image and send to admin DM */
-function fireStory(bot: Bot, video: VideoRow, category: Category): void {
+function fireStory(bot: Bot, video: VideoRow, category: Category, postMessageId?: number): void {
   // Resolve title: display_title → rewriteTitle → raw title
   const titlePromise = video.display_title
     ? Promise.resolve(video.display_title)
@@ -109,7 +109,7 @@ function fireStory(bot: Bot, video: VideoRow, category: Category): void {
       difficulty: video.difficulty,
       rawTitle: video.title,
     };
-    return sendStoryToAdmin(bot, storyData);
+    return sendStoryToAdmin(bot, storyData, postMessageId);
   }).catch(() => {});
 }
 
@@ -177,7 +177,7 @@ export async function postVideoToChannel(
           }
 
           postLog.info(`posted ${category} as VIDEO file`, { msgId: msg.message_id });
-          fireStory(bot, video, category);
+          fireStory(bot, video, category, msg.message_id);
           return 'posted';
         } catch (uploadErr) {
           download.cleanup();
@@ -225,7 +225,7 @@ export async function postVideoToChannel(
     }
 
     postLog.warn(`posted ${category} as LINK (degraded)`, { msgId: msg.message_id });
-    fireStory(bot, video, category);
+    fireStory(bot, video, category, msg.message_id);
     return 'posted';
   } catch (err) {
     postLog.error(`COMPLETE FAILURE for ${category} on ${date}`, { error: String(err) });

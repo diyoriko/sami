@@ -105,16 +105,17 @@ export async function generateStory(data: StoryData): Promise<Buffer> {
   ctx.ellipse(50, H - 100, 450, 350, 0, 0, Math.PI * 2);
   ctx.stroke();
 
-  // ── Category tag (monospace) ──
-  ctx.font = '52px monospace';
+  // ── Category tag ──
+  ctx.font = '52px OceanicReg, sans-serif';
   ctx.fillStyle = '#666666';
   ctx.fillText(categoryRu, 90, 270);
 
-  // ── Title (Oceanic Bold, auto-sized) ──
+  // ── Title (Oceanic Bold, auto-sized, max 3 lines) ──
   const maxWidth = W - 180;
   const titleSize = fitTitleSize(ctx, data.title, maxWidth, 120, 64);
   ctx.font = `bold ${titleSize}px Oceanic, sans-serif`;
-  const titleLines = wrapText(ctx, data.title, maxWidth);
+  let titleLines = wrapText(ctx, data.title, maxWidth);
+  if (titleLines.length > 3) titleLines = titleLines.slice(0, 3); // cap at 3 lines
   const lineHeight = Math.round(titleSize * 1.25);
 
   ctx.fillStyle = '#FAFAFA';
@@ -132,24 +133,26 @@ export async function generateStory(data: StoryData): Promise<Buffer> {
   const metaY = dividerY + 60;
   const valX = 470;
   const rowH = 80;
+  // Replace : with . — Oceanic TRIAL font is missing the colon glyph
+  const duration = (data.durationLabel || '—').replace(/:/g, '.');
   const meta = [
-    ['ВРЕМЯ', data.durationLabel || '—'],
+    ['ВРЕМЯ', duration],
     ['УРОВЕНЬ', difficultyRu],
     ['ИНВЕНТАРЬ', gear],
   ];
 
   for (let i = 0; i < meta.length; i++) {
     const y = metaY + i * rowH;
-    ctx.font = '44px monospace';
+    ctx.font = '44px OceanicReg, sans-serif';
     ctx.fillStyle = '#555555';
     ctx.fillText(meta[i][0], 90, y);
 
-    ctx.font = 'bold 44px monospace';
+    ctx.font = 'bold 44px Oceanic, sans-serif';
     ctx.fillStyle = '#BBBBBB';
     ctx.fillText(meta[i][1], valX, y);
   }
 
-  // ── Logo ──
+  // ── Logo (invert to white via offscreen canvas) ──
   try {
     const logoPath = path.join(ASSETS_DIR, 'logo.png');
     if (fs.existsSync(logoPath)) {
@@ -157,12 +160,25 @@ export async function generateStory(data: StoryData): Promise<Buffer> {
       const logo = await loadImage(logoPath);
       const lh = 200;
       const lw = Math.round(logo.width * lh / logo.height);
+
+      // Draw logo on offscreen canvas and invert colors
+      const offscreen = createCanvas(lw, lh);
+      const offCtx = offscreen.getContext('2d');
+      offCtx.drawImage(logo, 0, 0, lw, lh);
+      const imgData = offCtx.getImageData(0, 0, lw, lh);
+      const d = imgData.data;
+      for (let p = 0; p < d.length; p += 4) {
+        d[p] = 255 - d[p];       // R
+        d[p + 1] = 255 - d[p + 1]; // G
+        d[p + 2] = 255 - d[p + 2]; // B
+        // alpha stays
+      }
+      offCtx.putImageData(imgData, 0, 0);
+
       const lx = Math.round((W - lw) / 2);
       const ly = H - 340;
-
-      // Draw logo with white tint: draw on offscreen, then composite
-      ctx.globalAlpha = 0.85;
-      ctx.drawImage(logo, lx, ly, lw, lh);
+      ctx.globalAlpha = 0.9;
+      ctx.drawImage(offscreen, lx, ly);
       ctx.globalAlpha = 1.0;
     }
   } catch (err) {
@@ -177,14 +193,21 @@ export async function generateStory(data: StoryData): Promise<Buffer> {
 import { Bot, InputFile } from 'grammy';
 import { getConfig } from './config';
 
-export async function sendStoryToAdmin(bot: Bot, data: StoryData): Promise<void> {
+export async function sendStoryToAdmin(bot: Bot, data: StoryData, postMessageId?: number): Promise<void> {
   try {
     const config = getConfig();
     const buf = await generateStory(data);
+    const channelId = config.TELEGRAM_CHANNEL_ID.toString().replace('-100', '');
+    const postLink = postMessageId
+      ? `https://t.me/sami_workouts/${postMessageId}`
+      : '';
+    const caption = postLink
+      ? `📸 Сторис готова — пости в канал\n\n🔗 ${postLink}`
+      : '📸 Сторис готова — пости в канал';
     await bot.api.sendPhoto(
       config.TELEGRAM_ADMIN_USER_ID,
       new InputFile(buf, 'story.png'),
-      { caption: '📸 Сторис готова — пости в канал' },
+      { caption },
     );
     log.info('story sent to admin', { title: data.title, category: data.category });
   } catch (err) {
