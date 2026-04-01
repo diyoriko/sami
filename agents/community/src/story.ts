@@ -142,14 +142,13 @@ export async function generateStory(data: StoryData): Promise<Buffer> {
 
   // ── Title (Oceanic Bold, auto-sized, max 3 lines) ──
   const maxWidth = W - 180;
-  const titleSize = fitTitleSize(ctx, data.title, maxWidth, 120, 64);
+  const titleSize = fitTitleSize(ctx, data.title, maxWidth, 104, 60);
   ctx.font = `bold ${titleSize}px Oceanic, sans-serif`;
   const allTitleLines = wrapText(ctx, data.title, maxWidth);
   let titleLines = allTitleLines;
-  if (allTitleLines.length > 3) {
-    titleLines = allTitleLines.slice(0, 3);
-    // Add ellipsis to last line if truncated
-    titleLines[2] = titleLines[2].replace(/\s+\S*$/, '') + '...';
+  if (allTitleLines.length > 4) {
+    titleLines = allTitleLines.slice(0, 4);
+    titleLines[3] = titleLines[3].replace(/\s+\S*$/, '') + '...';
   }
   const lineHeight = Math.round(titleSize * 1.08);
 
