@@ -112,44 +112,6 @@ export async function generateStory(data: StoryData): Promise<Buffer> {
   ctx.fillStyle = '#0A0A0A';
   ctx.fillRect(0, 0, W, H);
 
-  // ── Thumbnail (top portion with gradient fade) ──
-  const thumbH = 580; // height of thumbnail area
-  if (data.thumbnailUrl) {
-    try {
-      const { loadImage } = await import('@napi-rs/canvas');
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 8000);
-      const res = await fetch(data.thumbnailUrl, { signal: controller.signal });
-      clearTimeout(timer);
-      if (res.ok) {
-        const buf = Buffer.from(await res.arrayBuffer());
-        const thumb = await loadImage(buf);
-        // Draw thumbnail covering full width, cropped to thumbH
-        const scale = Math.max(W / thumb.width, thumbH / thumb.height);
-        const tw = thumb.width * scale;
-        const th = thumb.height * scale;
-        const tx = (W - tw) / 2;
-        const ty = (thumbH - th) / 2;
-        ctx.save();
-        ctx.rect(0, 0, W, thumbH);
-        ctx.clip();
-        ctx.globalAlpha = 0.3; // dim the thumbnail
-        ctx.drawImage(thumb, tx, ty, tw, th);
-        ctx.globalAlpha = 1.0;
-        ctx.restore();
-
-        // Gradient fade from thumbnail to background
-        const grad = ctx.createLinearGradient(0, thumbH - 200, 0, thumbH);
-        grad.addColorStop(0, 'rgba(10, 10, 10, 0)');
-        grad.addColorStop(1, 'rgba(10, 10, 10, 1)');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, thumbH - 200, W, 200);
-      }
-    } catch {
-      // Thumbnail fetch failed — skip silently
-    }
-  }
-
   // ── Geometric accents ──
   ctx.strokeStyle = '#1A1A1A';
   ctx.lineWidth = 1;
@@ -176,7 +138,7 @@ export async function generateStory(data: StoryData): Promise<Buffer> {
     // Add ellipsis to last line if truncated
     titleLines[2] = titleLines[2].replace(/\s+\S*$/, '') + '...';
   }
-  const lineHeight = Math.round(titleSize * 1.25);
+  const lineHeight = Math.round(titleSize * 1.08);
 
   ctx.fillStyle = '#FAFAFA';
   const titleY = 420;
@@ -184,15 +146,10 @@ export async function generateStory(data: StoryData): Promise<Buffer> {
     ctx.fillText(titleLines[i], 90, titleY + i * lineHeight);
   }
 
-  // ── Divider ──
-  const dividerY = titleY + titleLines.length * lineHeight + 30;
-  ctx.fillStyle = '#444444';
-  ctx.fillRect(90, dividerY, 150, 4);
-
-  // ── Meta rows (monospace, label + value aligned) ──
-  const metaY = dividerY + 60;
+  // ── Meta rows ──
+  const metaY = titleY + titleLines.length * lineHeight + 60;
   const valX = 470;
-  const rowH = 80;
+  const rowH = 64;
   // Replace : with . — Oceanic TRIAL font is missing the colon glyph
   const duration = (data.durationLabel || '—').replace(/:/g, '.');
   const meta = [
@@ -210,6 +167,50 @@ export async function generateStory(data: StoryData): Promise<Buffer> {
     ctx.font = 'bold 44px Oceanic, sans-serif';
     ctx.fillStyle = '#BBBBBB';
     ctx.fillText(meta[i][1], valX, y);
+  }
+
+  // ── Thumbnail (small rounded rectangle after meta) ──
+  if (data.thumbnailUrl) {
+    try {
+      const { loadImage } = await import('@napi-rs/canvas');
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(data.thumbnailUrl, { signal: controller.signal });
+      clearTimeout(timer);
+      if (res.ok) {
+        const buf = Buffer.from(await res.arrayBuffer());
+        const thumb = await loadImage(buf);
+        const thumbW = 400;
+        const thumbH = Math.round(thumbW * 9 / 16); // 16:9 aspect
+        const thumbX = 90;
+        const thumbY = metaY + meta.length * rowH + 40;
+        const radius = 16;
+
+        // Clip to rounded rect
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(thumbX, thumbY, thumbW, thumbH, radius);
+        ctx.clip();
+
+        // Draw thumbnail scaled to fill
+        const scale = Math.max(thumbW / thumb.width, thumbH / thumb.height);
+        const tw = thumb.width * scale;
+        const th = thumb.height * scale;
+        const tx = thumbX + (thumbW - tw) / 2;
+        const ty = thumbY + (thumbH - th) / 2;
+        ctx.drawImage(thumb, tx, ty, tw, th);
+        ctx.restore();
+
+        // Border
+        ctx.strokeStyle = '#333333';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(thumbX, thumbY, thumbW, thumbH, radius);
+        ctx.stroke();
+      }
+    } catch {
+      // Thumbnail fetch failed — skip silently
+    }
   }
 
   // ── Logo (invert to white via offscreen canvas) ──
