@@ -108,6 +108,7 @@ function fireStory(bot: Bot, video: VideoRow, category: Category, postMessageId?
       durationLabel: video.duration_label ?? '—',
       difficulty: video.difficulty,
       rawTitle: video.title,
+      thumbnailUrl: video.thumbnail_url ?? undefined,
     };
     return sendStoryToAdmin(bot, storyData, postMessageId);
   }).catch(() => {});

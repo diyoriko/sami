@@ -39,7 +39,7 @@ function registerFonts(): void {
 
 // ── Text helpers ────────────────────────────────────────────────────────────
 
-/** Word-wrap using actual canvas measureText for precision */
+/** Word-wrap using actual canvas measureText, with orphan prevention */
 function wrapText(ctx: SKRSContext2D, text: string, maxWidth: number): string[] {
   const words = text.split(' ');
   const lines: string[] = [];
@@ -55,6 +55,22 @@ function wrapText(ctx: SKRSContext2D, text: string, maxWidth: number): string[] 
     }
   }
   if (current) lines.push(current);
+
+  // Fix orphans: if a line is very short (≤ 3 chars), merge with previous line
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i].length <= 3 && lines[i - 1]) {
+      const merged = `${lines[i - 1]} ${lines[i]}`;
+      // Only merge if it fits, otherwise leave as-is
+      // Be generous for short orphans (single prepositions like "о", "в", "с")
+      const tolerance = lines[i].length <= 2 ? 1.2 : 1.05;
+      if (ctx.measureText(merged).width <= maxWidth * tolerance) {
+        lines[i - 1] = merged;
+        lines.splice(i, 1);
+        i--;
+      }
+    }
+  }
+
   return lines;
 }
 
@@ -77,6 +93,7 @@ export interface StoryData {
   difficulty: Difficulty;
   equipment?: string[];
   rawTitle?: string;
+  thumbnailUrl?: string;
 }
 
 export async function generateStory(data: StoryData): Promise<Buffer> {
@@ -94,6 +111,44 @@ export async function generateStory(data: StoryData): Promise<Buffer> {
   // ── Background ──
   ctx.fillStyle = '#0A0A0A';
   ctx.fillRect(0, 0, W, H);
+
+  // ── Thumbnail (top portion with gradient fade) ──
+  const thumbH = 580; // height of thumbnail area
+  if (data.thumbnailUrl) {
+    try {
+      const { loadImage } = await import('@napi-rs/canvas');
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(data.thumbnailUrl, { signal: controller.signal });
+      clearTimeout(timer);
+      if (res.ok) {
+        const buf = Buffer.from(await res.arrayBuffer());
+        const thumb = await loadImage(buf);
+        // Draw thumbnail covering full width, cropped to thumbH
+        const scale = Math.max(W / thumb.width, thumbH / thumb.height);
+        const tw = thumb.width * scale;
+        const th = thumb.height * scale;
+        const tx = (W - tw) / 2;
+        const ty = (thumbH - th) / 2;
+        ctx.save();
+        ctx.rect(0, 0, W, thumbH);
+        ctx.clip();
+        ctx.globalAlpha = 0.3; // dim the thumbnail
+        ctx.drawImage(thumb, tx, ty, tw, th);
+        ctx.globalAlpha = 1.0;
+        ctx.restore();
+
+        // Gradient fade from thumbnail to background
+        const grad = ctx.createLinearGradient(0, thumbH - 200, 0, thumbH);
+        grad.addColorStop(0, 'rgba(10, 10, 10, 0)');
+        grad.addColorStop(1, 'rgba(10, 10, 10, 1)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, thumbH - 200, W, 200);
+      }
+    } catch {
+      // Thumbnail fetch failed — skip silently
+    }
+  }
 
   // ── Geometric accents ──
   ctx.strokeStyle = '#1A1A1A';
@@ -114,8 +169,13 @@ export async function generateStory(data: StoryData): Promise<Buffer> {
   const maxWidth = W - 180;
   const titleSize = fitTitleSize(ctx, data.title, maxWidth, 120, 64);
   ctx.font = `bold ${titleSize}px Oceanic, sans-serif`;
-  let titleLines = wrapText(ctx, data.title, maxWidth);
-  if (titleLines.length > 3) titleLines = titleLines.slice(0, 3); // cap at 3 lines
+  const allTitleLines = wrapText(ctx, data.title, maxWidth);
+  let titleLines = allTitleLines;
+  if (allTitleLines.length > 3) {
+    titleLines = allTitleLines.slice(0, 3);
+    // Add ellipsis to last line if truncated
+    titleLines[2] = titleLines[2].replace(/\s+\S*$/, '') + '...';
+  }
   const lineHeight = Math.round(titleSize * 1.25);
 
   ctx.fillStyle = '#FAFAFA';
