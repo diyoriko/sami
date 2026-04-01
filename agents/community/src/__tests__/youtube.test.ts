@@ -3,8 +3,9 @@ import { describe, it, expect, vi } from 'vitest';
 // Mock config to avoid process.exit in CI (no env vars)
 vi.mock('../config', () => ({
   getConfig: () => ({
-    SCORE_BRAND_WEIGHT: 0.5,
-    SCORE_VIEW_WEIGHT: 0.35,
+    SCORE_BRAND_WEIGHT: 0.45,
+    SCORE_VIEW_WEIGHT: 0.20,
+    SCORE_ENGAGEMENT_WEIGHT: 0.20,
     SCORE_DURATION_WEIGHT: 0.15,
     VIDEO_PENALTY_CAP: 60,
     VIDEO_MIN_DURATION: 240,
@@ -77,26 +78,28 @@ describe('extractYoutubeId', () => {
 
 describe('computeTotalScore', () => {
   it('returns weighted sum of three scores', () => {
-    // Default weights: brand=0.5, view=0.3, duration=0.2 (from config)
-    const result = computeTotalScore(100, 100, 100);
+    // Weights: brand=0.45, view=0.20, engagement=0.20, duration=0.15
+    const result = computeTotalScore(100, 100, 100, 100);
     expect(result).toBe(100);
   });
 
   it('returns 0 for all zeros', () => {
-    expect(computeTotalScore(0, 0, 0)).toBe(0);
+    expect(computeTotalScore(0, 0, 0, 0)).toBe(0);
   });
 
   it('rounds to integer', () => {
-    const result = computeTotalScore(33, 33, 33);
+    const result = computeTotalScore(33, 33, 33, 33);
     expect(Number.isInteger(result)).toBe(true);
   });
 
   it('brand score has highest weight', () => {
-    const highBrand = computeTotalScore(100, 0, 0);
-    const highView = computeTotalScore(0, 100, 0);
-    const highDuration = computeTotalScore(0, 0, 100);
+    const highBrand = computeTotalScore(100, 0, 0, 0);
+    const highView = computeTotalScore(0, 100, 0, 0);
+    const highEngagement = computeTotalScore(0, 0, 0, 100);
+    const highDuration = computeTotalScore(0, 0, 100, 0);
     expect(highBrand).toBeGreaterThan(highView);
     expect(highView).toBeGreaterThanOrEqual(highDuration);
+    expect(highEngagement).toBe(highView); // same weight
   });
 });
 

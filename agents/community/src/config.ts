@@ -25,8 +25,9 @@ const ConfigSchema = z.object({
   // Challenge auto-publish
   CRON_CHALLENGE_PUBLISH: z.string().default('0 8 * * *'),   // 08:00 MSK (timezone: Europe/Moscow)
   // Video search scoring weights (0-1, must sum to 1)
-  SCORE_BRAND_WEIGHT: z.string().default('0.50').transform(Number),
-  SCORE_VIEW_WEIGHT: z.string().default('0.35').transform(Number),
+  SCORE_BRAND_WEIGHT: z.string().default('0.45').transform(Number),
+  SCORE_VIEW_WEIGHT: z.string().default('0.20').transform(Number),
+  SCORE_ENGAGEMENT_WEIGHT: z.string().default('0.20').transform(Number),
   SCORE_DURATION_WEIGHT: z.string().default('0.15').transform(Number),
   // Post rating weights (0-1, must sum to 1) — displayed in channel posts
   RATING_VIEW_WEIGHT: z.string().default('0.40').transform(Number),

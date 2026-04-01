@@ -89,6 +89,8 @@ const CALM_INSTRUCTIONAL_PATTERNS = [
   /правильная техника|proper form|техника выполнения/i,
   /прогрессия|progression|разбор|breakdown/i,
   /наука|science.based|биомеханика|biomechanics/i,
+  /начинающ|beginner|для новичк/i,
+  /мягк|gentle|slow|спокойн|calm/i,
 ];
 
 // SAMI content pillars
@@ -133,16 +135,20 @@ function scoreBrandAlignment(title: string, description: string): number {
   return Math.max(0, Math.min(100, score));
 }
 
-// Hidden gems scoring: peak at 10K-200K views (quality but not mainstream)
+// Log curve: monotonically increasing with diminishing returns.
+// 1K=30, 10K=57, 50K=77, 100K=86, 500K=97, 1M+=100.
+// No penalty for popular videos — high views are a positive signal.
 function scoreViewCount(viewCount: number): number {
-  if (viewCount >= 50_000 && viewCount < 200_000) return 100; // sweet spot
-  if (viewCount >= 10_000 && viewCount < 50_000) return 90;   // hidden gems
-  if (viewCount >= 200_000 && viewCount < 500_000) return 70;
-  if (viewCount >= 5_000 && viewCount < 10_000) return 65;
-  if (viewCount >= 500_000 && viewCount < 1_000_000) return 50;
-  if (viewCount >= 1_000 && viewCount < 5_000) return 45;
-  if (viewCount >= 1_000_000) return 35;                       // too mainstream
-  return 15;
+  if (viewCount <= 0) return 0;
+  const log = Math.log10(viewCount);
+  return Math.min(Math.round(Math.max((log - 2) / 3.5, 0) * 100), 100);
+}
+
+// Engagement rate: like_ratio as a quality signal independent of views
+function scoreEngagement(likeRatio: number): number {
+  if (likeRatio <= 0) return 0;
+  // 1% = mediocre (30), 3% = good (71), 5% = excellent (91), 6%+ = 100
+  return Math.min(Math.round(Math.sqrt(likeRatio / 0.06) * 100), 100);
 }
 
 function scoreDuration(seconds: number): number {
@@ -155,11 +161,12 @@ function scoreDuration(seconds: number): number {
   return 15;
 }
 
-export function computeTotalScore(brandScore: number, viewScore: number, durationScore: number): number {
+export function computeTotalScore(brandScore: number, viewScore: number, durationScore: number, engagementScore: number = 0): number {
   const config = getConfig();
   return Math.round(
     brandScore * config.SCORE_BRAND_WEIGHT +
     viewScore * config.SCORE_VIEW_WEIGHT +
+    engagementScore * config.SCORE_ENGAGEMENT_WEIGHT +
     durationScore * config.SCORE_DURATION_WEIGHT
   );
 }
@@ -418,8 +425,9 @@ export async function searchVideos(
 
     const brandScore = scoreBrandAlignment(title, description);
     const viewScore = scoreViewCount(viewCount);
+    const engagementScore = scoreEngagement(likeRatio);
     const durationScore = scoreDuration(seconds);
-    const totalScore = computeTotalScore(brandScore, viewScore, durationScore);
+    const totalScore = computeTotalScore(brandScore, viewScore, durationScore, engagementScore);
 
     const equipment = detectEquipment(title, description);
 
