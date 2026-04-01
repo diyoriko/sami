@@ -19,23 +19,41 @@ const log = createLogger('story');
 const W = 1080;
 const H = 1920;
 
-// ── Load fonts as base64 for SVG embedding ──────────────────────────────────
+// ── Install fonts to system for librsvg (fontconfig) ────────────────────────
 
 const ASSETS_DIR = path.resolve(__dirname, '..', 'assets');
 
-function loadFontBase64(filename: string): string {
+/** Copy OTF fonts to ~/.fonts/ so librsvg can find them via fontconfig */
+function ensureFontsInstalled(): void {
   try {
-    return fs.readFileSync(path.join(ASSETS_DIR, filename)).toString('base64');
-  } catch {
-    log.warn(`font not found: ${filename}`);
-    return '';
+    const fontsDir = path.join(process.env.HOME || '/root', '.fonts');
+    fs.mkdirSync(fontsDir, { recursive: true });
+    let copied = false;
+    for (const font of ['OceanicGrotesk-Bold.otf', 'OceanicGrotesk-Regular.otf']) {
+      const src = path.join(ASSETS_DIR, font);
+      const dst = path.join(fontsDir, font);
+      if (fs.existsSync(src) && !fs.existsSync(dst)) {
+        fs.copyFileSync(src, dst);
+        copied = true;
+      }
+    }
+    if (copied) {
+      require('child_process').execSync('fc-cache -f 2>/dev/null || true');
+      log.info('fonts installed to ~/.fonts/');
+    }
+  } catch (err) {
+    log.warn('failed to install fonts', { error: String(err) });
   }
 }
 
-let _boldFont = '';
-let _regFont = '';
-function getBoldFont(): string { return _boldFont || (_boldFont = loadFontBase64('OceanicGrotesk-Bold.otf')); }
-function getRegFont(): string { return _regFont || (_regFont = loadFontBase64('OceanicGrotesk-Regular.otf')); }
+let _fontsReady = false;
+function fontsReady(): void {
+  if (!_fontsReady) { ensureFontsInstalled(); _fontsReady = true; }
+}
+
+// Font family name from OTF metadata (fc-query shows "Oceanic Grotesk TRIAL")
+const FONT_TITLE = "'Oceanic Grotesk TRIAL', 'Helvetica Neue', Arial, sans-serif";
+const FONT_MONO = "'SF Mono', 'DejaVu Sans Mono', 'Liberation Mono', monospace";
 
 // ── SVG helpers ─────────────────────────────────────────────────────────────
 
@@ -76,8 +94,7 @@ export interface StoryData {
 }
 
 export async function generateStory(data: StoryData): Promise<Buffer> {
-  const boldB64 = getBoldFont();
-  const regB64 = getRegFont();
+  fontsReady();
 
   const categoryRu = (CATEGORY_RU[data.category] ?? data.category).toUpperCase();
   const difficultyRu = DIFFICULTY_RU[data.difficulty] ?? data.difficulty;
@@ -98,7 +115,7 @@ export async function generateStory(data: StoryData): Promise<Buffer> {
   const titleY = 420;
 
   const titleSvgLines = titleLines.map((line, i) =>
-    `<text x="90" y="${titleY + i * lineHeight}" font-family="OceanicBold" font-size="${titleSize}" fill="#FAFAFA">${esc(line)}</text>`
+    `<text x="90" y="${titleY + i * lineHeight}" font-family="${FONT_TITLE}" font-size="${titleSize}" font-weight="bold" fill="#FAFAFA">${esc(line)}</text>`
   ).join('\n    ');
 
   // Meta rows below title
@@ -115,27 +132,11 @@ export async function generateStory(data: StoryData): Promise<Buffer> {
 
   const metaSvg = meta.map(([label, value], i) => {
     const y = metaStartY + i * rowH;
-    return `<text x="90" y="${y}" font-family="mono" font-size="44" fill="#555555">${esc(label!)}</text>
-    <text x="${valX}" y="${y}" font-family="mono" font-size="44" font-weight="bold" fill="#BBBBBB">${esc(value!)}</text>`;
+    return `<text x="90" y="${y}" font-family="${FONT_MONO}" font-size="44" fill="#555555">${esc(label!)}</text>
+    <text x="${valX}" y="${y}" font-family="${FONT_MONO}" font-size="44" font-weight="bold" fill="#BBBBBB">${esc(value!)}</text>`;
   }).join('\n    ');
 
   const svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <style>
-      @font-face {
-        font-family: 'OceanicBold';
-        src: url('data:font/otf;base64,${boldB64}') format('opentype');
-      }
-      @font-face {
-        font-family: 'OceanicReg';
-        src: url('data:font/otf;base64,${regB64}') format('opentype');
-      }
-      @font-face {
-        font-family: 'mono';
-        src: local('SF Mono'), local('Menlo'), local('Consolas'), local('monospace');
-      }
-    </style>
-  </defs>
 
   <!-- Background -->
   <rect width="${W}" height="${H}" fill="#0A0A0A"/>
@@ -145,7 +146,7 @@ export async function generateStory(data: StoryData): Promise<Buffer> {
   <ellipse cx="50" cy="${H - 100}" rx="450" ry="350" fill="none" stroke="#1A1A1A" stroke-width="1"/>
 
   <!-- Category tag -->
-  <text x="90" y="270" font-family="mono" font-size="52" fill="#666666">${esc(categoryRu)}</text>
+  <text x="90" y="270" font-family="${FONT_MONO}" font-size="52" fill="#666666">${esc(categoryRu)}</text>
 
   <!-- Title -->
   ${titleSvgLines}
