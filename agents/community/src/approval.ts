@@ -17,6 +17,7 @@ import {
   setChallengeSeriesDayVideo,
   clearChallengeSeriesDaySlot,
   getDb,
+  saveUgcState,
 } from './db';
 import { searchAllCategories, searchVideos, detectEquipment, Category, ScoredVideo } from './youtube';
 import { rewriteTitle, formatChannelName } from './translate';
@@ -178,7 +179,8 @@ export async function runApprovalFlow(
     const text = await formatApprovalMessage(v, category);
     const keyboard = new InlineKeyboard()
       .text('✅ Выбрать', `approve:${sessionId}`)
-      .text('🔄 Другое', `refresh:${sessionId}`);
+      .text('🔄 Другое', `refresh:${sessionId}`)
+      .text('✏️', `edit_title:${sessionId}`);
 
     try {
       const msg = await sendApprovalCard(bot.api, config.TELEGRAM_ADMIN_USER_ID, v.thumbnail_url, text, keyboard);
@@ -264,13 +266,15 @@ export function registerApprovalCallbacks(bot: Bot): void {
     if (cctx) {
       // Week/series flow — no publish button, auto-publish handles it
       newKeyboard = new InlineKeyboard()
-        .text('✅ В очереди', 'noop').text('↩️ Отменить', `unapprove:${session.id}`);
+        .text('✅ В очереди', 'noop').text('↩️ Отменить', `unapprove:${session.id}`)
+        .text('✏️', `edit_title:${session.id}`);
     } else {
       // Regular search flow — show publish button
       newKeyboard = new InlineKeyboard()
         .text('✅ Выбрано', 'noop').text('↩️ Отменить', `unapprove:${session.id}`)
         .row()
-        .text('📢 Опубликовать', `publish_card:${session.id}`);
+        .text('📢 Опубликовать', `publish_card:${session.id}`)
+        .text('✏️', `edit_title:${session.id}`);
     }
 
     await editKeyboard(ctx as any, newKeyboard);
@@ -294,7 +298,8 @@ export function registerApprovalCallbacks(bot: Bot): void {
 
     const keyboard = new InlineKeyboard()
       .text('✅ Выбрать', `approve:${sessionId}`)
-      .text('🔄 Другое', `refresh:${sessionId}`);
+      .text('🔄 Другое', `refresh:${sessionId}`)
+      .text('✏️', `edit_title:${sessionId}`);
 
     await editKeyboard(ctx as any, keyboard);
     await ctx.answerCallbackQuery('Возвращено в пул');
@@ -368,7 +373,8 @@ export function registerApprovalCallbacks(bot: Bot): void {
     const text = await formatApprovalMessage(v, session.category as Category);
     const keyboard = new InlineKeyboard()
       .text('✅ Выбрать', `approve:${newSessionId}`)
-      .text('🔄 Другое', `refresh:${newSessionId}`);
+      .text('🔄 Другое', `refresh:${newSessionId}`)
+      .text('✏️', `edit_title:${newSessionId}`);
 
     // Edit existing message instead of sending a new one
     const messageId = ctx.callbackQuery?.message?.message_id;
@@ -406,6 +412,27 @@ export function registerApprovalCallbacks(bot: Bot): void {
         refreshLog.error('refresh send failed', { error: String(err) });
       }
     }
+  });
+
+  // Edit title — admin enters custom display_title
+  bot.callbackQuery(/^edit_title:(\d+)$/, async (ctx) => {
+    const sessionId = parseInt(ctx.match[1]);
+    const config = getConfig();
+    if (ctx.from?.id !== config.TELEGRAM_ADMIN_USER_ID) return;
+
+    let session = getApprovalSessionByMessageId(ctx.callbackQuery.message?.message_id ?? -1);
+    if (!session) session = getApprovalSessionById(sessionId);
+    if (!session?.video_id) {
+      await ctx.answerCallbackQuery('Сессия не найдена');
+      return;
+    }
+
+    saveUgcState(config.TELEGRAM_ADMIN_USER_ID, 'edit_title', session.video_id);
+    await ctx.answerCallbackQuery();
+    await ctx.api.sendMessage(
+      config.TELEGRAM_ADMIN_USER_ID,
+      '✏️ Введи новый заголовок для этого видео:',
+    );
   });
 
   // Publish single video directly from approval card

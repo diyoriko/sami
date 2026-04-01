@@ -27,6 +27,10 @@
 - [ ] **SM-1005 Cross-promo** — 3 микро-канала ЗОЖ/фитнес
 - [ ] **SM-1006 Статья VC.ru** — после 20+ подписчиков
 
+### P2: Content
+
+- [ ] **SM-1040 Еженедельный дайджест в канал** — крон вс вечер (напр. 20:00 МСК), собирает все посты за неделю из DB (`getPostsForDateRange`), формирует красивое сообщение со списком тренировок (день, категория, название, ссылка), постит в `@sami_workouts`. Базовая инфра есть (strategist `send_digest`), нужен автономный крон + шаблон
+
 ### P3: Отложено (после 50+ участников)
 
 - [ ] **SM-1020 Монетизация** — опрос + архитектура premium
@@ -755,3 +759,8 @@ SAMI и Hunter технически стабильны: тесты идут, д�
 - [x] **Mega Review:** **SAMI** — medium — db.ts split фазы 2-5 — done (SM-1010)
 - [x] **Mega Review:** **SAMI** — medium — bot-menu.ts split — done (SM-1011)
 - [x] **Mega Review:** **SAMI** — medium — Outreach 9 знакомым — перенесено в SM-1000
+
+### Mega Review 2026-03-31
+<!-- Source: ~/Documents/Projects/Architect/code-reviews/2026-03-31.md -->
+| 16 | SAMI | **high** | SM-1000: написать 3 конкретным людям сегодня (не 10 "кому-нибудь") | — | `[mega-review]`
+| 20 | SAMI | **medium** | Добавить тесты для `poster.ts` — публикация в канал без покрытия | `agents/community/src/poster.ts` | `[mega-review]`

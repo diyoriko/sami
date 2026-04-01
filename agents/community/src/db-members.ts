@@ -184,7 +184,7 @@ export function getExpiredCaptchas(): CaptchaRow[] {
 
 // --- UGC conversation state (persistent) ---
 
-export type UgcStep = 'waiting_link' | 'waiting_category' | 'waiting_difficulty' | 'waiting_duration' | 'waiting_equipment' | 'waiting_rubric' | 'waiting_title' | 'cs_name' | 'cs_duration' | 'cs_category';
+export type UgcStep = 'waiting_link' | 'waiting_category' | 'waiting_difficulty' | 'waiting_duration' | 'waiting_equipment' | 'waiting_rubric' | 'waiting_title' | 'cs_name' | 'cs_duration' | 'cs_category' | 'edit_title';
 
 export interface UgcConversationRow {
   telegram_user_id: number;

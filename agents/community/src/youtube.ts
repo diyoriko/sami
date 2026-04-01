@@ -335,7 +335,7 @@ export function detectEquipment(title: string, description: string): string[] {
   return EQUIPMENT_DETECT_PATTERNS.filter(([re]) => re.test(text)).map(([, label]) => label);
 }
 
-export type ScoredVideo = Omit<VideoRow, 'id'> & {
+export type ScoredVideo = Omit<VideoRow, 'id' | 'display_title'> & {
   search_query: string;
   view_count: number;
   like_ratio: number;

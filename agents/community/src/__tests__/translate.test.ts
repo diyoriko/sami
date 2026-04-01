@@ -40,8 +40,7 @@ describe('rewriteTitle', () => {
   });
 
   it('escapes Markdown special chars', async () => {
-    const result = await rewriteTitle('Тренировка *силовая* для [начинающих]');
-    expect(result).toContain('\\*');
+    const result = await rewriteTitle('Тренировка [силовая] с мячом');
     expect(result).toContain('\\[');
   });
 
@@ -60,12 +59,89 @@ describe('rewriteTitle', () => {
     const result = await rewriteTitle('Лучшая HIIT тренировка');
     expect(result).toContain('HIIT');
   });
+
+  // ── New tests: segment truncation ──
+
+  it('takes first segment before pipe separator', async () => {
+    const result = await rewriteTitle('Утренний комплекс йоги | Домашняя йога. Онлайн фитнес студия');
+    expect(result.toLowerCase()).toContain('утренний');
+    expect(result.toLowerCase()).not.toContain('онлайн');
+  });
+
+  it('takes first segment before // separator', async () => {
+    const result = await rewriteTitle('Тренировка из ягодичных мостиков // Лифтинг ягодиц дома');
+    expect(result.toLowerCase()).toContain('тренировка');
+    expect(result.toLowerCase()).not.toContain('лифтинг');
+  });
+
+  // ── New tests: redundant info stripping ──
+
+  it('strips "в домашних условиях" (redundant with equipment tag)', async () => {
+    const result = await rewriteTitle('Йога в домашних условиях');
+    expect(result.toLowerCase()).not.toContain('домашних');
+  });
+
+  it('strips "для начинающих" (redundant with difficulty tag)', async () => {
+    const result = await rewriteTitle('Растяжка для начинающих утренняя');
+    expect(result.toLowerCase()).not.toContain('начинающих');
+  });
+
+  // ── New tests: hype stripping ──
+
+  it('strips "убийца калорий"', async () => {
+    const result = await rewriteTitle('Высокоинтенсивное кардио убийца калорий');
+    expect(result.toLowerCase()).not.toContain('убийца');
+  });
+
+  it('strips "взрывн*" hype words', async () => {
+    const result = await rewriteTitle('Взрывная тренировка на ноги');
+    expect(result.toLowerCase()).not.toContain('взрывн');
+  });
+
+  // ── New tests: special character cleanup ──
+
+  it('strips asterisks', async () => {
+    const result = await rewriteTitle('*СИЛОВАЯ* тренировка');
+    expect(result).not.toContain('*');
+    // Should also not contain escaped asterisk from title content
+    // (escV2 will escape any Markdown chars, but source asterisks are stripped first)
+  });
+
+  it('strips channel promo patterns', async () => {
+    const result = await rewriteTitle('Утренняя йога. Онлайн фитнес студия');
+    expect(result.toLowerCase()).not.toContain('студия');
+  });
+
+  // ── New tests: length cap ──
+
+  it('caps title at 60 characters', async () => {
+    const long = 'Очень длинное название тренировки которое содержит множество слов и фраз описывающих содержание видео';
+    const result = await rewriteTitle(long);
+    // escV2 adds backslashes, so unescaped length should be ≤ 60
+    const unescaped = result.replace(/\\(.)/g, '$1');
+    expect(unescaped.length).toBeLessThanOrEqual(60);
+  });
+
+  // ── New tests: abbreviation handling ──
+
+  it('preserves known Russian abbreviations like МФР', async () => {
+    const result = await rewriteTitle('Комплекс упражнений МФР');
+    expect(result).toContain('МФР');
+  });
+
+  it('lowercases unknown Cyrillic caps words', async () => {
+    const result = await rewriteTitle('Гимнастика НЕ дыхательная');
+    // "НЕ" is only 2 chars, stays per current logic (< 5 char threshold)
+    // But "ВЫСОКОИНТЕНСИВНОЕ" would be lowercased
+    const r2 = await rewriteTitle('ВЫСОКОИНТЕНСИВНОЕ кардио');
+    expect(r2.toLowerCase()).toContain('высокоинтенсивное');
+  });
 });
 
 describe('formatChannelName', () => {
   it('escapes Markdown in Russian channel names', async () => {
-    const result = await formatChannelName('Йога *дома*');
-    expect(result).toContain('\\*');
+    const result = await formatChannelName('Йога (дома)');
+    expect(result).toContain('\\(');
   });
 
   it('cleans CAPS in channel names', async () => {

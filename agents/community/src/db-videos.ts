@@ -15,6 +15,7 @@ export interface VideoRow {
   id: number;
   youtube_id: string;
   title: string;
+  display_title: string | null;
   channel_name: string;
   channel_url: string | null;
   duration_seconds: number | null;
@@ -34,7 +35,7 @@ export function getVideoById(id: number): VideoRow | null {
   return getDb().prepare('SELECT * FROM videos WHERE id = ?').get(id) as VideoRow | null;
 }
 
-export function upsertVideo(v: Omit<VideoRow, 'id'> & { search_query?: string }): number {
+export function upsertVideo(v: Omit<VideoRow, 'id' | 'display_title'> & { search_query?: string }): number {
   const db = getDb();
   const stmt = db.prepare(`
     INSERT INTO videos (youtube_id, title, channel_name, channel_url, duration_seconds,
@@ -130,6 +131,12 @@ export function updateVideoRating(videoId: number): number {
   const rating = computeRating(video);
   db.prepare('UPDATE videos SET rating = ? WHERE id = ?').run(rating, videoId);
   return rating;
+}
+
+// --- Display title (admin-curated override) ---
+
+export function setVideoDisplayTitle(videoId: number, title: string): void {
+  getDb().prepare('UPDATE videos SET display_title = ? WHERE id = ?').run(title, videoId);
 }
 
 // --- Video rejections (blocklist) ---

@@ -14,6 +14,7 @@ function makeVideo(overrides: Partial<VideoRow> = {}): VideoRow {
     id: 1,
     youtube_id: 'abc123',
     title: 'Утренняя растяжка для начинающих',
+    display_title: null,
     channel_name: 'FitChannel',
     video_url: 'https://www.youtube.com/watch?v=abc123',
     category: 'stretching',
@@ -121,5 +122,16 @@ describe('formatCaption', () => {
   it('shows "Без инвентаря" for bodyweight video', async () => {
     const result = await formatCaption(makeVideo({ title: 'Простая растяжка дома' }));
     expect(result).toMatch(/[Бб]ез инвентаря/);
+  });
+
+  it('uses display_title when set', async () => {
+    const result = await formatCaption(makeVideo({ display_title: 'Мой заголовок' }));
+    expect(result).toContain('Мой заголовок');
+  });
+
+  it('falls back to rewriteTitle when display_title is null', async () => {
+    const result = await formatCaption(makeVideo({ display_title: null }));
+    // rewriteTitle mock returns title as-is
+    expect(result).toContain('Утренняя растяжка для начинающих');
   });
 });

@@ -1,4 +1,6 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import { Bot } from 'grammy';
+import type { Update, UserFromGetMe } from 'grammy/types';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -150,5 +152,147 @@ describe('index.ts source structure', () => {
 
   it('sends deploy report on start', () => {
     expect(indexSource).toContain('sendDeployReport');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BOT BEHAVIOR SMOKE TESTS — actual handler execution via bot.handleUpdate()
+// ═══════════════════════════════════════════════════════════════════════════
+
+const ADMIN_ID = 123456;
+const USER_ID = 55001;
+const BOT_ID = 99999;
+
+let behaviorBot: Bot;
+let apiCalls: { method: string; payload: any }[];
+let registerBotMenu: typeof import('../bot-menu').registerBotMenu;
+let registerModeration: typeof import('../moderation').registerModeration;
+
+let updateCounter = 0;
+
+function textUpdate(text: string, overrides: { chat_id?: number; user_id?: number; first_name?: string } = {}): Update {
+  const chatId = overrides.chat_id ?? USER_ID;
+  const userId = overrides.user_id ?? USER_ID;
+  const isCommand = text.startsWith('/');
+  return {
+    update_id: ++updateCounter,
+    message: {
+      message_id: ++updateCounter + 5000,
+      date: Math.floor(Date.now() / 1000),
+      chat: { id: chatId, type: chatId > 0 ? 'private' as const : 'supergroup' as const },
+      from: { id: userId, is_bot: false, first_name: overrides.first_name ?? 'Тест', username: 'testuser' },
+      text,
+      ...(isCommand ? { entities: [{ type: 'bot_command', offset: 0, length: text.split(' ')[0].length }] } : {}),
+    } as any,
+  };
+}
+
+function findCalls(method: string) {
+  return apiCalls.filter(c => c.method === method);
+}
+
+describe('bot behavior smoke tests', () => {
+  beforeAll(async () => {
+    const botMenu = await import('../bot-menu');
+    const moderation = await import('../moderation');
+    registerBotMenu = botMenu.registerBotMenu;
+    registerModeration = moderation.registerModeration;
+  });
+
+  beforeEach(() => {
+    updateCounter = 0;
+    apiCalls = [];
+
+    behaviorBot = new Bot('test:token');
+    behaviorBot.botInfo = {
+      id: BOT_ID,
+      is_bot: true,
+      first_name: 'Сами botik',
+      username: 'sami_workout_bot',
+      can_join_groups: true,
+      can_read_all_group_messages: true,
+      supports_inline_queries: false,
+      can_connect_to_business: false,
+      has_main_web_app: false,
+    } as UserFromGetMe;
+
+    behaviorBot.api.config.use(async (_prev, method, payload) => {
+      apiCalls.push({ method, payload });
+      const msgResult = {
+        message_id: 9999,
+        date: Math.floor(Date.now() / 1000),
+        chat: { id: (payload as any)?.chat_id ?? USER_ID, type: 'private' },
+        from: { id: BOT_ID, is_bot: true, first_name: 'Bot' },
+        text: '',
+      };
+      if (method === 'sendMessage') return { ok: true as const, result: msgResult as any };
+      if (method === 'deleteMessage') return { ok: true as const, result: true as any };
+      if (method === 'setMyCommands') return { ok: true as const, result: true as any };
+      return { ok: true as const, result: true as any };
+    });
+
+    registerModeration(behaviorBot);
+    registerBotMenu(behaviorBot);
+  });
+
+  it('/start in private chat sends greeting with user name', async () => {
+    await behaviorBot.handleUpdate(textUpdate('/start', { chat_id: USER_ID, user_id: USER_ID, first_name: 'Алексей' }));
+
+    const sends = findCalls('sendMessage');
+    expect(sends.length).toBeGreaterThan(0);
+
+    const text = sends[sends.length - 1].payload.text;
+    expect(text).toContain('Привет, Алексей');
+    expect(text).toContain('Ботик Сами');
+  });
+
+  it('/start sends reply keyboard with menu buttons', async () => {
+    await behaviorBot.handleUpdate(textUpdate('/start', { chat_id: USER_ID, user_id: USER_ID }));
+
+    const sends = findCalls('sendMessage');
+    const lastSend = sends[sends.length - 1];
+    const markup = JSON.stringify(lastSend.payload.reply_markup ?? {});
+    expect(markup).toContain('Мои тренировки');
+    expect(markup).toContain('Предложить тренировку');
+  });
+
+  it('/start in group chat is ignored', async () => {
+    const groupId = -1009876543210;
+    await behaviorBot.handleUpdate(textUpdate('/start', { chat_id: groupId, user_id: USER_ID }));
+
+    // No greeting message sent (deleteMessage calls may happen for moderation, but no sendMessage with greeting)
+    const sends = findCalls('sendMessage');
+    const greetingSends = sends.filter(c => String(c.payload.text ?? '').includes('Ботик Сами'));
+    expect(greetingSends.length).toBe(0);
+  });
+
+  it('/start shows admin keyboard for admin user', async () => {
+    await behaviorBot.handleUpdate(textUpdate('/start', { chat_id: ADMIN_ID, user_id: ADMIN_ID }));
+
+    const sends = findCalls('sendMessage');
+    const lastSend = sends[sends.length - 1];
+    const markup = JSON.stringify(lastSend.payload.reply_markup ?? {});
+    expect(markup).toContain('Дашборд');
+    expect(markup).toContain('Неделя');
+  });
+
+  it('/start does NOT show admin buttons to regular user', async () => {
+    await behaviorBot.handleUpdate(textUpdate('/start', { chat_id: USER_ID, user_id: USER_ID }));
+
+    const sends = findCalls('sendMessage');
+    const lastSend = sends[sends.length - 1];
+    const markup = JSON.stringify(lastSend.payload.reply_markup ?? {});
+    expect(markup).not.toContain('Дашборд');
+    expect(markup).not.toContain('Неделя');
+  });
+
+  it('handler registration does not throw', () => {
+    const testBot = new Bot('test:token');
+    testBot.botInfo = behaviorBot.botInfo;
+    // Registering all handlers should not throw
+    expect(() => {
+      registerBotMenu(testBot);
+      registerModeration(testBot);
+    }).not.toThrow();
   });
 });

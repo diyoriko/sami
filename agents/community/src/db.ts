@@ -650,6 +650,9 @@ function migrate(db: Database.Database): void {
   // Join source column on members
   addColumn(db, 'members', 'join_source', 'TEXT');
 
+  // Display title: admin-curated title override for channel posts
+  addColumn(db, 'videos', 'display_title', 'TEXT');
+
   // Schema version tracking
   db.exec(`
     CREATE TABLE IF NOT EXISTS schema_info (
@@ -742,6 +745,7 @@ export {
   wasPostedEver,
   computeRating,
   updateVideoRating,
+  setVideoDisplayTitle,
   recordRejection,
   isVideoRejected,
   getRejectionCount,

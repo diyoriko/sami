@@ -307,6 +307,56 @@ async function main(): Promise<void> {
     );
   });
 
+  // /rewrite — re-generate captions for all channel posts with new title logic
+  bot.command('rewrite', async (ctx) => {
+    if (ctx.from?.id !== config.TELEGRAM_ADMIN_USER_ID) return;
+    const { formatCaption } = await import('./poster');
+    const { getDb, getVideoById } = await import('./db');
+    const { escV2: esc } = await import('./shared');
+
+    const posts = getDb().prepare(`
+      SELECT p.id, p.video_id, p.channel_message_id, p.category, p.post_type
+      FROM posts p
+      WHERE p.channel_message_id IS NOT NULL
+      ORDER BY p.posted_at DESC
+    `).all() as { id: number; video_id: number; channel_message_id: number; category: string; post_type: string }[];
+
+    await ctx.reply(`✏️ Переписываю ${posts.length} постов...`);
+
+    let ok = 0;
+    let fail = 0;
+    for (const p of posts) {
+      const video = getVideoById(p.video_id);
+      if (!video) { fail++; continue; }
+
+      const caption = await formatCaption(video, undefined, undefined, p.category as any);
+
+      try {
+        if (p.post_type === 'video') {
+          await bot.api.editMessageCaption(config.TELEGRAM_CHANNEL_ID, p.channel_message_id, {
+            caption,
+            parse_mode: 'MarkdownV2',
+          });
+        } else {
+          await bot.api.editMessageText(config.TELEGRAM_CHANNEL_ID, p.channel_message_id, caption, {
+            parse_mode: 'MarkdownV2',
+            link_preview_options: { is_disabled: true },
+          });
+        }
+        ok++;
+      } catch (err: any) {
+        // "message is not modified" is OK — content didn't change
+        if (err?.description?.includes('not modified')) { ok++; continue; }
+        fail++;
+      }
+
+      // Telegram rate limit: max ~30 msg/sec, 300ms delay is safe
+      await new Promise(r => setTimeout(r, 300));
+    }
+
+    await ctx.reply(`✅ Готово: ${ok} обновлено, ${fail} ошибок.`);
+  });
+
   // /analytics — manually run daily analytics
   bot.command('analytics', async (ctx) => {
     if (ctx.from?.id !== config.TELEGRAM_ADMIN_USER_ID) return;

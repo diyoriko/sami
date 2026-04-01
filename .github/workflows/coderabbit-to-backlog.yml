@@ -47,18 +47,18 @@ jobs:
             exit 0
           fi
 
-          if ! grep -q "### CodeRabbit Suggestions" COMMUNITY_TASKS.md; then
-            echo -e "\n### CodeRabbit Suggestions\n" >> COMMUNITY_TASKS.md
+          if ! grep -q "### CodeRabbit Suggestions" BACKLOG.md; then
+            echo -e "\n### CodeRabbit Suggestions\n" >> BACKLOG.md
           fi
 
-          echo "$TASKS" >> COMMUNITY_TASKS.md
-          echo "Added $(echo "$TASKS" | wc -l) tasks to COMMUNITY_TASKS.md"
+          echo "$TASKS" >> BACKLOG.md
+          echo "Added $(echo "$TASKS" | wc -l) tasks to BACKLOG.md"
 
       - name: Commit changes
         run: |
           git config user.name "SAMI Bot"
           git config user.email "noreply@sami.bot"
-          git add COMMUNITY_TASKS.md
+          git add BACKLOG.md
           CHANGES=$(git diff --cached --stat)
           if [ -n "$CHANGES" ]; then
             git commit -m "chore: add CodeRabbit review suggestions to backlog (PR #${{ github.event.pull_request.number }})"

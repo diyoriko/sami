@@ -8,8 +8,15 @@ function readSrc(filename: string): string {
   return fs.readFileSync(path.join(srcDir, filename), 'utf8');
 }
 
+/** Read all bot-menu module files combined (after ARCH-080 split) */
+function readBotMenuAll(): string {
+  return ['bot-menu.ts', 'bot-menu-workouts.ts', 'bot-menu-admin.ts', 'bot-menu-challenges.ts']
+    .map(f => { try { return readSrc(f); } catch { return ''; } })
+    .join('\n');
+}
+
 describe('UX smoke: bot-menu handlers', () => {
-  const botMenuSource = readSrc('bot-menu.ts');
+  const botMenuSource = readBotMenuAll();
 
   it('persistent menu has all required buttons', () => {
     expect(botMenuSource).toContain('💡 Предложить тренировку');
@@ -136,40 +143,40 @@ describe('UX smoke: shared constants', () => {
 });
 
 describe('UX smoke: "Мои тренировки" enriched cards', () => {
-  const botMenuSource = readSrc('bot-menu.ts');
+  const botMenuAll = readBotMenuAll();
 
   it('shows category emoji, duration, difficulty in workout list', () => {
-    expect(botMenuSource).toContain('CATEGORY_EMOJI');
-    expect(botMenuSource).toContain('formatDurationLabel');
-    expect(botMenuSource).toContain('DIFFICULTY_EMOJI');
+    expect(botMenuAll).toContain('CATEGORY_EMOJI');
+    expect(botMenuAll).toContain('formatDurationLabel');
+    expect(botMenuAll).toContain('DIFFICULTY_EMOJI');
   });
 
   it('shows equipment info when not "none"', () => {
-    expect(botMenuSource).toContain('EQUIPMENT_VALUE_RU');
+    expect(botMenuAll).toContain('EQUIPMENT_VALUE_RU');
   });
 
   it('delete button for each workout', () => {
-    expect(botMenuSource).toContain('ugc_del:');
-    expect(botMenuSource).toContain('ugc_del_yes:');
+    expect(botMenuAll).toContain('ugc_del:');
+    expect(botMenuAll).toContain('ugc_del_yes:');
   });
 });
 
 describe('UX smoke: admin rubric selection', () => {
-  const botMenuSource = readSrc('bot-menu.ts');
+  const botMenuAll = readBotMenuAll();
 
   it('rubric picker with 3 options', () => {
-    expect(botMenuSource).toContain('ugc_rubric:');
-    expect(botMenuSource).toContain('Челлендж');
-    expect(botMenuSource).toContain('От участника');
-    expect(botMenuSource).toContain('Своя рубрика');
+    expect(botMenuAll).toContain('ugc_rubric:');
+    expect(botMenuAll).toContain('Челлендж');
+    expect(botMenuAll).toContain('От участника');
+    expect(botMenuAll).toContain('Своя рубрика');
   });
 
   it('waiting_rubric step for custom text', () => {
-    expect(botMenuSource).toContain('waiting_rubric');
+    expect(botMenuAll).toContain('waiting_rubric');
   });
 
   it('rubric line in post caption', () => {
-    expect(botMenuSource).toContain('rubricLine');
+    expect(botMenuAll).toContain('rubricLine');
   });
 });
 

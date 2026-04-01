@@ -1,26 +1,22 @@
 /**
- * Bot private chat: persistent menu, "Мои тренировки", UGC flow.
+ * Bot private chat: persistent menu, UGC flow, orchestration.
  *
- * Persistent keyboard buttons (ReplyKeyboard) shown in private chat:
- * - "Мои тренировки" — completed workouts list
- * - "Предложить тренировку" — UGC submission flow
- *
- * NOTE: ReplyKeyboard (persistent menu) is per-chat and only appears after
- * the user sends /start. This is a Telegram platform limitation — there is
- * no API to push a ReplyKeyboard to all users proactively. Bot commands
- * (the "/" menu) are registered globally via setMyCommands in index.ts.
+ * Split into modules (ARCH-080):
+ * - bot-menu-workouts.ts — /start, my workouts, /cancel, profile, filters
+ * - bot-menu-admin.ts — dashboard, weekly schedule, publish, invites, clear channel
+ * - bot-menu-challenges.ts — challenge series CRUD
+ * - bot-menu.ts (this file) — shared helpers, UGC flow, orchestration
  */
 
 import { Bot, Keyboard, InlineKeyboard, InputFile } from 'grammy';
 import { getConfig } from './config';
 import { createLogger } from './logger';
 import { downloadVideo, isYtDlpAvailable } from './downloader';
-import { todayMsk, yesterdayMsk } from './dates';
-import { sendMyWorkouts, sendUgcToAdmin, sendChallengeView, sendFilterResults, formatUptime } from './bot-menu-views';
+import { todayMsk } from './dates';
+import { sendUgcToAdmin } from './bot-menu-views';
 
 const log = createLogger('bot-menu');
 import {
-  getUserSubmissions, getUserSubmissionTotal,
   createUgcSubmission,
   updateUgcSubmission,
   getUgcSubmission,
@@ -29,36 +25,10 @@ import {
   saveUgcState,
   getUgcState,
   deleteUgcState,
-  getPendingUgcCount,
-  getLastStrategistTimestamp,
-  getChannelStats,
-  getRetention,
-  getCumulativeStats,
-  getPostCountForDate,
-  getCompletionCountForDate,
-  getUniqueCompletionUsersForDate,
-  getMemberProfile,
-  getMemberLevel,
-  getUserStreak,
-  filterVideos,
-  getNewMembersToday,
   getDb,
   upsertVideo,
   recordPost,
   withTransaction,
-  createChallengeSeries,
-  getChallengeSeries,
-  listChallengeSeries,
-  getActiveChallengeSeriesList,
-  updateChallengeSeriesStatus,
-  getChallengeSeriesDaysStatus,
-  setChallengeSeriesDayVideo,
-  clearChallengeSeriesDaySlot,
-  getChallengeParticipantCount,
-  createInviteLink,
-  getInviteLinks,
-  type ChallengeSeriesRow,
-  type UgcSubmission,
   type UgcStep,
 } from './db';
 import {
@@ -71,10 +41,13 @@ import {
   MUSCLE_PATTERNS, MUSCLE_DEFAULTS,
   escV2, decodeHtmlEntities,
 } from './shared';
+import { registerWorkoutHandlers } from './bot-menu-workouts';
+import { registerAdminHandlers } from './bot-menu-admin';
+import { registerChallengeHandlers } from './bot-menu-challenges';
 
-// --- Persistent keyboard ---
+// --- Shared helpers (exported for sub-modules) ---
 
-function mainKeyboard(isAdmin = false): Keyboard {
+export function mainKeyboard(isAdmin = false): Keyboard {
   const kb = new Keyboard()
     .text('🏋️ Мои тренировки')
     .text('💡 Предложить тренировку');
@@ -87,9 +60,6 @@ function mainKeyboard(isAdmin = false): Keyboard {
   return kb.resized().persistent();
 }
 
-// UGC conversation state is persisted in SQLite (survives bot restarts).
-// See db.ts: saveUgcState, getUgcState, deleteUgcState
-
 export function extractYoutubeId(url: string): string | null {
   const patterns = [
     /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
@@ -101,19 +71,19 @@ export function extractYoutubeId(url: string): string | null {
   return null;
 }
 
-/** Build category inline keyboard: 2 buttons per row so labels are readable */
+// --- UGC keyboard builders ---
+
 function buildCategoryKeyboard(subId: number): InlineKeyboard {
   const kb = new InlineKeyboard();
   CATEGORY_BUTTONS.forEach((btn, i) => {
     kb.text(btn.label, `ugc_cat:${subId}:${btn.value}`);
-    if (i % 2 === 1) kb.row(); // 2 per row
+    if (i % 2 === 1) kb.row();
   });
   if (CATEGORY_BUTTONS.length % 2 === 1) kb.row();
   kb.text('❌ Отмена', 'ugc_cancel');
   return kb;
 }
 
-/** Build duration inline keyboard: 2 buttons per row */
 function buildDurationKeyboard(subId: number): InlineKeyboard {
   const kb = new InlineKeyboard();
   DURATION_BUTTONS.forEach((btn, i) => {
@@ -125,7 +95,6 @@ function buildDurationKeyboard(subId: number): InlineKeyboard {
   return kb;
 }
 
-/** Build equipment inline keyboard: 2 buttons per row */
 function buildEquipmentKeyboard(subId: number, skippedDuration: boolean = false): InlineKeyboard {
   const kb = new InlineKeyboard();
   EQUIPMENT_BUTTONS.forEach((btn, i) => {
@@ -137,926 +106,20 @@ function buildEquipmentKeyboard(subId: number, skippedDuration: boolean = false)
   return kb;
 }
 
-// --- Register handlers ---
-
-export function registerBotMenu(bot: Bot): void {
-  const config = getConfig();
-
-  const isAdmin = (userId: number) => userId === config.TELEGRAM_ADMIN_USER_ID;
-
-  // /start in private chat — clean slate + show menu
-  bot.command('start', async (ctx) => {
-    if (ctx.chat.type !== 'private') return;
-    deleteUgcState(ctx.from!.id);
-
-    // Clear previous messages in this chat for a fresh start
-    const msgId = ctx.message?.message_id;
-    if (msgId) {
-      for (let id = msgId; id > msgId - 200 && id > 0; id--) {
-        try { await ctx.api.deleteMessage(ctx.chat.id, id); } catch { /* TG API: too old or already deleted */
-          break; // stop on first failure
-        }
-      }
-    }
-
-    const firstName = ctx.from?.first_name ?? '';
-    const greeting = firstName ? `Привет, ${firstName}!` : 'Привет!';
-    await ctx.reply(
-      `${greeting} Я Ботик Сами — твой помощник в мире ежедневных тренировок.\n\n` +
-      `Тренировки выходят каждый день в канале @sami_workouts.\n\n` +
-      `Что умею:\n` +
-      `• Показать твои тренировки и статистику\n` +
-      `• Принять предложение новой тренировки\n\n` +
-      `Выбирай:`,
-      { reply_markup: mainKeyboard(isAdmin(ctx.from!.id)) }
-    );
-  });
-
-  // --- "Мои тренировки" button ---
-  bot.hears('🏋️ Мои тренировки', async (ctx) => {
-    if (ctx.chat.type !== 'private') return;
-    deleteUgcState(ctx.from!.id);
-    await sendMyWorkouts(ctx, ctx.from!.id, 0);
-  });
-
-  // Pagination callback
-  bot.callbackQuery(/^mywk:(\d+)$/, async (ctx) => {
-    const offset = parseInt(ctx.match[1]);
-    await ctx.answerCallbackQuery();
-    await sendMyWorkouts(ctx, ctx.from!.id, offset, ctx.callbackQuery.message?.message_id);
-  });
-
-  // Delete workout — confirmation prompt
-  bot.callbackQuery(/^ugc_del:(\d+):(\d+)$/, async (ctx) => {
-    const subId = parseInt(ctx.match[1]);
-    const offset = parseInt(ctx.match[2]);
-    const sub = getUgcSubmission(subId);
-    if (!sub || sub.telegram_user_id !== ctx.from!.id) {
-      await ctx.answerCallbackQuery('Не найдено');
-      return;
-    }
-    await ctx.answerCallbackQuery();
-    const title = sub.title ? decodeHtmlEntities(sub.title) : 'Без названия';
-    const kb = new InlineKeyboard()
-      .text('Да, удалить', `ugc_del_yes:${subId}:${offset}`)
-      .text('Отмена', `mywk:${offset}`);
-    try {
-      await ctx.editMessageText(`Удалить тренировку «${title}»?`, { reply_markup: kb });
-    } catch { /* TG API: message may be deleted */ }
-  });
-
-  // Delete workout — confirmed
-  bot.callbackQuery(/^ugc_del_yes:(\d+):(\d+)$/, async (ctx) => {
-    const subId = parseInt(ctx.match[1]);
-    const offset = parseInt(ctx.match[2]);
-    const sub = getUgcSubmission(subId);
-    if (!sub || sub.telegram_user_id !== ctx.from!.id) {
-      await ctx.answerCallbackQuery('Не найдено');
-      return;
-    }
-    deleteUgcSubmission(subId);
-    await ctx.answerCallbackQuery('Удалено');
-    await sendMyWorkouts(ctx, ctx.from!.id, offset, ctx.callbackQuery.message?.message_id);
-  });
-
-  // Resume draft workout — re-enter UGC flow from where user left off
-  bot.callbackQuery(/^ugc_resume:(\d+):(\d+)$/, async (ctx) => {
-    const subId = parseInt(ctx.match[1]);
-    const offset = parseInt(ctx.match[2]);
-    const userId = ctx.from!.id;
-    const sub = getUgcSubmission(subId);
-    if (!sub || sub.telegram_user_id !== userId) {
-      await ctx.answerCallbackQuery('Не найдено');
-      return;
-    }
-    if (sub.status !== 'draft') {
-      await ctx.answerCallbackQuery('Эта тренировка уже не черновик');
-      return;
-    }
-    await ctx.answerCallbackQuery();
-
-    const config = getConfig();
-    const isAdminUser = userId === config.TELEGRAM_ADMIN_USER_ID;
-
-    // Determine which step to resume based on filled fields
-    let resumeStep: UgcStep;
-    let prompt: string;
-    let kb: InlineKeyboard;
-
-    if (!sub.category) {
-      resumeStep = 'waiting_category';
-      prompt = 'Какой тип тренировки?';
-      kb = buildCategoryKeyboard(subId);
-    } else if (!sub.difficulty) {
-      resumeStep = 'waiting_difficulty';
-      prompt = 'Уровень сложности?';
-      kb = new InlineKeyboard();
-      DIFFICULTY_BUTTONS.forEach((btn, i) => {
-        if (i > 0) kb.row();
-        kb.text(btn.label, `ugc_diff:${subId}:${btn.value}`);
-      });
-      kb.row().text('← Назад', `ugc_back:${subId}:waiting_difficulty`).text('❌ Отмена', 'ugc_cancel');
-    } else if (!sub.duration_seconds) {
-      resumeStep = 'waiting_duration';
-      prompt = 'Сколько длится тренировка?';
-      kb = buildDurationKeyboard(subId);
-    } else if (!sub.equipment) {
-      resumeStep = 'waiting_equipment';
-      prompt = 'Нужен ли инвентарь?';
-      kb = buildEquipmentKeyboard(subId);
-    } else if (isAdminUser && sub.rubric === null) {
-      // Admin rubric step (rubric is null = not yet set)
-      resumeStep = 'waiting_rubric';
-      prompt = 'Рубрика поста:';
-      kb = new InlineKeyboard()
-        .text('📅 Челлендж', `ugc_rubric:${subId}:challenge`)
-        .text('👤 От участника', `ugc_rubric:${subId}:ugc`)
-        .row()
-        .text('✏️ Своя рубрика', `ugc_rubric:${subId}:custom`)
-        .row()
-        .text('← Назад', `ugc_back:${subId}:waiting_rubric`)
-        .text('❌ Отмена', 'ugc_cancel');
-    } else {
-      // All fields filled except title, or title is default — go to title step
-      resumeStep = 'waiting_title';
-      prompt = 'Как назвать тренировку? Напиши короткое название (до 200 символов).';
-      kb = new InlineKeyboard()
-        .text('← Назад', `ugc_back:${subId}:waiting_title`)
-        .text('❌ Отмена', 'ugc_cancel');
-    }
-
-    saveUgcState(userId, resumeStep, subId);
-
-    try {
-      await ctx.editMessageText(prompt, { reply_markup: kb });
-    } catch { /* TG API: message may be deleted, fallback to reply */
-      await ctx.reply(prompt, { reply_markup: kb });
-    }
-  });
-
-  // --- Admin buttons ---
-  bot.hears('📊 Дашборд', async (ctx) => {
-    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
-    const { todayMsk, yesterdayMsk, thisMondayMsk } = await import('./dates');
-    const {
-      ensureActiveChallenge, getChallengeDay, initWeekSlots, getWeekStatus,
-    } = await import('./db');
-    const { DAY_CATEGORY_MAP, CATEGORY_EMOJI, CATEGORY_RU: CR, CHALLENGE_DURATION } = await import('./shared');
-
-    const date = todayMsk();
-    const yesterday = yesterdayMsk();
-    const posts = getPostCountForDate(date);
-    const completions = getCompletionCountForDate(date);
-    const users = getUniqueCompletionUsersForDate(date);
-
-    // Subscriber & group member counts + delta
-    let subscriberCount = 0;
-    let groupMemberCount = 0;
-    try {
-      subscriberCount = await ctx.api.getChatMemberCount(config.TELEGRAM_CHANNEL_ID);
-    } catch { /* API error */ }
-    try {
-      groupMemberCount = await ctx.api.getChatMemberCount(config.TELEGRAM_GROUP_ID);
-    } catch { /* API error */ }
-
-    const yesterdayStats = getChannelStats(yesterday);
-    const subDelta = yesterdayStats ? subscriberCount - yesterdayStats.subscriber_count : 0;
-    const subDeltaStr = subDelta > 0 ? ` (+${subDelta})` : subDelta < 0 ? ` (${subDelta})` : '';
-
-    // Pending UGC
-    const pendingUgc = getPendingUgcCount();
-
-    // Date display: "17 марта 2026, среда"
-    const MONTHS_RU = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
-    const DAYS_RU = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
-    const dateObj = new Date(date + 'T00:00:00');
-    const dateDisplay = `${dateObj.getDate()} ${MONTHS_RU[dateObj.getMonth()]} ${dateObj.getFullYear()}, ${DAYS_RU[dateObj.getDay()]}`;
-
-    // Week schedule
-    let weekQueueText = '';
-    let dashKb: InlineKeyboard | undefined;
-    try {
-      const challenge = ensureActiveChallenge(date, thisMondayMsk());
-      if (challenge.status === 'active') {
-        const sDay = getChallengeDay(challenge.start_date, date);
-        if (sDay >= 1 && sDay <= CHALLENGE_DURATION) {
-          const wk = 1 as 1 | 2 | 3;
-          initWeekSlots(challenge.id, wk);
-          const slots = getWeekStatus(challenge.id, wk);
-
-          const DAY_LABELS = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-          const lines = slots.map(slot => {
-            const d = ((slot.day_number - 1) % 7) + 1;
-            const jd = d === 7 ? 0 : d;
-            const slotCat = DAY_CATEGORY_MAP[jd];
-            const slotCatRu = slotCat ? CR[slotCat] : '?';
-            const slotEmoji = slotCat ? CATEGORY_EMOJI[slotCat] : '❓';
-            const dayLabel = DAY_LABELS[jd];
-            const isToday = slot.day_number === sDay;
-            const icon = slot.status === 'posted' ? '✅'
-              : slot.status === 'queued' ? '📋'
-              : '⬜';
-            const title = slot.title ? ` — ${decodeHtmlEntities(slot.title).slice(0, 30)}` : '';
-            const marker = isToday ? ' 👈' : '';
-            return `${icon} ${dayLabel} ${slotEmoji} ${slotCatRu}${title}${marker}`;
-          });
-          // Schedule shown in «📅 Неделя», not in dashboard
-
-          // Show publish button if today's slot is queued
-          const todaySlot = slots.find(s => s.day_number === sDay);
-          if (todaySlot && todaySlot.status === 'queued') {
-            dashKb = new InlineKeyboard().text('📤 Опубликовать сейчас', `challenge_pub:${challenge.id}:${sDay}`);
-          }
-        }
-      }
-    } catch { /* no challenge yet */ }
-
-    // Retention
-    const retention = getRetention(date, yesterday);
-    const retPct = retention.yesterday_active > 0
-      ? Math.round(retention.returned_today / retention.yesterday_active * 100) : 0;
-
-    // Cumulative
-    const cumulative = getCumulativeStats();
-
-    // Strategist + uptime
-    const lastStrategist = getLastStrategistTimestamp();
-    const stratLine = lastStrategist
-      ? `Стратег: ${lastStrategist.replace('T', ' ').slice(0, 16).slice(5)}`
-      : 'Стратег: нет данных';
-    const uptimeStr = formatUptime(process.uptime());
-
-    await ctx.reply(
-      [
-        `*Sami — дашборд*`,
-        ``,
-        `📅 ${escV2(dateDisplay)}`,
-        ``,
-        `👥 Подписчики: ${escV2(String(subscriberCount))}${escV2(subDeltaStr)}  ·  Группа: ${escV2(String(groupMemberCount))}`,
-        `📝 Постов: ${escV2(String(posts))}  ·  Выполнений: ${escV2(String(completions))} \\(${escV2(String(users))} чел\\.\\)`,
-        `📋 На модерации: ${escV2(String(pendingUgc))}`,
-        weekQueueText,
-        ``,
-        `_✅ опубликовано · 📋 в очереди · ⬜ пусто · 👈 сегодня_`,
-        ``,
-        `Retention: ${escV2(String(retention.returned_today))}/${escV2(String(retention.yesterday_active))} \\(${escV2(String(retPct))}%\\)`,
-        `Всего: ${escV2(String(cumulative.total_completions))} выполнений · ${escV2(String(cumulative.total_active_users))} активных`,
-        ``,
-        `${escV2(stratLine)}  ·  Аптайм: ${escV2(uptimeStr)}`,
-      ].join('\n'),
-      { parse_mode: 'MarkdownV2', ...(dashKb ? { reply_markup: dashKb } : {}) }
-    );
-  });
-
-  // Inline publish button from status message
-  bot.callbackQuery('btn_publish', async (ctx) => {
-    if (ctx.from!.id !== config.TELEGRAM_ADMIN_USER_ID) return;
-    await ctx.answerCallbackQuery('Публикую...');
-    const { todayMsk, tomorrowMsk } = await import('./dates');
-    const { postVideoToChannel } = await import('./poster');
-    const { getApprovedVideo } = await import('./db');
-
-    const today = todayMsk();
-    const tomorrow = tomorrowMsk();
-    const hasTomorrow = CATEGORIES.some(c => getApprovedVideo(tomorrow, c) !== null);
-    const hasToday = CATEGORIES.some(c => getApprovedVideo(today, c) !== null);
-    const date = hasTomorrow ? tomorrow : hasToday ? today : null;
-
-    if (!date) {
-      try { await ctx.editMessageText('Нет одобренных видео.'); } catch { /* TG API: message may be deleted */ }
-      return;
-    }
-
-    const report: string[] = [];
-    for (const cat of CATEGORIES) {
-      const approved = getApprovedVideo(date, cat);
-      if (!approved) continue;
-      const result = await postVideoToChannel(bot, date, cat, { force: true });
-      const label = `${CATEGORY_EMOJI[cat]} ${CATEGORY_RU[cat]}`;
-      if (result === 'posted') report.push(`${label} — ${approved.title}`);
-      else if (result === 'error') report.push(`${label} — ошибка`);
-      else report.push(`${label} — пропущено`);
-    }
-    try {
-      await ctx.editMessageText(report.length > 0 ? report.join('\n') : 'Нет одобренных видео.');
-    } catch { /* TG API: message may be deleted */ }
-  });
-
-  // Inline reset button from status message
-  bot.callbackQuery('btn_reset', async (ctx) => {
-    if (ctx.from!.id !== config.TELEGRAM_ADMIN_USER_ID) return;
-    await ctx.answerCallbackQuery('Сброшено');
-    const { todayMsk, tomorrowMsk } = await import('./dates');
-    const { resetApprovalSessions } = await import('./db');
-    const today = todayMsk();
-    const tomorrow = tomorrowMsk();
-    const total = resetApprovalSessions(today) + resetApprovalSessions(tomorrow);
-    try {
-      await ctx.editMessageText(`Сброшено ${total} сессий. Нажми «Неделя» для нового поиска.`);
-    } catch { /* TG API: message may be deleted */ }
-  });
-
-  bot.hears('📅 Неделя', async (ctx) => {
-    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
-    const { todayMsk, thisMondayMsk } = await import('./dates');
-    const {
-      ensureActiveChallenge, getChallengeDay,
-      initWeekSlots, getWeekStatus,
-    } = await import('./db');
-    const { DAY_CATEGORY_MAP, CATEGORY_RU, CATEGORY_EMOJI, CHALLENGE_DURATION } = await import('./shared');
-
-    const today = todayMsk();
-    const challenge = ensureActiveChallenge(today, thisMondayMsk());
-
-    if (challenge.status === 'completed') {
-      await ctx.reply(`Неделя завершена. Новый цикл стартует в понедельник.`);
-      return;
-    }
-
-    // Always week 1 (7-day cycles)
-    let challengeDay: number;
-    const weekNum = 1 as 1 | 2 | 3;
-
-    if (challenge.status === 'upcoming') {
-      challengeDay = 0;
-    } else {
-      challengeDay = getChallengeDay(challenge.start_date, today);
-      if (challengeDay > CHALLENGE_DURATION) {
-        await ctx.reply(`Неделя завершена. Новый цикл стартует в понедельник.`);
-        return;
-      }
-    }
-    initWeekSlots(challenge.id, weekNum);
-    const slots = getWeekStatus(challenge.id, weekNum);
-
-    const DAY_LABELS = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-    const lines = slots.map(slot => {
-      const dow = ((slot.day_number - 1) % 7) + 1;
-      const jsDow = dow === 7 ? 0 : dow;
-      const cat = DAY_CATEGORY_MAP[jsDow];
-      const catRu = cat ? CATEGORY_RU[cat] : '?';
-      const emoji = cat ? CATEGORY_EMOJI[cat] : '❓';
-      const dayLabel = DAY_LABELS[jsDow];
-      const isToday = slot.day_number === challengeDay;
-      const icon = slot.status === 'posted' ? '✅' : slot.status === 'queued' ? '📋' : '⬜';
-      const title = slot.title ? ` — ${slot.title.slice(0, 35)}` : '';
-      const marker = isToday ? ' 👈' : '';
-      return `${icon} ${dayLabel} ${emoji} ${catRu}${title}${marker}`;
-    });
-
-    const filledCount = slots.filter(s => s.status !== 'empty').length;
-
-    const planTag = challenge.status === 'upcoming' ? ` · стартует ${escV2(challenge.start_date)}` : '';
-    const msg = [
-      `📅 *Расписание недели*${planTag}`,
-      ``,
-      ...lines.map(l => escV2(l)),
-      ``,
-      `Заполнено: ${filledCount}/7`,
-    ].join('\n');
-
-    const kb = new InlineKeyboard();
-
-    // Per-day buttons: fill empty / replace queued
-    const DAY_LABELS_SHORT = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-    let buttonsInRow = 0;
-    for (const slot of slots) {
-      const dow = ((slot.day_number - 1) % 7) + 1;
-      const jsDow = dow === 7 ? 0 : dow;
-      const dl = DAY_LABELS_SHORT[jsDow];
-      if (slot.status === 'empty') {
-        kb.text(`＋ ${dl}`, `fill_day:${challenge.id}:${slot.day_number}`);
-        buttonsInRow++;
-      } else if (slot.status === 'queued') {
-        kb.text(`↻ ${dl}`, `fill_day:${challenge.id}:${slot.day_number}`);
-        buttonsInRow++;
-      }
-      if (buttonsInRow === 4) { kb.row(); buttonsInRow = 0; }
-    }
-
-    await ctx.reply(msg, { parse_mode: 'MarkdownV2', reply_markup: kb });
-  });
-
-  // Fill or replace a specific day slot
-  bot.callbackQuery(/^fill_day:(\d+):(\d+)$/, async (ctx) => {
-    if (ctx.from!.id !== config.TELEGRAM_ADMIN_USER_ID) return;
-    await ctx.answerCallbackQuery();
-
-    const challengeId = Number(ctx.match![1]);
-    const dayNumber = Number(ctx.match![2]);
-    const { getWeekSlotForDay, clearWeekSlot } = await import('./db');
-    const { DAY_CATEGORY_MAP } = await import('./shared');
-    const { runApprovalFlow } = await import('./approval');
-    const { tomorrowMsk } = await import('./dates');
-
-    const slot = getWeekSlotForDay(challengeId, dayNumber);
-    if (!slot) return;
-
-    // If slot is queued, clear it first (replace)
-    if (slot.status === 'queued') {
-      clearWeekSlot(challengeId, dayNumber);
-    }
-
-    // Determine category for this day
-    const dow = ((dayNumber - 1) % 7) + 1;
-    const jsDow = dow === 7 ? 0 : dow;
-    const category = DAY_CATEGORY_MAP[jsDow];
-    if (!category) return;
-
-    const date = tomorrowMsk();
-    await runApprovalFlow(bot, date, category, { challengeId, dayNumber, type: 'weekly' });
-  });
-
-  // Manual challenge publish for today
-  bot.callbackQuery(/^challenge_pub:(\d+):(\d+)$/, async (ctx) => {
-    if (ctx.from!.id !== config.TELEGRAM_ADMIN_USER_ID) return;
-    await ctx.answerCallbackQuery('Публикую...');
-
-    const challengeId = Number(ctx.match![1]);
-    const dayNumber = Number(ctx.match![2]);
-    const { getActiveChallenge } = await import('./db');
-    const { postChallengeVideo } = await import('./poster');
-
-    const challenge = getActiveChallenge();
-    if (!challenge || challenge.id !== challengeId) {
-      try { await ctx.editMessageText('Нет активного расписания.'); } catch { /* TG API: message may be deleted */ }
-      return;
-    }
-
-    const result = await postChallengeVideo(bot, challenge, dayNumber);
-    if (result === 'posted') {
-      try { await ctx.editMessageText('✅ Опубликовано!'); } catch { /* TG API: message may be deleted */ }
-    } else {
-      try { await ctx.editMessageText(`Ошибка публикации: ${result}`); } catch { /* TG API: message may be deleted */ }
-    }
-  });
-
-  // ─── CHALLENGE SERIES ──────────────────────────────────────────────────────
-
-  bot.hears('🏆 Челлендж', async (ctx) => {
-    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
-    deleteUgcState(ctx.from!.id);
-
-    const active = getActiveChallengeSeriesList();
-    const drafts = listChallengeSeries(['draft']);
-
-    const kb = new InlineKeyboard();
-    kb.text('➕ Создать челлендж', 'cs_create').row();
-
-    for (const s of [...active, ...drafts]) {
-      const statusIcon = s.status === 'active' ? '🟢' : '📝';
-      const pCount = getChallengeParticipantCount(s.id);
-      kb.text(`${statusIcon} ${s.name} (${pCount} уч.)`, `cs_view:${s.id}`).row();
-    }
-
-    const completedCount = listChallengeSeries(['completed']).length;
-    if (completedCount > 0) {
-      kb.text(`📦 Завершённые (${completedCount})`, 'cs_completed').row();
-    }
-
-    const text = active.length > 0 || drafts.length > 0
-      ? '*🏆 Челленджи*\n\nВыбери челлендж или создай новый:'
-      : '*🏆 Челленджи*\n\nНет активных челленджей\\. Создай первый\\!';
-
-    await ctx.reply(text, { parse_mode: 'MarkdownV2', reply_markup: kb });
-  });
-
-  // Create challenge: step 1 — name
-  bot.callbackQuery('cs_create', async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
-    await ctx.answerCallbackQuery();
-    saveUgcState(ctx.from!.id, 'cs_name');
-    try {
-      await ctx.editMessageText('Как назвать челлендж? Например: «Здоровая спина» или «7 дней стретчинга»');
-    } catch { /* TG API: message may be deleted, fallback to reply */
-      await ctx.reply('Как назвать челлендж?');
-    }
-  });
-
-  // Create challenge: step 2 — duration (after name is typed in text handler below)
-  bot.callbackQuery(/^cs_dur:(\d+)$/, async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
-    const days = parseInt(ctx.match[1]);
-    await ctx.answerCallbackQuery();
-
-    // Store in UGC state temporarily
-    const state = getUgcState(ctx.from!.id);
-    if (!state) return;
-
-    // state.submission_id stores our temp metadata as JSON string in step field hack
-    // Actually, let's use a simpler approach: store metadata as JSON in submission_id
-    const meta = JSON.parse(state.submission_id ? String(state.submission_id) : '{}');
-    meta.duration = days;
-    saveUgcState(ctx.from!.id, 'cs_category', undefined);
-    // Store meta in a simple way — reuse ugc_state step field with JSON
-    getDb().prepare(`UPDATE ugc_conversation_state SET submission_id = ? WHERE telegram_user_id = ?`)
-      .run(JSON.stringify(meta), ctx.from!.id);
-
-    const kb = new InlineKeyboard();
-    CATEGORY_BUTTONS.forEach((btn, i) => {
-      kb.text(btn.label, `cs_cat:${btn.value}`);
-      if (i % 2 === 1) kb.row();
-    });
-    if (CATEGORY_BUTTONS.length % 2 === 1) kb.row();
-    kb.text('🔀 Без привязки', 'cs_cat:mixed').row();
-    kb.text('❌ Отмена', 'cs_cancel');
-
-    try {
-      await ctx.editMessageText(`Длительность: ${days} дней\n\nКатегория по умолчанию (можно менять для каждого дня):`, { reply_markup: kb });
-    } catch { /* TG API: message may be deleted */ }
-  });
-
-  // Create challenge: step 3 — default category
-  const csCatPattern = new RegExp(`^cs_cat:(${CATEGORIES.join('|')}|mixed)$`);
-  bot.callbackQuery(csCatPattern, async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
-    const category = ctx.match[1] === 'mixed' ? null : ctx.match[1];
-    await ctx.answerCallbackQuery();
-
-    const state = getUgcState(ctx.from!.id);
-    if (!state) return;
-    const meta = JSON.parse(String(state.submission_id ?? '{}'));
-    meta.category = category;
-
-    // Create the challenge with start = tomorrow MSK
-    const { tomorrowMsk } = await import('./dates');
-    const startDate = tomorrowMsk();
-
-    const seriesId = createChallengeSeries(meta.name, meta.duration, startDate, {
-      defaultCategory: category ?? undefined,
-      publishTime: '09:00',
-    });
-
-    deleteUgcState(ctx.from!.id);
-
-    const series = getChallengeSeries(seriesId)!;
-    const catLabel = category ? (CATEGORY_RU[category as Category] ?? category) : 'смешанная';
-
-    try {
-      await ctx.editMessageText(
-        `✅ Челлендж создан!\n\n` +
-        `Название: ${series.name}\n` +
-        `Дней: ${series.duration_days}\n` +
-        `Категория: ${catLabel}\n` +
-        `Старт: ${series.start_date}\n` +
-        `Статус: черновик\n\n` +
-        `Теперь заполни расписание и активируй.`
-      );
-    } catch { /* TG API: message may be deleted */ }
-
-    // Show challenge view
-    await sendChallengeView(ctx, seriesId);
-  });
-
-  bot.callbackQuery('cs_cancel', async (ctx) => {
-    deleteUgcState(ctx.from!.id);
-    await ctx.answerCallbackQuery('Отменено');
-    try { await ctx.editMessageText('Создание челленджа отменено.'); } catch { /* TG API: message may be deleted */ }
-  });
-
-  // View a specific challenge series
-  bot.callbackQuery(/^cs_view:(\d+)$/, async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
-    await ctx.answerCallbackQuery();
-    await sendChallengeView(ctx, parseInt(ctx.match[1]));
-  });
-
-  // Completed challenges list
-  bot.callbackQuery('cs_completed', async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
-    await ctx.answerCallbackQuery();
-    const completed = listChallengeSeries(['completed']);
-    if (completed.length === 0) {
-      try { await ctx.editMessageText('Нет завершённых челленджей.'); } catch { /* TG API: message may be deleted */ }
-      return;
-    }
-    const kb = new InlineKeyboard();
-    for (const s of completed.slice(0, 10)) {
-      const pCount = getChallengeParticipantCount(s.id);
-      kb.text(`📦 ${s.name} (${pCount} уч.)`, `cs_view:${s.id}`).row();
-    }
-    try {
-      await ctx.editMessageText('*Завершённые челленджи:*', { parse_mode: 'MarkdownV2', reply_markup: kb });
-    } catch { /* TG API: message may be deleted */ }
-  });
-
-  // Activate / Complete / Cancel a challenge
-  bot.callbackQuery(/^cs_activate:(\d+)$/, async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
-    await ctx.answerCallbackQuery('Активирован');
-    updateChallengeSeriesStatus(parseInt(ctx.match[1]), 'active');
-    await sendChallengeView(ctx, parseInt(ctx.match[1]));
-  });
-
-  bot.callbackQuery(/^cs_complete:(\d+)$/, async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
-    await ctx.answerCallbackQuery('Завершён');
-    updateChallengeSeriesStatus(parseInt(ctx.match[1]), 'completed');
-    await sendChallengeView(ctx, parseInt(ctx.match[1]));
-  });
-
-  bot.callbackQuery(/^cs_cancel_series:(\d+)$/, async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
-    await ctx.answerCallbackQuery('Отменён');
-    updateChallengeSeriesStatus(parseInt(ctx.match[1]), 'cancelled');
-    try { await ctx.editMessageText('Челлендж отменён.'); } catch { /* TG API: message may be deleted */ }
-  });
-
-  // Fill a day in challenge series — run approval flow
-  bot.callbackQuery(/^fill_series_day:(\d+):(\d+)$/, async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
-    await ctx.answerCallbackQuery('Ищу видео...');
-
-    const seriesId = parseInt(ctx.match[1]);
-    const dayNumber = parseInt(ctx.match[2]);
-
-    const series = getChallengeSeries(seriesId);
-    if (!series) return;
-
-    const { getChallengeSeriesDaySlot } = await import('./db');
-    const slot = getChallengeSeriesDaySlot(seriesId, dayNumber);
-    if (slot?.status === 'queued') {
-      clearChallengeSeriesDaySlot(seriesId, dayNumber);
-    }
-
-    const category = (slot?.category ?? series.default_category ?? 'stretching') as Category;
-
-    // Use approval flow with series context
-    const { runApprovalFlow } = await import('./approval');
-    const { todayMsk } = await import('./dates');
-
-    // Store series context — reuse challenge context mechanism
-    // We'll search and then on approve, fill the series slot
-    await runApprovalFlow(bot, todayMsk(), category, { challengeId: seriesId, dayNumber, type: 'series' }, undefined, undefined);
-  });
-
-  // Publish a specific challenge series day
-  bot.callbackQuery(/^cs_pub:(\d+):(\d+)$/, async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
-    await ctx.answerCallbackQuery('Публикую...');
-
-    const seriesId = parseInt(ctx.match[1]);
-    const dayNumber = parseInt(ctx.match[2]);
-    const series = getChallengeSeries(seriesId);
-    if (!series || series.status !== 'active') {
-      try { await ctx.editMessageText('Челлендж не активен.'); } catch { /* TG API: message may be deleted */ }
-      return;
-    }
-
-    const { postChallengeSeriesVideo } = await import('./poster');
-    const result = await postChallengeSeriesVideo(bot, series, dayNumber);
-    if (result === 'posted') {
-      try { await ctx.editMessageText('✅ Опубликовано!'); } catch { /* TG API: message may be deleted */ }
-    } else {
-      try { await ctx.editMessageText(`Ошибка: ${result}`); } catch { /* TG API: message may be deleted */ }
-    }
-  });
-
-  bot.hears('Опубликовать', async (ctx) => {
-    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
-    const { todayMsk, tomorrowMsk } = await import('./dates');
-    const { postVideoToChannel } = await import('./poster');
-    const { getApprovedVideo } = await import('./db');
-
-    const today = todayMsk();
-    const tomorrow = tomorrowMsk();
-    const hasTomorrow = CATEGORIES.some(c => getApprovedVideo(tomorrow, c) !== null);
-    const hasToday = CATEGORIES.some(c => getApprovedVideo(today, c) !== null);
-    const date = hasTomorrow ? tomorrow : hasToday ? today : null;
-
-    if (!date) {
-      await ctx.reply('Нет одобренных видео. Сначала «Неделя».');
-      return;
-    }
-
-    await ctx.reply(`Публикую видео на ${date}...`);
-    const report: string[] = [];
-    for (const cat of CATEGORIES) {
-      const approved = getApprovedVideo(date, cat);
-      if (!approved) continue; // skip categories without approved videos
-      const result = await postVideoToChannel(bot, date, cat, { force: true });
-      const label = `${CATEGORY_EMOJI[cat]} ${CATEGORY_RU[cat]}`;
-      if (result === 'posted') report.push(`${label} — ${approved.title}`);
-      else if (result === 'error') report.push(`${label} — ошибка`);
-      else report.push(`${label} — пропущено`);
-    }
-    if (report.length === 0) {
-      await ctx.reply('Нет одобренных видео на эту дату.');
-    } else {
-      await ctx.reply(report.join('\n'));
-    }
-  });
-
-  bot.hears('Сбросить выбор', async (ctx) => {
-    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
-    const { todayMsk, tomorrowMsk } = await import('./dates');
-    const { resetApprovalSessions } = await import('./db');
-    const today = todayMsk();
-    const tomorrow = tomorrowMsk();
-    const countToday = resetApprovalSessions(today);
-    const countTomorrow = resetApprovalSessions(tomorrow);
-    const total = countToday + countTomorrow;
-    await ctx.reply(`Сброшено ${total} сессий (${today}: ${countToday}, ${tomorrow}: ${countTomorrow}). Нажми «Неделя» для нового поиска.`);
-  });
-
-  // --- "Очистить" button (admin only) — clear channel posts ---
-  bot.hears('🧹 Очистить канал', async (ctx) => {
-    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
-    const kb = new InlineKeyboard()
-      .text('Да, удалить все посты', 'clear_channel_confirm')
-      .text('❌ Отмена', 'clear_channel_cancel');
-    await ctx.reply('Удалить все посты из канала @sami_workouts?\nЭто действие необратимо.', { reply_markup: kb });
-  });
-
-  bot.callbackQuery('clear_channel_confirm', async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
-    await ctx.answerCallbackQuery('Удаляю...');
-
-    const channelId = config.TELEGRAM_CHANNEL_ID;
-    const { getDb, withTransaction } = await import('./db');
-    const posts = getDb().prepare(
-      `SELECT channel_message_id FROM posts WHERE channel_message_id IS NOT NULL ORDER BY channel_message_id DESC`
-    ).all() as { channel_message_id: number }[];
-
-    let deleted = 0;
-    for (const post of posts) {
-      try {
-        await ctx.api.deleteMessage(channelId, post.channel_message_id);
-        deleted++;
-      } catch { /* already deleted or too old */ }
-    }
-
-    withTransaction(() => {
-      getDb().prepare(`DELETE FROM posts`).run();
-    });
-
-    try {
-      await ctx.editMessageText(`🧹 Удалено ${deleted} постов из канала. БД постов очищена.`);
-    } catch { /* TG API: message may be deleted */ }
-  });
-
-  bot.callbackQuery('clear_channel_cancel', async (ctx) => {
-    await ctx.answerCallbackQuery('Отменено');
-    try { await ctx.editMessageText('Очистка канала отменена.'); } catch { /* TG API: message may be deleted */ }
-  });
-
-  // --- /invites command (admin only) — trackable invite links ---
-  bot.command('invites', async (ctx) => {
-    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
-
-    const text = ctx.message?.text ?? '';
-    const args = text.replace(/^\/invites\s*/, '').trim();
-
-    // /invites add <label> <url>
-    if (args.startsWith('add ')) {
-      const parts = args.slice(4).trim();
-      const spaceIdx = parts.lastIndexOf(' ');
-      if (spaceIdx === -1) {
-        await ctx.reply('Формат: /invites add <label> <url>');
-        return;
-      }
-      const label = parts.slice(0, spaceIdx).trim();
-      const url = parts.slice(spaceIdx + 1).trim();
-      if (!label || !url) {
-        await ctx.reply('Формат: /invites add <label> <url>');
-        return;
-      }
-      if (!url.startsWith('https://t.me/')) {
-        await ctx.reply('URL должен начинаться с https://t.me/');
-        return;
-      }
-      try {
-        const id = createInviteLink(label, url);
-        await ctx.reply(`Ссылка добавлена (id=${id}):\n${label} — ${url}`);
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (msg.includes('UNIQUE constraint')) {
-          await ctx.reply('Эта ссылка уже зарегистрирована.');
-        } else {
-          await ctx.reply(`Ошибка: ${msg}`);
-        }
-      }
-      return;
-    }
-
-    // /invites — list all
-    const links = getInviteLinks();
-    if (links.length === 0) {
-      await ctx.reply(
-        'Нет зарегистрированных ссылок.\n\n' +
-        'Добавить: /invites add <label> <url>\n' +
-        'Пример: /invites add instagram https://t.me/+AbCdEf12345',
-      );
-      return;
-    }
-
-    const lines = links.map((l, i) => {
-      const date = l.created_at.slice(0, 10);
-      return `${i + 1}. *${escV2(l.label)}*\n` +
-        `   ${escV2(l.url)}\n` +
-        `   Клики: ${l.clicks} · Вступления: ${l.joins} · ${escV2(date)}`;
-    });
-
-    await ctx.reply(
-      `*Инвайт\\-ссылки* \\(${links.length}\\)\n\n` +
-      lines.join('\n\n') +
-      `\n\n_Добавить: /invites add <label> <url>_`,
-      { parse_mode: 'MarkdownV2' },
-    );
-  });
-
-  // --- "Профиль" button ---
-  bot.hears('Профиль', async (ctx) => {
-    if (ctx.chat.type !== 'private') return;
-    deleteUgcState(ctx.from!.id);
-    const userId = ctx.from!.id;
-    const profile = getMemberProfile(userId);
-    const { level, completions } = getMemberLevel(userId);
-    const streak = getUserStreak(userId);
-
-    const GOAL_LABELS: Record<string, string> = {
-      rhythm: 'ритм и дисциплина',
-      mobility: 'гибкость и мобильность',
-      strength: 'сила',
-      observer: 'исследователь',
-    };
-
-    const subTotal = getUserSubmissionTotal(userId);
-
-    const lines = [
-      `*Профиль*`,
-      '',
-      `Имя: ${escV2(profile?.first_name ?? 'не указано')}`,
-      `Уровень: ${escV2(level)}`,
-      `Тренировок: ${escV2(String(completions))}`,
-      `Предложено: ${escV2(String(subTotal))}`,
-    ];
-    if (streak > 0) {
-      lines.splice(5, 0, `Серия: ${escV2(String(streak))} дн\\. 🔥`);
-    }
-
-    if (profile?.fitness_goal) {
-      lines.push(`Цель: ${escV2(GOAL_LABELS[profile.fitness_goal] ?? profile.fitness_goal)}`);
-    }
-    if (profile?.joined_at) {
-      lines.push(`Участник с: ${escV2(profile.joined_at.slice(0, 10))}`);
-    }
-
-    await ctx.reply(lines.join('\n'), { parse_mode: 'MarkdownV2' });
-  });
-
-  // --- "Фильтры" button ---
-  bot.hears('Фильтры', async (ctx) => {
-    if (ctx.chat.type !== 'private') return;
-    deleteUgcState(ctx.from!.id);
-
-    const kb = new InlineKeyboard();
-    CATEGORY_BUTTONS.forEach((btn, i) => {
-      kb.text(btn.label, `filter:cat:${btn.value}`);
-      if (i % 2 === 1) kb.row();
-    });
-    // Ensure last odd category gets its own row before presets
-    if (CATEGORY_BUTTONS.length % 2 === 1) kb.row();
-    kb.text('💎 Новичок', 'filter:preset:beginner')
-      .text('☀️ Утро (до 15м)', 'filter:preset:morning')
-      .row()
-      .text('🌙 После работы', 'filter:preset:afterwork')
-      .text('⚡ Быстрая (до 10м)', 'filter:preset:quick');
-
-    await ctx.reply('Выбери фильтр или пресет:', { reply_markup: kb });
-  });
-
-  const filterCatPattern = new RegExp(`^filter:cat:(${CATEGORIES.join('|')})$`);
-  bot.callbackQuery(filterCatPattern, async (ctx) => {
-    const category = ctx.match[1];
-    await ctx.answerCallbackQuery();
-    const videos = filterVideos({ category, limit: 5 });
-    await sendFilterResults(ctx, videos, CATEGORY_RU[category as Category] ?? category);
-  });
-
-  bot.callbackQuery(/^filter:preset:(beginner|morning|afterwork|quick)$/, async (ctx) => {
-    const preset = ctx.match[1];
-    await ctx.answerCallbackQuery();
-
-    const presetConfig: Record<string, { label: string; opts: Parameters<typeof filterVideos>[0] }> = {
-      beginner: { label: 'Новичок', opts: { difficulty: 'beginner', limit: 5 } },
-      morning: { label: 'Утро', opts: { maxDuration: 900, limit: 5 } },
-      afterwork: { label: 'После работы', opts: { category: 'strength', minDuration: 900, limit: 5 } },
-      quick: { label: 'Быстрая', opts: { maxDuration: 600, limit: 5 } },
-    };
-
-    const { label, opts } = presetConfig[preset] ?? { label: preset, opts: { limit: 5 } };
-    const videos = filterVideos(opts);
-    await sendFilterResults(ctx, videos, label);
-  });
-
-  // --- "Предложить тренировку" button ---
+// --- UGC handler registration ---
+
+function registerUgcHandlers(
+  bot: Bot,
+  config: ReturnType<typeof getConfig>,
+  isAdmin: (userId: number) => boolean,
+): void {
+
+  // "Предложить тренировку" button
   bot.hears('💡 Предложить тренировку', async (ctx) => {
     if (ctx.chat.type !== 'private') return;
     saveUgcState(ctx.from!.id, 'waiting_link');
 
     if (isAdmin(ctx.from!.id)) {
-      // Admin sees extra option: YouTube search
       const kb = new InlineKeyboard()
         .text('🔍 Поиск YouTube', 'ugc_yt_search')
         .row()
@@ -1074,13 +137,12 @@ export function registerBotMenu(bot: Bot): void {
     }
   });
 
-  // Admin: YouTube search in UGC flow — pick category then run approval-style search
+  // Admin: YouTube search in UGC flow
   bot.callbackQuery('ugc_yt_search', async (ctx) => {
     if (!isAdmin(ctx.from!.id)) return;
     await ctx.answerCallbackQuery();
     deleteUgcState(ctx.from!.id);
 
-    // Show category picker for search
     const kb = new InlineKeyboard();
     CATEGORY_BUTTONS.forEach((btn, i) => {
       kb.text(btn.label, `ugc_search_cat:${btn.value}`);
@@ -1091,25 +153,24 @@ export function registerBotMenu(bot: Bot): void {
 
     try {
       await ctx.editMessageText('Какую категорию ищем?', { reply_markup: kb });
-    } catch { /* TG API: message may be deleted, fallback to reply */
+    } catch {
       await ctx.reply('Какую категорию ищем?', { reply_markup: kb });
     }
   });
 
-  // Admin: run search for selected category (standalone, not challenge)
   const ugcSearchCatPattern = new RegExp(`^ugc_search_cat:(${CATEGORIES.join('|')})$`);
   bot.callbackQuery(ugcSearchCatPattern, async (ctx) => {
     if (!isAdmin(ctx.from!.id)) return;
     const category = ctx.match[1] as Category;
     await ctx.answerCallbackQuery('Ищу...');
-    try { await ctx.editMessageText(`🔍 Ищу видео для ${CATEGORY_RU[category]}...`); } catch { /* TG API: message may be deleted */ }
+    try { await ctx.editMessageText(`🔍 Ищу видео для ${CATEGORY_RU[category]}...`); } catch { /* TG API */ }
 
     const { runApprovalFlow } = await import('./approval');
     const { todayMsk } = await import('./dates');
     await runApprovalFlow(bot, todayMsk(), category);
   });
 
-  // Cancel UGC flow — inline button or /cancel command
+  // Cancel UGC flow
   bot.callbackQuery('ugc_cancel', async (ctx) => {
     const state = getUgcState(ctx.from.id);
     if (state?.submission_id) {
@@ -1117,12 +178,10 @@ export function registerBotMenu(bot: Bot): void {
     }
     deleteUgcState(ctx.from.id);
     await ctx.answerCallbackQuery('Отменено');
-    try {
-      await ctx.editMessageText('Отменено.');
-    } catch { /* TG API: message may be deleted */ }
+    try { await ctx.editMessageText('Отменено.'); } catch { /* TG API */ }
   });
 
-  // Back button in UGC flow — return to previous step
+  // Back button in UGC flow
   bot.callbackQuery(/^ugc_back:(\d+):(.+)$/, async (ctx) => {
     const subId = parseInt(ctx.match[1]);
     const currentStep = ctx.match[2] as UgcStep;
@@ -1132,17 +191,15 @@ export function registerBotMenu(bot: Bot): void {
     const sub = getUgcSubmission(subId);
     if (!sub) {
       deleteUgcState(userId);
-      try { await ctx.editMessageText('Сессия устарела.'); } catch { /* TG API: message may be deleted */ }
+      try { await ctx.editMessageText('Сессия устарела.'); } catch { /* TG API */ }
       return;
     }
 
     if (currentStep === 'waiting_difficulty') {
-      // Back to category
       saveUgcState(userId, 'waiting_category', subId);
       const kb = buildCategoryKeyboard(subId);
-      try { await ctx.editMessageText('Какой тип тренировки?', { reply_markup: kb }); } catch { /* TG API: message may be deleted */ }
+      try { await ctx.editMessageText('Какой тип тренировки?', { reply_markup: kb }); } catch { /* TG API */ }
     } else if (currentStep === 'waiting_duration') {
-      // Back to difficulty
       saveUgcState(userId, 'waiting_difficulty', subId);
       const kb = new InlineKeyboard();
       DIFFICULTY_BUTTONS.forEach((btn, i) => {
@@ -1150,11 +207,9 @@ export function registerBotMenu(bot: Bot): void {
         kb.text(btn.label, `ugc_diff:${subId}:${btn.value}`);
       });
       kb.row().text('← Назад', `ugc_back:${subId}:waiting_difficulty`).text('❌ Отмена', 'ugc_cancel');
-      try { await ctx.editMessageText('Уровень сложности?', { reply_markup: kb }); } catch { /* TG API: message may be deleted */ }
+      try { await ctx.editMessageText('Уровень сложности?', { reply_markup: kb }); } catch { /* TG API */ }
     } else if (currentStep === 'waiting_equipment') {
-      // Back to duration or difficulty (if duration was auto-detected)
       if (sub.duration_seconds) {
-        // Duration was auto-detected, go back to difficulty
         saveUgcState(userId, 'waiting_difficulty', subId);
         const kb = new InlineKeyboard();
         DIFFICULTY_BUTTONS.forEach((btn, i) => {
@@ -1162,20 +217,18 @@ export function registerBotMenu(bot: Bot): void {
           kb.text(btn.label, `ugc_diff:${subId}:${btn.value}`);
         });
         kb.row().text('← Назад', `ugc_back:${subId}:waiting_difficulty`).text('❌ Отмена', 'ugc_cancel');
-        try { await ctx.editMessageText('Уровень сложности?', { reply_markup: kb }); } catch { /* TG API: message may be deleted */ }
+        try { await ctx.editMessageText('Уровень сложности?', { reply_markup: kb }); } catch { /* TG API */ }
       } else {
         saveUgcState(userId, 'waiting_duration', subId);
         const kb = buildDurationKeyboard(subId);
-        try { await ctx.editMessageText('Сколько длится тренировка?', { reply_markup: kb }); } catch { /* TG API: message may be deleted */ }
+        try { await ctx.editMessageText('Сколько длится тренировка?', { reply_markup: kb }); } catch { /* TG API */ }
       }
     } else if (currentStep === 'waiting_rubric') {
-      // Back to equipment
       saveUgcState(userId, 'waiting_equipment', subId);
       const kb = buildEquipmentKeyboard(subId);
-      try { await ctx.editMessageText('Нужен ли инвентарь?', { reply_markup: kb }); } catch { /* TG API: message may be deleted */ }
+      try { await ctx.editMessageText('Нужен ли инвентарь?', { reply_markup: kb }); } catch { /* TG API */ }
     } else if (currentStep === 'waiting_title') {
       if (isAdmin(userId)) {
-        // Admin: back to rubric
         saveUgcState(userId, 'waiting_rubric', subId);
         const rubricKb = new InlineKeyboard()
           .text('📅 Челлендж', `ugc_rubric:${subId}:challenge`)
@@ -1185,16 +238,16 @@ export function registerBotMenu(bot: Bot): void {
           .row()
           .text('← Назад', `ugc_back:${subId}:waiting_rubric`)
           .text('❌ Отмена', 'ugc_cancel');
-        try { await ctx.editMessageText('Рубрика поста:', { reply_markup: rubricKb }); } catch { /* TG API: message may be deleted */ }
+        try { await ctx.editMessageText('Рубрика поста:', { reply_markup: rubricKb }); } catch { /* TG API */ }
       } else {
-        // Regular user: back to equipment
         saveUgcState(userId, 'waiting_equipment', subId);
         const kb = buildEquipmentKeyboard(subId);
-        try { await ctx.editMessageText('Нужен ли инвентарь?', { reply_markup: kb }); } catch { /* TG API: message may be deleted */ }
+        try { await ctx.editMessageText('Нужен ли инвентарь?', { reply_markup: kb }); } catch { /* TG API */ }
       }
     }
   });
 
+  // /cancel command
   bot.command('cancel', async (ctx) => {
     if (ctx.chat.type !== 'private') return;
     const state = getUgcState(ctx.from!.id);
@@ -1205,7 +258,7 @@ export function registerBotMenu(bot: Bot): void {
     await ctx.reply('Отменено.', { reply_markup: mainKeyboard(isAdmin(ctx.from!.id)) });
   });
 
-  // --- UGC: accept video file directly ---
+  // Accept video file
   bot.on('message:video', async (ctx, next) => {
     if (ctx.chat.type !== 'private') return next();
     const userId = ctx.from!.id;
@@ -1213,12 +266,10 @@ export function registerBotMenu(bot: Bot): void {
     log.info('video message in private chat', { userId, step: state?.step ?? 'none', hasVideo: !!ctx.message.video });
     if (!state || state.step !== 'waiting_link') return next();
 
-    // User sent a video file instead of a YouTube link
     const video = ctx.message.video;
     const fileId = video.file_id;
     const duration = video.duration;
 
-    // Create UGC submission with file_id as video_url (bot can re-send by file_id)
     const subId = createUgcSubmission(userId, ctx.from!.username ?? null, `tg:${fileId}`, null);
     if (duration) {
       updateUgcSubmission(subId, {
@@ -1228,13 +279,11 @@ export function registerBotMenu(bot: Bot): void {
       });
     }
     saveUgcState(userId, 'waiting_category', subId);
-
     const kb = buildCategoryKeyboard(subId);
-
     await ctx.reply('Видео получено! Какой тип тренировки?', { reply_markup: kb });
   });
 
-  // --- UGC: accept video sent as document (e.g. .mov, .mp4 files Telegram treats as documents) ---
+  // Accept video as document
   const VIDEO_MIME_PREFIXES = ['video/'];
   bot.on('message:document', async (ctx, next) => {
     if (ctx.chat.type !== 'private') return next();
@@ -1256,13 +305,11 @@ export function registerBotMenu(bot: Bot): void {
       updateUgcSubmission(subId, { title: doc.file_name.replace(/\.[^.]+$/, '') });
     }
     saveUgcState(userId, 'waiting_category', subId);
-
     const kb = buildCategoryKeyboard(subId);
-
     await ctx.reply('Видео получено! Какой тип тренировки?', { reply_markup: kb });
   });
 
-  // --- UGC conversation handler (private chat text) ---
+  // Text handler — UGC steps + challenge creation (MUST be last on() handler)
   bot.on('message:text', async (ctx, next) => {
     if (ctx.chat.type !== 'private') return next();
     const userId = ctx.from!.id;
@@ -1270,9 +317,21 @@ export function registerBotMenu(bot: Bot): void {
     if (!state) return next();
 
     const text = ctx.message.text.trim();
-
-    // Don't intercept bot commands — let them pass through
     if (text.startsWith('/')) return next();
+
+    // Title editing from approval flow
+    if (state.step === 'edit_title') {
+      deleteUgcState(userId);
+      if (!text || !state.submission_id) {
+        await ctx.reply('Заголовок не может быть пустым.');
+        return;
+      }
+      const { setVideoDisplayTitle } = await import('./db-videos');
+      setVideoDisplayTitle(state.submission_id, text);
+      const { escV2: esc } = await import('./shared');
+      await ctx.reply(`✅ Заголовок: *${esc(text)}*`, { parse_mode: 'MarkdownV2' });
+      return;
+    }
 
     // Challenge series creation: name
     if (state.step === ('cs_name')) {
@@ -1309,24 +368,21 @@ export function registerBotMenu(bot: Bot): void {
       const videoUrl = `https://www.youtube.com/watch?v=${ytId}`;
       const subId = createUgcSubmission(userId, ctx.from!.username ?? null, videoUrl, ytId);
 
-      // Auto-fetch duration from YouTube API
       try {
         const { fetchVideoDuration } = await import('./youtube');
         const dur = await fetchVideoDuration(ytId);
         if (dur) {
           updateUgcSubmission(subId, { duration_seconds: dur.seconds, duration_label: dur.label });
         }
-      } catch { /* non-critical, user will be asked manually */ }
+      } catch { /* non-critical */ }
 
       saveUgcState(userId, 'waiting_category', subId);
-
       const kb = buildCategoryKeyboard(subId);
-
       await ctx.reply('Какой тип тренировки?', { reply_markup: kb });
       return;
     }
 
-    // Step: custom rubric text (admin only)
+    // Custom rubric text (admin only)
     if (state.step === 'waiting_rubric') {
       if (text.length < 2 || text.length > 100) {
         await ctx.reply('Рубрика от 2 до 100 символов.');
@@ -1342,14 +398,13 @@ export function registerBotMenu(bot: Bot): void {
       return;
     }
 
-    // Step 5: waiting for title (free text) — last step before submission
+    // Title step — last step before submission
     if (state.step === 'waiting_title') {
       if (text.length < 3 || text.length > 200) {
         await ctx.reply(`Название слишком ${text.length < 3 ? 'короткое' : 'длинное'} (${text.length}/200)`);
         return;
       }
 
-      // Auto-detect muscles from title using shared patterns
       const detectedMuscles = MUSCLE_PATTERNS
         .filter(([re]) => re.test(text))
         .map(([, label]) => label);
@@ -1366,7 +421,6 @@ export function registerBotMenu(bot: Bot): void {
       const sub = getUgcSubmission(state.submission_id!);
       if (!sub) return;
 
-      // Send to admin for review
       await sendUgcToAdmin(bot, sub);
 
       const muscleHint = detectedMuscles.length > 0
@@ -1382,7 +436,7 @@ export function registerBotMenu(bot: Bot): void {
     return next();
   });
 
-  // --- UGC category callback ---
+  // UGC category callback
   const catPattern = new RegExp(`^ugc_cat:(\\d+):(${CATEGORIES.join('|')})$`);
   bot.callbackQuery(catPattern, async (ctx) => {
     const subId = parseInt(ctx.match[1]);
@@ -1406,12 +460,12 @@ export function registerBotMenu(bot: Bot): void {
 
     try {
       await ctx.editMessageText('Уровень сложности?', { reply_markup: kb });
-    } catch { /* TG API: message may be deleted, fallback to reply */
+    } catch {
       await ctx.reply('Уровень сложности?', { reply_markup: kb });
     }
   });
 
-  // --- UGC difficulty callback ---
+  // UGC difficulty callback
   const diffPattern = new RegExp(`^ugc_diff:(\\d+):(${DIFFICULTIES.join('|')})$`);
   bot.callbackQuery(diffPattern, async (ctx) => {
     const subId = parseInt(ctx.match[1]);
@@ -1425,29 +479,21 @@ export function registerBotMenu(bot: Bot): void {
     await ctx.answerCallbackQuery();
     updateUgcSubmission(subId, { difficulty });
 
-    // Check if duration was auto-detected from video file metadata
     const sub = getUgcSubmission(subId);
     if (sub?.duration_seconds) {
-      // Skip duration step — go directly to equipment
       saveUgcState(userId, 'waiting_equipment', subId);
       const kb = buildEquipmentKeyboard(subId);
-      try {
-        await ctx.editMessageText('Нужен ли инвентарь?', { reply_markup: kb });
-      } catch { /* TG API: message may be deleted, fallback to reply */
-        await ctx.reply('Нужен ли инвентарь?', { reply_markup: kb });
-      }
+      try { await ctx.editMessageText('Нужен ли инвентарь?', { reply_markup: kb }); }
+      catch { await ctx.reply('Нужен ли инвентарь?', { reply_markup: kb }); }
     } else {
       saveUgcState(userId, 'waiting_duration', subId);
       const kb = buildDurationKeyboard(subId);
-      try {
-        await ctx.editMessageText('Сколько длится тренировка?', { reply_markup: kb });
-      } catch { /* TG API: message may be deleted, fallback to reply */
-        await ctx.reply('Сколько длится тренировка?', { reply_markup: kb });
-      }
+      try { await ctx.editMessageText('Сколько длится тренировка?', { reply_markup: kb }); }
+      catch { await ctx.reply('Сколько длится тренировка?', { reply_markup: kb }); }
     }
   });
 
-  // --- UGC duration callback ---
+  // UGC duration callback
   bot.callbackQuery(/^ugc_dur:(\d+):(\d+)$/, async (ctx) => {
     const subId = parseInt(ctx.match[1]);
     const seconds = parseInt(ctx.match[2]);
@@ -1463,14 +509,11 @@ export function registerBotMenu(bot: Bot): void {
     saveUgcState(userId, 'waiting_equipment', subId);
 
     const kb = buildEquipmentKeyboard(subId);
-    try {
-      await ctx.editMessageText('Нужен ли инвентарь?', { reply_markup: kb });
-    } catch {
-      await ctx.reply('Нужен ли инвентарь?', { reply_markup: kb });
-    }
+    try { await ctx.editMessageText('Нужен ли инвентарь?', { reply_markup: kb }); }
+    catch { await ctx.reply('Нужен ли инвентарь?', { reply_markup: kb }); }
   });
 
-  // --- UGC equipment callback ---
+  // UGC equipment callback
   const equipPattern = new RegExp(`^ugc_equip:(\\d+):(${EQUIPMENT_VALUES.join('|')})$`);
   bot.callbackQuery(equipPattern, async (ctx) => {
     const subId = parseInt(ctx.match[1]);
@@ -1485,7 +528,6 @@ export function registerBotMenu(bot: Bot): void {
     updateUgcSubmission(subId, { equipment: EQUIPMENT_VALUE_RU[equipValue] ?? equipValue });
 
     if (isAdmin(userId)) {
-      // Admin: rubric selection before title
       saveUgcState(userId, 'waiting_rubric', subId);
       const rubricKb = new InlineKeyboard()
         .text('📅 Челлендж', `ugc_rubric:${subId}:challenge`)
@@ -1495,25 +537,19 @@ export function registerBotMenu(bot: Bot): void {
         .row()
         .text('← Назад', `ugc_back:${subId}:waiting_rubric`)
         .text('❌ Отмена', 'ugc_cancel');
-      try {
-        await ctx.editMessageText('Рубрика поста:', { reply_markup: rubricKb });
-      } catch { /* TG API: message may be deleted, fallback to reply */
-        await ctx.reply('Рубрика поста:', { reply_markup: rubricKb });
-      }
+      try { await ctx.editMessageText('Рубрика поста:', { reply_markup: rubricKb }); }
+      catch { await ctx.reply('Рубрика поста:', { reply_markup: rubricKb }); }
     } else {
       saveUgcState(userId, 'waiting_title', subId);
       const titleKb = new InlineKeyboard()
         .text('← Назад', `ugc_back:${subId}:waiting_title`)
         .text('❌ Отмена', 'ugc_cancel');
-      try {
-        await ctx.editMessageText('Как назвать тренировку? Напиши короткое название (до 200 символов).', { reply_markup: titleKb });
-      } catch { /* TG API: message may be deleted, fallback to reply */
-        await ctx.reply('Как назвать тренировку? Напиши короткое название (до 200 символов).', { reply_markup: titleKb });
-      }
+      try { await ctx.editMessageText('Как назвать тренировку? Напиши короткое название (до 200 символов).', { reply_markup: titleKb }); }
+      catch { await ctx.reply('Как назвать тренировку? Напиши короткое название (до 200 символов).', { reply_markup: titleKb }); }
     }
   });
 
-  // --- UGC rubric callback (admin only) ---
+  // UGC rubric callback (admin only)
   bot.callbackQuery(/^ugc_rubric:(\d+):(challenge|ugc|custom)$/, async (ctx) => {
     const subId = parseInt(ctx.match[1]);
     const rubricType = ctx.match[2];
@@ -1526,20 +562,15 @@ export function registerBotMenu(bot: Bot): void {
     await ctx.answerCallbackQuery();
 
     if (rubricType === 'custom') {
-      // Ask admin to type custom rubric
       saveUgcState(userId, 'waiting_rubric', subId);
       const backKb = new InlineKeyboard()
         .text('← Назад', `ugc_back:${subId}:waiting_rubric`)
         .text('❌ Отмена', 'ugc_cancel');
-      try {
-        await ctx.editMessageText('Напиши название рубрики (будет первой строкой поста):', { reply_markup: backKb });
-      } catch { /* TG API: message may be deleted, fallback to reply */
-        await ctx.reply('Напиши название рубрики:', { reply_markup: backKb });
-      }
+      try { await ctx.editMessageText('Напиши название рубрики (будет первой строкой поста):', { reply_markup: backKb }); }
+      catch { await ctx.reply('Напиши название рубрики:', { reply_markup: backKb }); }
       return;
     }
 
-    // Predefined rubrics
     const rubricLabel = rubricType === 'challenge' ? null : 'Тренировка от участника';
     updateUgcSubmission(subId, { rubric: rubricLabel });
     saveUgcState(userId, 'waiting_title', subId);
@@ -1547,14 +578,11 @@ export function registerBotMenu(bot: Bot): void {
     const titleKb = new InlineKeyboard()
       .text('← Назад', `ugc_back:${subId}:waiting_title`)
       .text('❌ Отмена', 'ugc_cancel');
-    try {
-      await ctx.editMessageText('Как назвать тренировку? Напиши короткое название (до 200 символов).', { reply_markup: titleKb });
-    } catch {
-      await ctx.reply('Как назвать тренировку? Напиши короткое название (до 200 символов).', { reply_markup: titleKb });
-    }
+    try { await ctx.editMessageText('Как назвать тренировку? Напиши короткое название (до 200 символов).', { reply_markup: titleKb }); }
+    catch { await ctx.reply('Как назвать тренировку? Напиши короткое название (до 200 символов).', { reply_markup: titleKb }); }
   });
 
-  // --- Admin UGC approve/reject ---
+  // Admin UGC approve/reject
   bot.callbackQuery(/^ugc_decide:(\d+):(approve|reject)$/, async (ctx) => {
     if (ctx.from!.id !== config.TELEGRAM_ADMIN_USER_ID) {
       await ctx.answerCallbackQuery('Нет доступа');
@@ -1575,7 +603,6 @@ export function registerBotMenu(bot: Bot): void {
       const author = sub.username ? `@${sub.username}` : (sub.telegram_user_id ? `id:${sub.telegram_user_id}` : '');
       const submitterDisplay = sub.username ? `@${sub.username}` : 'участник';
 
-      // --- Publish to channel ---
       let published = false;
       let publishError = '';
       try {
@@ -1597,7 +624,6 @@ export function registerBotMenu(bot: Bot): void {
         const isTgFileId = sub.video_url.startsWith('tg:');
         const isYouTubeUrl = /youtube\.com|youtu\.be/.test(sub.video_url);
 
-        // For YouTube UGC: fetch real channel name, stats, and show YouTube link
         let authorLine: string;
         let ytStats: { viewCount: number; likeRatio: number; channelSubscribers: number } | null = null;
         if (isYouTubeUrl && sub.youtube_id) {
@@ -1615,7 +641,6 @@ export function registerBotMenu(bot: Bot): void {
           authorLine = `Автор: ${escV2(submitterDisplay)}`;
         }
 
-        // Create a video record in DB for tracking (completions, favorites)
         const syntheticYoutubeId = isTgFileId
           ? `ugc-${subId}`
           : (sub.youtube_id ?? `ugc-${subId}`);
@@ -1638,7 +663,6 @@ export function registerBotMenu(bot: Bot): void {
           channel_subscribers: ytStats?.channelSubscribers ?? 0,
         });
 
-        // Sami Score for YouTube UGC (has real metrics, rating auto-computed by upsertVideo)
         let samiScoreLine: string | null = null;
         if (ytStats) {
           const { getVideoById } = await import('./db');
@@ -1649,7 +673,6 @@ export function registerBotMenu(bot: Bot): void {
           }
         }
 
-        // Rubric: custom text, default "Тренировка от участника", or omit for challenge
         const rubricLine = sub.rubric ? `*${escV2(sub.rubric)}*` : null;
         const caption = [
           ...(rubricLine ? [rubricLine, ''] : []),
@@ -1671,7 +694,6 @@ export function registerBotMenu(bot: Bot): void {
             { caption, parse_mode: 'MarkdownV2', supports_streaming: true }
           );
         } else if (isYouTubeUrl && isYtDlpAvailable()) {
-          // Download with retry (2 attempts) + text fallback
           const MAX_UGC_ATTEMPTS = 2;
           let videoSent = false;
 
@@ -1705,7 +727,6 @@ export function registerBotMenu(bot: Bot): void {
             }
           }
 
-          // Fallback: post as text + YouTube link if video download/upload failed
           if (!videoSent) {
             log.warn('UGC: all download attempts failed, falling back to text+link', { subId });
             const safeUrl = sub.video_url.replace(/[)\\]/g, '\\$&');
@@ -1717,7 +738,6 @@ export function registerBotMenu(bot: Bot): void {
             );
           }
         } else {
-          // Fallback: post as text with link
           const safeUrl = sub.video_url.replace(/[)\\]/g, '\\$&');
           const linkCaption = isYouTubeUrl
             ? caption + `\n📎 [Смотреть на YouTube](${safeUrl})`
@@ -1729,7 +749,6 @@ export function registerBotMenu(bot: Bot): void {
           );
         }
 
-        // Record post in DB
         try {
           const date = todayMsk();
           const postType = (isTgFileId || (isYouTubeUrl && isYtDlpAvailable())) ? 'video' as const : 'link' as const;
@@ -1755,10 +774,9 @@ export function registerBotMenu(bot: Bot): void {
             `Ошибка: ${publishError.slice(0, 300)}`,
           ].join('\n');
           await bot.api.sendMessage(config.TELEGRAM_ADMIN_USER_ID, details);
-        } catch { /* TG API: message may be deleted */ }
+        } catch { /* TG API */ }
       }
 
-      // Update admin message
       const statusText = published ? 'Одобрено и опубликовано' : `Одобрено (публикация не удалась: ${publishError})`;
       try {
         const origText = escV2(ctx.callbackQuery.message?.text ?? '');
@@ -1766,15 +784,14 @@ export function registerBotMenu(bot: Bot): void {
           `${origText}\n\n_${escV2(statusText)}_ \\· Предложил\\(а\\): ${escV2(author)}`,
           { parse_mode: 'MarkdownV2' }
         );
-      } catch { /* TG API: message may be deleted */ }
+      } catch { /* TG API */ }
 
-      // Notify author
       try {
         const notifyText = published
           ? `Твоя тренировка «${sub.title}» одобрена и опубликована в канале!`
           : `Твоя тренировка «${sub.title}» одобрена и будет опубликована!`;
         await bot.api.sendMessage(sub.telegram_user_id, notifyText);
-      } catch { /* TG API: message may be deleted */ }
+      } catch { /* TG API */ }
     } else {
       updateUgcSubmission(subId, { status: 'rejected' });
       await ctx.answerCallbackQuery('Отклонено');
@@ -1783,17 +800,29 @@ export function registerBotMenu(bot: Bot): void {
           escV2(ctx.callbackQuery.message?.text ?? '') + '\n\n_Отклонено_',
           { parse_mode: 'MarkdownV2' }
         );
-      } catch { /* TG API: message may be deleted */ }
+      } catch { /* TG API */ }
 
       try {
         await bot.api.sendMessage(
           sub.telegram_user_id,
           `К сожалению, тренировка «${sub.title}» не прошла модерацию. Обычно причина — качество видео или несоответствие формату. Попробуй предложить другую!`
         );
-      } catch { /* TG API: message may be deleted */ }
+      } catch { /* TG API */ }
     }
   });
+}
+
+// --- Main orchestrator ---
+
+export function registerBotMenu(bot: Bot): void {
+  const config = getConfig();
+  const isAdmin = (userId: number) => userId === config.TELEGRAM_ADMIN_USER_ID;
+
+  // Order matters: commands first, then hears, callbacks, on() handlers last
+  registerWorkoutHandlers(bot, config, isAdmin);
+  registerAdminHandlers(bot, config, isAdmin);
+  registerChallengeHandlers(bot, config, isAdmin);
+  registerUgcHandlers(bot, config, isAdmin); // LAST — has on('message:text') catch-all
 
   log.info('handlers registered');
 }
-

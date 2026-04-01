@@ -47,7 +47,9 @@ export async function formatCaption(video: VideoRow, challengeInfo?: ChallengeIn
   const equipment = detectEquipment(video.title, '');
   const equipmentTag = equipment.length > 0 ? equipment.join(', ') : EQUIPMENT_NO_GEAR;
 
-  const title = await rewriteTitle(video.title);
+  const title = video.display_title
+    ? escV2(video.display_title)
+    : await rewriteTitle(video.title);
   const channelName = await formatChannelName(video.channel_name);
 
   const catEmoji = CATEGORY_EMOJI[displayCategory] ?? '🏷';

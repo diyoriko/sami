@@ -76,6 +76,7 @@ describe('rating', () => {
       id: 1,
       youtube_id: 'test123',
       title: 'Test',
+      display_title: null,
       channel_name: 'Test',
       channel_url: null,
       duration_seconds: 600,
@@ -100,7 +101,7 @@ describe('rating', () => {
     const { computeRating } = await import('../db');
 
     const base = {
-      id: 1, youtube_id: 'a', title: 'T', channel_name: 'C', channel_url: null,
+      id: 1, youtube_id: 'a', title: 'T', display_title: null, channel_name: 'C', channel_url: null,
       duration_seconds: 600, duration_label: '10:00', difficulty: 'beginner' as const,
       category: 'stretching' as const, muscles: null, thumbnail_url: null,
       video_url: 'https://youtube.com/watch?v=a', rating: 0,
@@ -116,7 +117,7 @@ describe('rating', () => {
     const { computeRating } = await import('../db');
 
     const ugcVideo = {
-      id: 999, youtube_id: 'ugc-42', title: 'UGC Test', channel_name: 'user',
+      id: 999, youtube_id: 'ugc-42', title: 'UGC Test', display_title: null, channel_name: 'user',
       channel_url: null, duration_seconds: 300, duration_label: '5:00',
       difficulty: 'beginner' as const, category: 'stretching' as const,
       muscles: null, thumbnail_url: null, video_url: 'tg:file123',

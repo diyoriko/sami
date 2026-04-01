@@ -22,5 +22,49 @@ jobs:
       - run: npm ci
       - name: Type check
         run: npm run typecheck
-      - name: Tests
-        run: npm test
+      - name: Tests with coverage
+        run: npm run test:coverage
+
+      # ── Coverage delta gate ──
+      - name: Extract coverage
+        id: coverage
+        run: |
+          LINES=$(node -e "console.log(require('./coverage/coverage-summary.json').total.lines.pct)")
+          echo "lines=$LINES" >> "$GITHUB_OUTPUT"
+
+      - name: Save coverage baseline
+        if: github.ref == 'refs/heads/main'
+        run: echo "${{ steps.coverage.outputs.lines }}" > .coverage-baseline
+
+      - name: Cache baseline (main)
+        if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: agents/community/.coverage-baseline
+          key: sami-coverage-${{ github.sha }}
+
+      - name: Restore baseline (PR)
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v4
+        with:
+          path: agents/community/.coverage-baseline
+          key: sami-coverage-
+          restore-keys: sami-coverage-
+
+      - name: Coverage delta check
+        if: github.event_name == 'pull_request'
+        run: |
+          CURRENT="${{ steps.coverage.outputs.lines }}"
+          if [ -f .coverage-baseline ]; then
+            BASELINE=$(cat .coverage-baseline)
+            node -e "
+              const current = ${CURRENT}, baseline = ${BASELINE};
+              const delta = (current - baseline).toFixed(2);
+              console.log('Coverage: ' + current + '% (baseline: ' + baseline + '%, Δ: ' + delta + '%)');
+              if (delta < -2) {
+                console.log('::warning::Coverage dropped by ' + Math.abs(delta) + '% (was ' + baseline + '%, now ' + current + '%). Threshold: -2%');
+              }
+            "
+          else
+            echo "No baseline cached yet — skipping delta check"
+          fi
