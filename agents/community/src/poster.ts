@@ -96,15 +96,21 @@ export type PostResult = 'posted' | 'skipped' | 'no_video' | 'error';
 
 /** Fire-and-forget: generate story image and send to admin DM */
 function fireStory(bot: Bot, video: VideoRow, category: Category): void {
-  const storyData: StoryData = {
-    title: video.display_title ?? video.title,
-    category,
-    durationLabel: video.duration_label ?? '—',
-    difficulty: video.difficulty,
-    rawTitle: video.title,
-  };
-  // Don't await — story generation should not block post flow
-  sendStoryToAdmin(bot, storyData).catch(() => {});
+  // Resolve title: display_title → rewriteTitle → raw title
+  const titlePromise = video.display_title
+    ? Promise.resolve(video.display_title)
+    : rewriteTitle(video.title).then(t => t.replace(/\\(.)/g, '$1')); // unescape MarkdownV2
+
+  titlePromise.then(title => {
+    const storyData: StoryData = {
+      title,
+      category,
+      durationLabel: video.duration_label ?? '—',
+      difficulty: video.difficulty,
+      rawTitle: video.title,
+    };
+    return sendStoryToAdmin(bot, storyData);
+  }).catch(() => {});
 }
 
 export async function postVideoToChannel(
