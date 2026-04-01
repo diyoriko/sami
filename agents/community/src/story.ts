@@ -1,77 +1,53 @@
 /**
  * Story image generator for Telegram channel stories.
  *
- * Generates a 1080×1920 PNG from post data (title, category, duration, difficulty, equipment).
- * Uses sharp with SVG overlay + embedded Oceanic Grotesk font.
+ * Generates a 1080×1920 PNG from post data using @napi-rs/canvas (Skia).
+ * No dependency on system fontconfig — fonts registered directly via Skia.
  *
  * Flow: after posting to channel → generateStory() → send image to admin DM.
  */
 
-import sharp from 'sharp';
+import { createCanvas, GlobalFonts, type SKRSContext2D } from '@napi-rs/canvas';
 import * as fs from 'fs';
 import * as path from 'path';
 import { type Category, type Difficulty, CATEGORY_RU, DIFFICULTY_RU, EQUIPMENT_NO_GEAR } from './shared';
-import { detectEquipment } from './youtube';
 import { createLogger } from './logger';
 
 const log = createLogger('story');
 
 const W = 1080;
 const H = 1920;
-
-// ── Install fonts to system for librsvg (fontconfig) ────────────────────────
-
 const ASSETS_DIR = path.resolve(__dirname, '..', 'assets');
 
-/** Copy OTF fonts to ~/.fonts/ so librsvg can find them via fontconfig */
-function ensureFontsInstalled(): void {
+// ── Register fonts once ─────────────────────────────────────────────────────
+
+let _fontsRegistered = false;
+
+function registerFonts(): void {
+  if (_fontsRegistered) return;
+  _fontsRegistered = true;
   try {
-    const fontsDir = path.join(process.env.HOME || '/root', '.fonts');
-    fs.mkdirSync(fontsDir, { recursive: true });
-    let copied = false;
-    for (const font of ['OceanicGrotesk-Bold.otf', 'OceanicGrotesk-Regular.otf']) {
-      const src = path.join(ASSETS_DIR, font);
-      const dst = path.join(fontsDir, font);
-      if (fs.existsSync(src) && !fs.existsSync(dst)) {
-        fs.copyFileSync(src, dst);
-        copied = true;
-      }
-    }
-    if (copied) {
-      require('child_process').execSync('fc-cache -f 2>/dev/null || true');
-      log.info('fonts installed to ~/.fonts/');
-    }
+    const bold = path.join(ASSETS_DIR, 'OceanicGrotesk-Bold.otf');
+    const reg = path.join(ASSETS_DIR, 'OceanicGrotesk-Regular.otf');
+    if (fs.existsSync(bold)) GlobalFonts.registerFromPath(bold, 'Oceanic');
+    if (fs.existsSync(reg)) GlobalFonts.registerFromPath(reg, 'OceanicReg');
+    log.info('fonts registered via Skia');
   } catch (err) {
-    log.warn('failed to install fonts', { error: String(err) });
+    log.warn('font registration failed', { error: String(err) });
   }
 }
 
-let _fontsReady = false;
-function fontsReady(): void {
-  if (!_fontsReady) { ensureFontsInstalled(); _fontsReady = true; }
-}
+// ── Text helpers ────────────────────────────────────────────────────────────
 
-// Font family name from OTF metadata (fc-query shows "Oceanic Grotesk TRIAL")
-const FONT_TITLE = "'Oceanic Grotesk TRIAL', 'Helvetica Neue', Arial, sans-serif";
-const FONT_MONO = "'SF Mono', 'DejaVu Sans Mono', 'Liberation Mono', monospace";
-
-// ── SVG helpers ─────────────────────────────────────────────────────────────
-
-function esc(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-/** Word-wrap text to fit within maxWidth (approximate, assumes ~0.55em per char for bold) */
-function wrapTitle(text: string, fontSize: number, maxWidth: number): string[] {
-  const charWidth = fontSize * 0.55;
-  const maxChars = Math.floor(maxWidth / charWidth);
+/** Word-wrap using actual canvas measureText for precision */
+function wrapText(ctx: SKRSContext2D, text: string, maxWidth: number): string[] {
   const words = text.split(' ');
   const lines: string[] = [];
   let current = '';
 
   for (const word of words) {
     const test = current ? `${current} ${word}` : word;
-    if (test.length > maxChars && current) {
+    if (ctx.measureText(test).width > maxWidth && current) {
       lines.push(current);
       current = word;
     } else {
@@ -82,6 +58,16 @@ function wrapTitle(text: string, fontSize: number, maxWidth: number): string[] {
   return lines;
 }
 
+/** Find font size where the longest word fits within maxWidth */
+function fitTitleSize(ctx: SKRSContext2D, text: string, maxWidth: number, maxSize: number, minSize: number): number {
+  const longestWord = text.split(' ').reduce((a, b) => a.length > b.length ? a : b, '');
+  for (let size = maxSize; size >= minSize; size -= 4) {
+    ctx.font = `bold ${size}px Oceanic, sans-serif`;
+    if (ctx.measureText(longestWord).width <= maxWidth) return size;
+  }
+  return minSize;
+}
+
 // ── Main generator ──────────────────────────────────────────────────────────
 
 export interface StoryData {
@@ -90,11 +76,14 @@ export interface StoryData {
   durationLabel: string;
   difficulty: Difficulty;
   equipment?: string[];
-  rawTitle?: string; // original YouTube title for equipment detection
+  rawTitle?: string;
 }
 
 export async function generateStory(data: StoryData): Promise<Buffer> {
-  fontsReady();
+  registerFonts();
+
+  const canvas = createCanvas(W, H);
+  const ctx = canvas.getContext('2d');
 
   const categoryRu = (CATEGORY_RU[data.category] ?? data.category).toUpperCase();
   const difficultyRu = DIFFICULTY_RU[data.difficulty] ?? data.difficulty;
@@ -102,93 +91,85 @@ export async function generateStory(data: StoryData): Promise<Buffer> {
     ? data.equipment.join(', ')
     : EQUIPMENT_NO_GEAR;
 
-  // Auto-size title: shrink font until longest word fits in width
+  // ── Background ──
+  ctx.fillStyle = '#0A0A0A';
+  ctx.fillRect(0, 0, W, H);
+
+  // ── Geometric accents ──
+  ctx.strokeStyle = '#1A1A1A';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.ellipse(W + 25, 75, 325, 325, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(50, H - 100, 450, 350, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // ── Category tag (monospace) ──
+  ctx.font = '52px monospace';
+  ctx.fillStyle = '#666666';
+  ctx.fillText(categoryRu, 90, 270);
+
+  // ── Title (Oceanic Bold, auto-sized) ──
   const maxWidth = W - 180;
-  const longestWord = data.title.split(' ').reduce((a, b) => a.length > b.length ? a : b, '');
-  let titleSize = 120;
-  while (titleSize > 60 && longestWord.length * titleSize * 0.55 > maxWidth) {
-    titleSize -= 4;
+  const titleSize = fitTitleSize(ctx, data.title, maxWidth, 120, 64);
+  ctx.font = `bold ${titleSize}px Oceanic, sans-serif`;
+  const titleLines = wrapText(ctx, data.title, maxWidth);
+  const lineHeight = Math.round(titleSize * 1.25);
+
+  ctx.fillStyle = '#FAFAFA';
+  const titleY = 420;
+  for (let i = 0; i < titleLines.length; i++) {
+    ctx.fillText(titleLines[i], 90, titleY + i * lineHeight);
   }
 
-  const titleLines = wrapTitle(data.title, titleSize, maxWidth);
-  const lineHeight = Math.round(titleSize * 1.2);
-  const titleY = 420;
+  // ── Divider ──
+  const dividerY = titleY + titleLines.length * lineHeight + 30;
+  ctx.fillStyle = '#444444';
+  ctx.fillRect(90, dividerY, 150, 4);
 
-  const titleSvgLines = titleLines.map((line, i) =>
-    `<text x="90" y="${titleY + i * lineHeight}" font-family="${FONT_TITLE}" font-size="${titleSize}" font-weight="bold" fill="#FAFAFA">${esc(line)}</text>`
-  ).join('\n    ');
-
-  // Meta rows below title
-  const metaStartY = titleY + titleLines.length * lineHeight + 80;
-  const dividerY = metaStartY - 30;
-  const rowH = 80;
+  // ── Meta rows (monospace, label + value aligned) ──
+  const metaY = dividerY + 60;
   const valX = 470;
-
+  const rowH = 80;
   const meta = [
     ['ВРЕМЯ', data.durationLabel || '—'],
     ['УРОВЕНЬ', difficultyRu],
     ['ИНВЕНТАРЬ', gear],
   ];
 
-  const metaSvg = meta.map(([label, value], i) => {
-    const y = metaStartY + i * rowH;
-    return `<text x="90" y="${y}" font-family="${FONT_MONO}" font-size="44" fill="#555555">${esc(label!)}</text>
-    <text x="${valX}" y="${y}" font-family="${FONT_MONO}" font-size="44" font-weight="bold" fill="#BBBBBB">${esc(value!)}</text>`;
-  }).join('\n    ');
+  for (let i = 0; i < meta.length; i++) {
+    const y = metaY + i * rowH;
+    ctx.font = '44px monospace';
+    ctx.fillStyle = '#555555';
+    ctx.fillText(meta[i][0], 90, y);
 
-  const svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
+    ctx.font = 'bold 44px monospace';
+    ctx.fillStyle = '#BBBBBB';
+    ctx.fillText(meta[i][1], valX, y);
+  }
 
-  <!-- Background -->
-  <rect width="${W}" height="${H}" fill="#0A0A0A"/>
-
-  <!-- Geometric accents -->
-  <ellipse cx="${W + 25}" cy="75" rx="325" ry="325" fill="none" stroke="#1A1A1A" stroke-width="1"/>
-  <ellipse cx="50" cy="${H - 100}" rx="450" ry="350" fill="none" stroke="#1A1A1A" stroke-width="1"/>
-
-  <!-- Category tag -->
-  <text x="90" y="270" font-family="${FONT_MONO}" font-size="52" fill="#666666">${esc(categoryRu)}</text>
-
-  <!-- Title -->
-  ${titleSvgLines}
-
-  <!-- Divider -->
-  <rect x="90" y="${dividerY}" width="150" height="4" fill="#444444"/>
-
-  <!-- Meta -->
-  ${metaSvg}
-
-  <!-- Logo placeholder (composited separately) -->
-</svg>`;
-
-  // Render SVG to PNG, then composite logo on top
-  const svgBuffer = Buffer.from(svg);
-  let image = sharp(svgBuffer, { density: 72 }).png();
-
-  // Try to composite logo
+  // ── Logo ──
   try {
     const logoPath = path.join(ASSETS_DIR, 'logo.png');
     if (fs.existsSync(logoPath)) {
-      const logoResized = await sharp(logoPath)
-        .resize({ height: 200 })
-        .negate({ alpha: false }) // invert to white
-        .ensureAlpha()
-        .toBuffer();
+      const { loadImage } = await import('@napi-rs/canvas');
+      const logo = await loadImage(logoPath);
+      const lh = 200;
+      const lw = Math.round(logo.width * lh / logo.height);
+      const lx = Math.round((W - lw) / 2);
+      const ly = H - 340;
 
-      const base = await image.toBuffer();
-      const logoMeta = await sharp(logoResized).metadata();
-      const logoW = logoMeta.width ?? 400;
-
-      image = sharp(base).composite([{
-        input: logoResized,
-        left: Math.round((W - logoW) / 2),
-        top: H - 340,
-      }]);
+      // Draw logo with white tint: draw on offscreen, then composite
+      ctx.globalAlpha = 0.85;
+      ctx.drawImage(logo, lx, ly, lw, lh);
+      ctx.globalAlpha = 1.0;
     }
   } catch (err) {
-    log.warn('failed to composite logo', { error: String(err) });
+    log.warn('logo composite failed', { error: String(err) });
   }
 
-  return image.png().toBuffer();
+  return Buffer.from(canvas.toBuffer('image/png'));
 }
 
 // ── Send story to admin ─────────────────────────────────────────────────────
