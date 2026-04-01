@@ -11,6 +11,7 @@ import {
 import { downloadVideo, isYtDlpAvailable } from './downloader';
 import { detectEquipment } from './youtube';
 import { rewriteTitle, formatChannelName } from './translate';
+import { sendStoryToAdmin, type StoryData } from './story';
 import { createLogger, type Logger } from './logger';
 import {
   type Category, type Difficulty,
@@ -93,6 +94,19 @@ export async function formatCaption(video: VideoRow, challengeInfo?: ChallengeIn
 
 export type PostResult = 'posted' | 'skipped' | 'no_video' | 'error';
 
+/** Fire-and-forget: generate story image and send to admin DM */
+function fireStory(bot: Bot, video: VideoRow, category: Category): void {
+  const storyData: StoryData = {
+    title: video.display_title ?? video.title,
+    category,
+    durationLabel: video.duration_label ?? '—',
+    difficulty: video.difficulty,
+    rawTitle: video.title,
+  };
+  // Don't await — story generation should not block post flow
+  sendStoryToAdmin(bot, storyData).catch(() => {});
+}
+
 export async function postVideoToChannel(
   bot: Bot,
   date: string,
@@ -157,6 +171,7 @@ export async function postVideoToChannel(
           }
 
           postLog.info(`posted ${category} as VIDEO file`, { msgId: msg.message_id });
+          fireStory(bot, video, category);
           return 'posted';
         } catch (uploadErr) {
           download.cleanup();
@@ -204,6 +219,7 @@ export async function postVideoToChannel(
     }
 
     postLog.warn(`posted ${category} as LINK (degraded)`, { msgId: msg.message_id });
+    fireStory(bot, video, category);
     return 'posted';
   } catch (err) {
     postLog.error(`COMPLETE FAILURE for ${category} on ${date}`, { error: String(err) });
