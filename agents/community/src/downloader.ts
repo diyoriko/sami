@@ -348,17 +348,19 @@ async function compressToFit(filePath: string): Promise<boolean> {
   }
 }
 
-const MAX_VIDEO_DURATION = 900; // 15 min — longer videos get posted as link
+const MAX_VIDEO_DURATION = 1800; // 30 min — longer videos get posted as link
 
 /**
  * Pick max resolution based on video duration to stay under 50MB with decent quality.
- * - ≤10 min: 480p (~800kbps video = comfortable fit)
- * - 10–15 min: 360p (~500kbps = good quality at lower res)
- * Videos >15 min are rejected before download (posted as YouTube link instead).
+ * - ≤8 min: 480p (~800kbps = comfortable fit)
+ * - 8–15 min: 360p (~500kbps = good quality at lower res)
+ * - 15–25 min: 360p
+ * - 15–30 min: 240p (~250kbps = watchable, fits 50MB)
  */
 function pickMaxHeight(durationSeconds: number | undefined): number {
-  if (!durationSeconds || durationSeconds <= 600) return 480;
-  return 360;
+  if (!durationSeconds || durationSeconds <= 480) return 480;
+  if (durationSeconds <= 900) return 360;
+  return 240;
 }
 
 /** Fetch video duration via yt-dlp metadata (no download) */
@@ -393,7 +395,7 @@ export async function downloadVideo(youtubeUrl: string, youtubeId: string): Prom
   // Fetch duration to pick optimal resolution (or skip download for very long videos)
   const duration = await fetchDuration(ytDlp, youtubeUrl, commonArgs);
   if (duration && duration > MAX_VIDEO_DURATION) {
-    throw new Error(`Video too long for upload (${Math.round(duration / 60)} min > 15 min limit) — will post as link`);
+    throw new Error(`Video too long for upload (${Math.round(duration / 60)} min > 30 min limit) — will post as link`);
   }
   const maxHeight = pickMaxHeight(duration);
   if (maxHeight < 480) {
