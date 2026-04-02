@@ -147,7 +147,7 @@ if [[ -f "$APPLY_PROPOSALS_SCRIPT" && -f "$TASKS_FILE" && -n "$API_KEY_FOR_PROPO
 fi
 
 CONTEXT_FILES=(
-  "$CONTEXT_ROOT/STRATEGIST_BRIEF.md"
+  "$CONTEXT_ROOT/docs/research/STRATEGIST_BRIEF.md"
   "$CONTEXT_ROOT/BACKLOG.md"
   "$COMMUNITY_REPORT_LOCAL"
   "$ANALYTICS_REPORT_LOCAL"
@@ -406,11 +406,11 @@ for p in files:
     if p.exists():
         text = p.read_text(encoding='utf-8', errors='ignore').strip()
         if text:
-            # Smart truncation for BACKLOG.md
+            # Smart truncation for BACKLOG.md; everything else — full content
             if p.name == 'BACKLOG.md':
                 parts.append(f"## Source: {p.name}\n\n{smart_backlog(text)}")
             else:
-                parts.append(f"## Source: {p.name}\n\n{text[:12000]}")
+                parts.append(f"## Source: {p.name}\n\n{text}")
 
 context = "\n\n".join(parts)
 
@@ -485,7 +485,18 @@ prompt = f"""Ты стратегический агент проекта Sami. �
 """
 
 out.write_text(prompt, encoding='utf-8')
+
+# Log prompt stats
+prompt_kb = len(prompt) // 1024
+context_kb = len(context) // 1024
+file_count = len(parts)
+import sys
+print(f"[strategist] prompt: {prompt_kb}KB total, context: {context_kb}KB from {file_count} files", file=sys.stderr)
 PY
+
+# Log prompt size for debugging
+PROMPT_SIZE=$(wc -c < "$PROMPT_PATH" 2>/dev/null | tr -d ' ')
+echo "[strategist] prompt file: ${PROMPT_SIZE} bytes ($(( PROMPT_SIZE / 1024 ))KB)"
 
 if [[ "$DRY_RUN" == "1" ]]; then
   REPORT_NAME="${STAMP_LOCAL}__strategist-dry-run.md"
