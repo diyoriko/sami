@@ -421,6 +421,23 @@ async function main(): Promise<void> {
       return;
     }
 
+    // POST /trigger-analytics — strategist triggers fresh analytics before fetching report
+    if (req.url === '/trigger-analytics' && req.method === 'POST') {
+      (async () => {
+        try {
+          const { runDailyAnalytics } = await import('./analytics');
+          const { todayMsk: today } = await import('./dates');
+          await runDailyAnalytics(bot, today());
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: 'ok', date: today() }));
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: String(err) }));
+        }
+      })();
+      return;
+    }
+
     // POST /packet — receive COMMUNITY_PACKET from strategist
     if (req.url === '/packet' && req.method === 'POST') {
       const authHeader = req.headers['x-admin-token'];
@@ -744,7 +761,7 @@ async function main(): Promise<void> {
     }
   });
   httpServer.listen(port, () => {
-    createLogger('http').info(`report server on :${port} — /report/community /report/analytics /packet /health /impl/* /proposal /proposals`);
+    createLogger('http').info(`report server on :${port} — /report/community /report/analytics /packet /health /trigger-analytics /impl/* /proposal /proposals`);
   });
 
   // Graceful shutdown (Railway sends SIGTERM on redeploy, 10s before SIGKILL)

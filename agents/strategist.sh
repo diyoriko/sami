@@ -53,11 +53,34 @@ emergency_notify() {
 }
 trap emergency_notify EXIT
 
+# Idempotency lock: prevent concurrent runs
+LOCK_FILE="$INTERNAL_DIR/.strategist.lock"
+if [[ -f "$LOCK_FILE" ]]; then
+  lock_age=$(( $(date +%s) - $(stat -f '%m' "$LOCK_FILE" 2>/dev/null || stat -c '%Y' "$LOCK_FILE" 2>/dev/null || echo 0) ))
+  if [[ "$lock_age" -lt "$TIMEOUT_SEC" ]]; then
+    echo "[strategist] another instance running (lock age: ${lock_age}s). Exiting."
+    exit 0
+  else
+    echo "[strategist] stale lock (${lock_age}s), removing..."
+    rm -f "$LOCK_FILE"
+  fi
+fi
+echo "$$" > "$LOCK_FILE"
+# Update trap to clean lock
+trap 'rm -f "$LOCK_FILE"; emergency_notify' EXIT
+
 COMMUNITY_AGENT_URL="${COMMUNITY_AGENT_URL:-https://courageous-happiness-production.up.railway.app}"
 
 # Use INTERNAL_DIR (runtime-safe) for curl downloads — avoids TCC blocks on Documents
 COMMUNITY_REPORT_LOCAL="$INTERNAL_DIR/community-latest.json"
 ANALYTICS_REPORT_LOCAL="$INTERNAL_DIR/analytics-latest.json"
+
+# Trigger fresh analytics collection before fetching (ensures subscriber count is current)
+echo "[strategist] triggering fresh analytics collection..."
+curl -sf --max-time 30 -X POST "$COMMUNITY_AGENT_URL/trigger-analytics" >/dev/null 2>&1 \
+  && echo "[strategist] analytics refresh triggered" \
+  || echo "[strategist] analytics refresh not available (using cached data)"
+sleep 3  # Give bot time to collect fresh data
 
 # Fetch fresh metrics from Railway before building prompt
 if curl -sf --max-time 10 "$COMMUNITY_AGENT_URL/report/community" -o "$COMMUNITY_REPORT_LOCAL" 2>/dev/null; then
@@ -69,6 +92,22 @@ if curl -sf --max-time 10 "$COMMUNITY_AGENT_URL/report/analytics" -o "$ANALYTICS
   echo "[strategist] fetched analytics report from Railway"
 else
   echo "[strategist] analytics report unavailable (ok, skipping)"
+fi
+
+# Record data freshness for prompt context
+ANALYTICS_AGE="unknown"
+if [ -f "$ANALYTICS_REPORT_LOCAL" ]; then
+  ANALYTICS_WRITTEN=$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('written_at','unknown'))" "$ANALYTICS_REPORT_LOCAL" 2>/dev/null || echo "unknown")
+  if [ "$ANALYTICS_WRITTEN" != "unknown" ]; then
+    ANALYTICS_AGE_SEC=$(python3 -c "
+from datetime import datetime, timezone
+written = datetime.fromisoformat('$ANALYTICS_WRITTEN'.replace('Z','+00:00'))
+age = (datetime.now(timezone.utc) - written).total_seconds()
+hours = int(age // 3600)
+print(f'{hours}h' if hours > 0 else f'{int(age//60)}m')
+" 2>/dev/null || echo "unknown")
+    ANALYTICS_AGE="$ANALYTICS_AGE_SEC (written_at: $ANALYTICS_WRITTEN)"
+  fi
 fi
 
 RECENT_SUMMARIES="$INTERNAL_DIR/recent-summaries.md"
@@ -304,18 +343,19 @@ else:
 PY
 echo "[strategist] extracted recent summaries -> $RECENT_SUMMARIES"
 
-python3 - "$PROMPT_PATH" "${CONTEXT_FILES[@]}" <<'PY'
+python3 - "$PROMPT_PATH" "$ANALYTICS_AGE" "${CONTEXT_FILES[@]}" <<'PY'
 import sys
 from pathlib import Path
 
 out = Path(sys.argv[1])
-files = [Path(p) for p in sys.argv[2:]]
+analytics_age = sys.argv[2]
+files = [Path(p) for p in sys.argv[3:]]
 parts = []
 for p in files:
     if p.exists():
         text = p.read_text(encoding='utf-8', errors='ignore').strip()
         if text:
-            parts.append(f"## Source: {p.name}\n\n{text[:6000]}")
+            parts.append(f"## Source: {p.name}\n\n{text[:12000]}")
 
 context = "\n\n".join(parts)
 
@@ -337,13 +377,18 @@ prompt = f"""Ты стратегический агент проекта Sami. �
 - Общий объём отчёта: до 3000 слов (не больше).
 - Фокус на actionable items, а не описания.
 
+⏰ АКТУАЛЬНОСТЬ ДАННЫХ:
+- Аналитика (subscriber_count и др.): возраст данных = {analytics_age}. Если старше 12 часов — упомяни это явно, цифры могут быть неточны.
+- Не выдавай устаревшие данные за текущие. Пиши «по данным на [время]» если данные старше 6 часов.
+
 Обязательные блоки:
+0. ## Ретроспектива — что рекомендовал прошлый раз? Что выполнено, что нет, почему? Если рекомендация повторяется 3+ раз — эскалируй как ⚠️ ПОВТОР и предложи альтернативу с меньшим effort.
 1. ## Резюме — 5-7 кратких буллетов (самое важное, простым языком)
-2. ## Фокус дня — 3 конкретных действия на сегодня (как совет другу)
-3. ## Эксперименты — таблица: гипотеза, шаги, метрика, дедлайн (только активные)
+2. ## Фокус дня — МАКСИМУМ 3 конкретных действия на сегодня (как совет другу). Лучше 2 выполненных, чем 5 проигнорированных.
+3. ## Эксперименты — таблица: гипотеза, шаги, метрика, дедлайн (только активные). Обнови статус из experiments.json.
 4. ## Метрики — главный показатель + 3-4 цифры (словами, не кодом)
-5. ## Решения — 3 решения для владельца проекта (без жаргона)
-6. ## Ресерч — 3 внешних инсайта с источниками
+5. ## Решения — МАКСИМУМ 3 решения для владельца проекта (без жаргона)
+6. ## Ресерч — 2-3 внешних инсайта. ⚠️ НЕ выдумывай ссылки и статистику! Если не можешь гарантировать точность URL — не указывай его. Лучше написать «по данным исследований» без ссылки, чем дать битую ссылку.
 
 ВАЖНО — контекст памяти:
 - В контексте есть experiments.json — трекер активных экспериментов. Обновляй статус в разделе "Эксперименты".
