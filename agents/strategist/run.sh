@@ -15,6 +15,7 @@ AGENT_DIR="$PROJECT_DIR/agents/strategist"
 CALENDAR_SECTION="## Фокус дня"
 
 COMMUNITY_AGENT_URL="${COMMUNITY_AGENT_URL:-https://courageous-happiness-production.up.railway.app}"
+STRATEGIST_HC_UUID="d22ef7e8-38ab-4930-816e-dcd434a0c914"
 
 # ─── Source shared runner ─────────────────────────────────────────────
 source "$HOME/Documents/Projects/Architect/shared/strategist-base.sh"
