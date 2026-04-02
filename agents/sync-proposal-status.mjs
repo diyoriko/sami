@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 /**
- * Sync strategist proposal statuses against COMMUNITY_TASKS.md.
+ * Sync strategist proposal statuses against BACKLOG.md.
  *
  * Reads proposed-tasks.md, checks each proposal against the backlog:
- * - If found in COMMUNITY_TASKS.md (fuzzy match) → mark as "accepted"
+ * - If found in BACKLOG.md (fuzzy match) → mark as "accepted"
  * - If found and marked [x] → mark as "done"
  * - Otherwise → stays "pending"
  *
@@ -25,7 +25,7 @@ const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, "..");
 
 const proposedPath = path.join(rootDir, "reports/strategist/.internal/proposed-tasks.md");
-const backlogPath = path.join(rootDir, "COMMUNITY_TASKS.md");
+const backlogPath = path.join(rootDir, "BACKLOG.md");
 const statusOutputPath = path.join(rootDir, "reports/strategist/.internal/proposal-status.md");
 const dryRun = process.argv.includes("--dry-run");
 
@@ -104,7 +104,7 @@ async function main() {
   const statusLines = [
     "# Proposal Status",
     "",
-    "Статусы предложений стратега (автоматически синхронизировано с COMMUNITY_TASKS.md).",
+    "Статусы предложений стратега (автоматически синхронизировано с BACKLOG.md).",
     "",
   ];
 
