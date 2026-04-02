@@ -191,10 +191,14 @@ bash agents/uninstall-1x-daily-mac.sh              # удалить cron
 ## Sprint → Release Process
 
 1. **Sprint** — задачи в текущей секции BACKLOG.md
-2. **Реализация** — код + тесты
-3. **Деплой** — `git push origin main` → Railway auto-deploy + version bump (vX.Y.Z)
-4. **Архивация** — закрытый спринт в `<details>`, открытые переносятся с причиной
-5. **Max 3 релиза в неделю** — батчевать коммиты, каждый релиз = Railway restart
+2. **Реализация** — код + тесты на main (локально)
+3. **PR** — `git checkout -b deploy/YYYY-MM-DD && git push -u origin HEAD && gh pr create --fill`
+4. **Review** — CI + CodeRabbit автоматически на PR. Исправить замечания если есть
+5. **Merge** — `gh pr merge --squash --delete-branch` → Railway auto-deploy
+6. **Архивация** — закрытый спринт в `<details>`, открытые переносятся с причиной
+7. **Max 3 релиза в неделю** — батчевать коммиты, каждый релиз = Railway restart
+
+**NEVER push directly to main.** Always go through a PR.
 
 ## Quality Gate
 
@@ -205,6 +209,12 @@ bash agents/uninstall-1x-daily-mac.sh              # удалить cron
 - Coverage: `npm run test:coverage` — отчёт покрытия (@vitest/coverage-v8)
 - CI coverage delta gate: warning при Δ% > -2% на PR (cache-based baseline)
 - `index.ts` coverage 0% — ожидаемо: тесты через bot.handleUpdate() mock, не direct import (index.ts вызывает main() at top level)
+
+## Commit Rules
+- Do NOT add `Co-Authored-By` trailer to commits — GitHub flagged the account for bot-like activity
+- Squash related changes into 1-3 meaningful commits before pushing, not micro-commits
+- Never push more than 5 commits at a time to main
+- Wait at least 3 minutes between pushes (enforced by pre-push hook)
 
 ## Guardrails
 
