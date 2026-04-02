@@ -344,8 +344,59 @@ PY
 echo "[strategist] extracted recent summaries -> $RECENT_SUMMARIES"
 
 python3 - "$PROMPT_PATH" "$ANALYTICS_AGE" "${CONTEXT_FILES[@]}" <<'PY'
+import re
 import sys
 from pathlib import Path
+
+def smart_backlog(text: str, max_chars: int = 20000) -> str:
+    """Extract current sprint fully + compact list of all completed tasks."""
+    lines = text.splitlines()
+
+    # Find current (first/topmost) sprint section — backlog is ordered newest-first
+    sprint_start = -1
+    for i, line in enumerate(lines):
+        if re.match(r'^##\s+(Sprint|SPRINT)\s+\d+', line, re.IGNORECASE):
+            sprint_start = i
+            break  # first sprint = current
+
+    # Current sprint: everything from last sprint header to next ## or <details>
+    current_sprint = ""
+    if sprint_start >= 0:
+        end = len(lines)
+        for i in range(sprint_start + 1, len(lines)):
+            if re.match(r'^(##\s|<details)', lines[i]):
+                end = i
+                break
+        current_sprint = "\n".join(lines[sprint_start:end])
+
+    # Header (everything before first sprint)
+    header = ""
+    for i, line in enumerate(lines):
+        if re.match(r'^##\s+(Sprint|SPRINT)\s+\d+', line, re.IGNORECASE):
+            header = "\n".join(lines[:i])
+            break
+
+    # ALL completed tasks across entire file (compact list)
+    completed = []
+    for line in lines:
+        if re.match(r'^-\s*\[x\]', line):
+            # Strip to just the task name, max 120 chars
+            completed.append(line.strip()[:120])
+
+    result_parts = []
+    if header.strip():
+        result_parts.append(header.strip())
+    if current_sprint.strip():
+        result_parts.append(current_sprint.strip())
+
+    if completed:
+        result_parts.append(
+            f"=== ВСЕ ЗАВЕРШЁННЫЕ ЗАДАЧИ ({len(completed)} шт) — НЕ предлагай повторно ===\n"
+            + "\n".join(completed)
+        )
+
+    result = "\n\n".join(result_parts)
+    return result[:max_chars]
 
 out = Path(sys.argv[1])
 analytics_age = sys.argv[2]
@@ -355,7 +406,11 @@ for p in files:
     if p.exists():
         text = p.read_text(encoding='utf-8', errors='ignore').strip()
         if text:
-            parts.append(f"## Source: {p.name}\n\n{text[:12000]}")
+            # Smart truncation for BACKLOG.md
+            if p.name == 'BACKLOG.md':
+                parts.append(f"## Source: {p.name}\n\n{smart_backlog(text)}")
+            else:
+                parts.append(f"## Source: {p.name}\n\n{text[:12000]}")
 
 context = "\n\n".join(parts)
 
@@ -408,6 +463,7 @@ prompt = f"""Ты стратегический агент проекта Sami. �
 // BACKLOG_PROPOSALS_END
 Правила: только новые задачи (не дублируй то что уже в BACKLOG.md). Максимум 5 предложений. Учитывай owner-decisions.json.
 ВАЖНО: В контексте есть proposal-status.md — статусы твоих прошлых предложений (done/accepted/pending). НЕ повторяй accepted и done предложения. Сфокусируйся на новых идеях.
+КРИТИЧЕСКИ ВАЖНО: В конце BACKLOG.md есть секция "ВСЕ ЗАВЕРШЁННЫЕ ЗАДАЧИ" — это полный список того, что УЖЕ СДЕЛАНО. Прочитай этот список ПЕРЕД тем как предлагать что-то. Если задача уже в этом списке — НЕ ПРЕДЛАГАЙ её.
 
 Обязательно в конце добавь блок:
 // COMMUNITY_PACKET_START
