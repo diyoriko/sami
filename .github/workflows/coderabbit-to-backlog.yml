@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: develop
 
       - name: Extract review comments to backlog
         env:
@@ -62,5 +62,5 @@ jobs:
           CHANGES=$(git diff --cached --stat)
           if [ -n "$CHANGES" ]; then
             git commit -m "chore: add CodeRabbit review suggestions to backlog (PR #${{ github.event.pull_request.number }})"
-            git push origin main
+            git push origin develop
           fi
