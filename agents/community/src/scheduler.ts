@@ -3,7 +3,7 @@ import { Bot } from 'grammy';
 import { getConfig } from './config';
 import { createLogger } from './logger';
 import { writeCommunityReport } from './strategist-sync';
-import { runDailyAnalytics, runWeeklyAnalytics } from './analytics';
+import { runDailyAnalytics, runWeeklyAnalytics, postWeeklyDigest } from './analytics';
 
 import { notifyAdmin } from './notify-admin';
 import { todayMsk, currentWeekMsk } from './dates';
@@ -183,6 +183,17 @@ export function startScheduler(bot: Bot): void {
     }
   }, { timezone: 'Europe/Moscow' });
 
+  // ---- SM-1040: Weekly digest to channel (Sunday 20:00 MSK) ----
+  cron.schedule('0 20 * * 0', async () => {
+    log.info('posting weekly digest to channel');
+    try {
+      await postWeeklyDigest(bot, currentWeekMsk());
+    } catch (err) {
+      log.error('weekly digest failed', { error: String(err) });
+      await notifyAdmin(bot, 'Analytics', `Недельный дайджест упал:\n\`${String(err)}\``);
+    }
+  }, { timezone: 'Europe/Moscow' });
+
   // ---- S5: Weekly progress poll (Sunday 12:00 MSK) ----
   cron.schedule('0 9 * * 0', async () => {
     log.info('posting weekly progress poll');
@@ -320,35 +331,12 @@ export function startScheduler(bot: Bot): void {
     }
   }, { timezone: 'Europe/Moscow' });
 
-  // ---- Stories reminder (daily 09:00 MSK) ----
-  cron.schedule('0 9 * * *', async () => {
-    log.info('checking for stories reminder (09:00)');
-    try {
-      const { getLatestPostForDate } = require('./db') as typeof import('./db');
-
-      const today = todayMsk();
-      const post = getLatestPostForDate(today);
-
-      if (!post) {
-        log.info('stories reminder skipped — no post for today');
-        return;
-      }
-
-      const link = `https://t.me/sami_workouts/${post.channel_message_id}`;
-      await bot.api.sendMessage(
-        config.TELEGRAM_ADMIN_USER_ID,
-        `📱 Опубликуй Story с сегодняшней тренировкой!\n\nStories видят даже незнакомые — бесплатный охват.\n\n${link}`
-      );
-      log.info('stories reminder sent');
-    } catch (err) {
-      log.error('stories reminder failed', { error: String(err) });
-    }
-  }, { timezone: 'Europe/Moscow' });
+  // ---- Stories reminder — DISABLED (admin request 2026-04-03) ----
 
   // Strategist runs on Mac (claude --print, Max subscription) and POSTs packet to /packet endpoint.
   // If ANTHROPIC_API_KEY is set, can also run locally on Railway (future option).
 
-  log.info('all cron jobs registered (community + analytics + poll + stability + reminder + owner + stories)');
+  log.info('all cron jobs registered (community + analytics + digest + poll + stability + reminder + owner)');
 
   // Cleanup old approval sessions on startup
   setTimeout(() => {

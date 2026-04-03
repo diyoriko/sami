@@ -87,8 +87,14 @@ Env: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID`, `TELEGRAM_GROUP_ID`, `TELEGRAM
 
 Деплой:
 ```bash
-git add . && git commit -m "..." && git push origin main
-# Railway автоматически подхватывает
+# Feature → develop
+git checkout -b feature/... && git add . && git commit -m "..." && git push -u origin HEAD
+gh pr create --base develop --fill
+# After review: gh pr merge --squash --delete-branch
+
+# Release: develop → main
+gh pr create --base main --head develop --title "Release $(date +%Y-%m-%d)" --fill
+# After review: gh pr merge --merge → Railway auto-deploy
 ```
 
 ---
@@ -191,14 +197,16 @@ bash agents/uninstall-1x-daily-mac.sh              # удалить cron
 ## Sprint → Release Process
 
 1. **Sprint** — задачи в текущей секции BACKLOG.md
-2. **Реализация** — код + тесты на main (локально)
-3. **PR** — `git checkout -b deploy/YYYY-MM-DD && git push -u origin HEAD && gh pr create --fill`
+2. **Реализация** — feature branch от `develop`, код + тесты
+3. **PR → develop** — `git checkout -b feature/... && git push -u origin HEAD && gh pr create --base develop --fill`
 4. **Review** — CI + CodeRabbit автоматически на PR. Исправить замечания если есть
-5. **Merge** — `gh pr merge --squash --delete-branch` → Railway auto-deploy
-6. **Архивация** — закрытый спринт в `<details>`, открытые переносятся с причиной
-7. **Max 3 релиза в неделю** — батчевать коммиты, каждый релиз = Railway restart
+5. **Merge → develop** — `gh pr merge --squash --delete-branch` (накопление изменений)
+6. **Release PR** — когда готовы к деплою: `develop` → PR → `main` → Railway auto-deploy
+7. **Архивация** — закрытый спринт в `<details>`, открытые переносятся с причиной
+8. **Max 3 релиза в неделю** — develop→main мержи, каждый = Railway restart
 
-**NEVER push directly to main.** Always go through a PR.
+**NEVER push directly to main OR develop.** Always go through a PR.
+Default branch: `develop`.
 
 ## Quality Gate
 
@@ -218,7 +226,7 @@ bash agents/uninstall-1x-daily-mac.sh              # удалить cron
 
 ## Guardrails
 
-- **Max 3 релиза в неделю** — батчевать fix-коммиты в один patch. Каждый релиз = Railway restart.
+- **Max 3 релиза в неделю** — develop→main мержи. Каждый = Railway restart.
 - Не создавать группы/каналы автоматически — только вручную, потом добавлять бота
 - Не полагаться на Google Drive для доставки отчётов
 - Не удалять пользовательские данные без явного запроса

@@ -118,7 +118,7 @@ describe('scheduler: startScheduler registers cron jobs', () => {
     // 7. Stability wall (0 16 * * 5)
     // 8. 48h inactivity reminder (0 10 * * *)
     // 9. Owner reminder (0 15 * * *)
-    // 10. Stories reminder (0 9 * * *)
+    // 10. Weekly digest to channel (0 20 * * 0)
     // 11. Tomorrow video check (0 22 * * *)
     expect(scheduledJobs.length).toBe(11);
   });
