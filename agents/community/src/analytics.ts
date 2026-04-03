@@ -262,3 +262,66 @@ export async function runWeeklyAnalytics(bot: Bot, weekStr: string): Promise<voi
     log.error('failed to send weekly DM', { error: String(err) });
   }
 }
+
+// ---------------------------------------------------------------------------
+// SM-1040: Weekly channel digest — post summary to @sami_workouts
+// ---------------------------------------------------------------------------
+
+export async function postWeeklyDigest(bot: Bot, weekStr: string): Promise<void> {
+  const config = getConfig();
+  log.info(`posting weekly digest to channel for ${weekStr}`);
+
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + mondayOffset);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+
+  const startDate = monday.toISOString().slice(0, 10);
+  const endDate = sunday.toISOString().slice(0, 10);
+
+  const recentPosts = getRecentPosts(7);
+  const cumulative = getCumulativeStats();
+  const weeklyCompletions = recentPosts.reduce((sum, p) => sum + p.completions, 0);
+
+  if (recentPosts.length === 0) {
+    log.info('no posts this week, skipping digest');
+    return;
+  }
+
+  // Top 3 by completions
+  const top3 = [...recentPosts]
+    .sort((a, b) => b.completions - a.completions)
+    .slice(0, 3);
+
+  const topLines = top3.map((p, i) => {
+    const medal = ['🥇', '🥈', '🥉'][i];
+    const title = escV2(p.title.slice(0, 40) + (p.title.length > 40 ? '…' : ''));
+    return `${medal} ${title} — ${p.completions} выполнений`;
+  });
+
+  const lines = [
+    `*${escV2(`Итоги недели ${startDate} — ${endDate}`)}*`,
+    '',
+    `${escV2(`📊 ${recentPosts.length} тренировок опубликовано`)}`,
+    `${escV2(`✅ ${weeklyCompletions} выполнений`)}`,
+    `${escV2(`👥 ${cumulative.total_active_users} активных участников`)}`,
+    '',
+    `*${escV2('Топ тренировки:')}*`,
+    ...topLines,
+    '',
+    `${escV2('Спасибо всем, кто практикует 💪')}`,
+  ];
+
+  try {
+    await bot.api.sendMessage(config.TELEGRAM_CHANNEL_ID, lines.join('\n'), {
+      parse_mode: 'MarkdownV2',
+      link_preview_options: { is_disabled: true },
+    });
+    log.info('weekly digest posted to channel');
+  } catch (err) {
+    log.error('failed to post weekly digest', { error: String(err) });
+  }
+}

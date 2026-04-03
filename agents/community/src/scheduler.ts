@@ -3,7 +3,7 @@ import { Bot } from 'grammy';
 import { getConfig } from './config';
 import { createLogger } from './logger';
 import { writeCommunityReport } from './strategist-sync';
-import { runDailyAnalytics, runWeeklyAnalytics } from './analytics';
+import { runDailyAnalytics, runWeeklyAnalytics, postWeeklyDigest } from './analytics';
 
 import { notifyAdmin } from './notify-admin';
 import { todayMsk, currentWeekMsk } from './dates';
@@ -183,6 +183,17 @@ export function startScheduler(bot: Bot): void {
     }
   }, { timezone: 'Europe/Moscow' });
 
+  // ---- SM-1040: Weekly digest to channel (Sunday 20:00 MSK) ----
+  cron.schedule('0 20 * * 0', async () => {
+    log.info('posting weekly digest to channel');
+    try {
+      await postWeeklyDigest(bot, currentWeekMsk());
+    } catch (err) {
+      log.error('weekly digest failed', { error: String(err) });
+      await notifyAdmin(bot, 'Analytics', `Недельный дайджест упал:\n\`${String(err)}\``);
+    }
+  }, { timezone: 'Europe/Moscow' });
+
   // ---- S5: Weekly progress poll (Sunday 12:00 MSK) ----
   cron.schedule('0 9 * * 0', async () => {
     log.info('posting weekly progress poll');
@@ -325,7 +336,7 @@ export function startScheduler(bot: Bot): void {
   // Strategist runs on Mac (claude --print, Max subscription) and POSTs packet to /packet endpoint.
   // If ANTHROPIC_API_KEY is set, can also run locally on Railway (future option).
 
-  log.info('all cron jobs registered (community + analytics + poll + stability + reminder + owner)');
+  log.info('all cron jobs registered (community + analytics + digest + poll + stability + reminder + owner)');
 
   // Cleanup old approval sessions on startup
   setTimeout(() => {
