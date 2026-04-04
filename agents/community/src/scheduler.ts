@@ -13,7 +13,6 @@ import {
   getLatestPost, getLatestPostForDate, getPostCountForDate,
   cleanupOldApprovalSessions,
 } from './db';
-import { postChallengeVideo, postChallengeSeriesVideo } from './poster';
 import { DAY_CATEGORY_MAP, CATEGORY_RU, CATEGORY_EMOJI, CHALLENGE_DURATION } from './shared';
 
 const log = createLogger('scheduler');
@@ -69,6 +68,7 @@ export function startScheduler(bot: Bot): void {
         return;
       }
 
+      const { postChallengeVideo } = await import('./poster.js');
       const result = await postChallengeVideo(bot, challenge, dayNumber);
       if (result === 'posted') {
         log.info(`challenge auto-publish: day ${dayNumber} posted`);
@@ -107,6 +107,7 @@ export function startScheduler(bot: Bot): void {
         if (!slot || slot.status !== 'queued' || !slot.video_id) continue;
 
         log.info(`series auto-publish: "${series.name}" day ${dayNumber}`);
+        const { postChallengeSeriesVideo } = await import('./poster.js');
         const result = await postChallengeSeriesVideo(bot, series, dayNumber);
         if (result !== 'posted') {
           await notifyAdmin(bot, 'Challenge Series', `Автопубликация "${series.name}" день ${dayNumber}: ${result}`);
@@ -355,6 +356,7 @@ export function startScheduler(bot: Bot): void {
       if (!slot || slot.status !== 'queued' || !slot.video_id) return;
 
       log.info(`catch-up: publishing challenge ${challenge.number} day ${dayNumber}`);
+      const { postChallengeVideo } = await import('./poster.js');
       const result = await postChallengeVideo(bot, challenge, dayNumber);
       log.info(`catch-up: challenge publish result: ${result}`);
       if (result !== 'posted') {
@@ -380,6 +382,7 @@ export function startScheduler(bot: Bot): void {
         if (!slot || slot.status !== 'queued' || !slot.video_id) continue;
 
         log.info(`catch-up: publishing series "${series.name}" day ${dayNumber}`);
+        const { postChallengeSeriesVideo } = await import('./poster.js');
         const result = await postChallengeSeriesVideo(bot, series, dayNumber);
         if (result !== 'posted') {
           await notifyAdmin(bot, 'Challenge Series', `Catch-up "${series.name}" день ${dayNumber}: ${result}`);

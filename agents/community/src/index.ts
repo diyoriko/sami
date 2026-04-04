@@ -10,7 +10,7 @@ import { registerBotMenu } from './bot-menu';
 import { registerModeration } from './moderation';
 import { registerApprovalCallbacks } from './approval';
 import { startScheduler } from './scheduler';
-import { upgradeYtDlp, logYtDlpStatus, initCookies, setAdminNotifier, runDiagnostic, isYtDlpAvailable as isYtDlpAvailableCheck } from './downloader';
+import { upgradeYtDlp, logYtDlpStatus, initCookies, setAdminNotifier, runDiagnostic } from './downloader';
 import { migrateStrategist, registerStrategistCallbacks } from './strategist';
 import { registerRubricHandlers } from './rubrics';
 import { sendAdminMessage } from './notify-admin';
