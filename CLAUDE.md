@@ -128,7 +128,7 @@ bash agents/uninstall-1x-daily-mac.sh              # удалить cron
 
 ### Скоринг (youtube.ts)
 
-`totalScore = brand * 0.50 + views * 0.35 + duration * 0.15` (веса в config.ts)
+`totalScore = brand * 0.45 + views * 0.20 + engagement * 0.20 + duration * 0.15` (веса в config.ts)
 
 **Brand alignment** (0-100, базовый балл 50):
 - Штрафы (вычитаются из 50, cap=60): weight loss (+25), fix body (+20), heavy equipment (+20),

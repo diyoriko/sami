@@ -423,6 +423,13 @@ async function main(): Promise<void> {
 
     // POST /trigger-analytics — strategist triggers fresh analytics before fetching report
     if (req.url === '/trigger-analytics' && req.method === 'POST') {
+      const authHeader = req.headers['x-admin-token'];
+      const expectedToken = config.STRATEGIST_API_KEY ?? config.TELEGRAM_BOT_TOKEN;
+      if (authHeader !== expectedToken) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'unauthorized' }));
+        return;
+      }
       (async () => {
         try {
           const { runDailyAnalytics } = await import('./analytics');
@@ -544,6 +551,13 @@ async function main(): Promise<void> {
     const parsedUrl = new URL(req.url ?? '/', `http://localhost:${port}`);
 
     if (parsedUrl.pathname === '/impl/tasks' && req.method === 'GET') {
+      const authHeader = req.headers['x-admin-token'];
+      const expectedToken = config.STRATEGIST_API_KEY ?? config.TELEGRAM_BOT_TOKEN;
+      if (authHeader !== expectedToken) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'unauthorized' }));
+        return;
+      }
       const statusFilter = parsedUrl.searchParams.get('status') as ImplTaskStatus | null;
       const tasks = listImplTasks(statusFilter ?? undefined);
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -552,6 +566,13 @@ async function main(): Promise<void> {
     }
 
     if (parsedUrl.pathname === '/impl/next' && req.method === 'GET') {
+      const authHeader = req.headers['x-admin-token'];
+      const expectedToken = config.STRATEGIST_API_KEY ?? config.TELEGRAM_BOT_TOKEN;
+      if (authHeader !== expectedToken) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'unauthorized' }));
+        return;
+      }
       const task = getNextImplTask();
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ task }));
@@ -749,6 +770,13 @@ async function main(): Promise<void> {
 
     const filePath = reportFiles[req.url ?? ''];
     if (filePath) {
+      const authHeader = req.headers['x-admin-token'];
+      const expectedToken = config.STRATEGIST_API_KEY ?? config.TELEGRAM_BOT_TOKEN;
+      if (authHeader !== expectedToken) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'unauthorized' }));
+        return;
+      }
       res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
       if (fs.existsSync(filePath)) {
         res.end(fs.readFileSync(filePath, 'utf8'));
