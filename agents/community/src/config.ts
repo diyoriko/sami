@@ -57,5 +57,12 @@ export function getConfig(): Config {
     process.exit(1);
   }
   _config = result.data;
+
+  // Validate scoring weights sum to 1.0
+  const weightSum = _config.SCORE_BRAND_WEIGHT + _config.SCORE_VIEW_WEIGHT + _config.SCORE_ENGAGEMENT_WEIGHT + _config.SCORE_DURATION_WEIGHT;
+  if (Math.abs(weightSum - 1.0) > 0.001) {
+    throw new Error(`Scoring weights must sum to 1.0, got ${weightSum} (brand=${_config.SCORE_BRAND_WEIGHT}, view=${_config.SCORE_VIEW_WEIGHT}, engagement=${_config.SCORE_ENGAGEMENT_WEIGHT}, duration=${_config.SCORE_DURATION_WEIGHT})`);
+  }
+
   return _config;
 }

@@ -89,7 +89,8 @@ function findYtDlp(): string {
         bestBin = bin;
         bestVer = ver;
       }
-    } catch { /* binary not available, try next */
+    } catch (err) {
+      log.debug(`yt-dlp binary not available: ${bin}`, { error: String(err) });
       continue;
     }
   }
@@ -115,8 +116,9 @@ export async function upgradeYtDlp(): Promise<void> {
     resetYtDlpCache();
     const lastLine = stdout.trim().split('\n').pop() ?? '';
     log.info(`pip upgrade: ${lastLine}`);
-  } catch (err: any) {
-    log.warn(`pip upgrade failed (using existing version)`, { error: (err.message || '').slice(0, 200) });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    log.warn(`pip upgrade failed (using existing version)`, { error: msg.slice(0, 200) });
   }
 }
 
@@ -129,8 +131,8 @@ export function logYtDlpStatus(): void {
     const cookieSize = cookieFile ? fs.statSync(cookieFile).size : 0;
     const cookies = cookieFile ? (cookieSize > 100 ? `yes (${(cookieSize / 1024).toFixed(0)}KB)` : 'skipped (empty)') : 'no';
     log.info(`yt-dlp: ${bin} (${ver}), proxy: ${proxy}, cookies: ${cookies}`);
-  } catch {
-    log.warn('yt-dlp NOT found — will post YouTube links as fallback');
+  } catch (err) {
+    log.warn('yt-dlp NOT found — will post YouTube links as fallback', { error: String(err) });
   }
 }
 
@@ -145,8 +147,8 @@ export async function runDiagnostic(): Promise<string> {
     bin = findYtDlp();
     const ver = execFileSync(bin, ['--version'], { encoding: 'utf8' }).trim();
     log(`yt-dlp: ${bin} (${ver})`);
-  } catch {
-    log('FAIL: yt-dlp not found');
+  } catch (err) {
+    log(`FAIL: yt-dlp not found (${String(err)})`);
     return lines.join('\n');
   }
 
@@ -178,10 +180,11 @@ export async function runDiagnostic(): Promise<string> {
       try {
         const files = fs.readdirSync(os.tmpdir()).filter((f: string) => f.startsWith('sami-diag'));
         files.forEach((f: string) => fs.unlinkSync(path.join(os.tmpdir(), f)));
-      } catch { /* cleanup */ }
+      } catch { /* cleanup of temp files — failure is OK */ }
       return lines.join('\n');
-    } catch (err: any) {
-      const msg = (err.stderr || err.message || '').slice(0, 150);
+    } catch (err: unknown) {
+      const e = err as { stderr?: string; message?: string };
+      const msg = (e.stderr || e.message || String(err)).slice(0, 150);
       log(`FAIL client=${client || 'default'}: ${msg}`);
     }
   }
@@ -200,7 +203,7 @@ async function probeVideoMeta(filePath: string): Promise<VideoMeta> {
       filePath,
     ], { timeout: METADATA_TIMEOUT });
     const info = JSON.parse(stdout);
-    const videoStream = info.streams?.find((s: any) => s.codec_type === 'video');
+    const videoStream = info.streams?.find((s: Record<string, unknown>) => s.codec_type === 'video');
     return {
       width: videoStream?.width ? Number(videoStream.width) : undefined,
       height: videoStream?.height ? Number(videoStream.height) : undefined,
@@ -274,7 +277,7 @@ async function normalizeVideo(filePath: string): Promise<string> {
         width: outStream?.width, height: outStream?.height,
         sar: outStream?.sample_aspect_ratio, dar: outStream?.display_aspect_ratio,
       });
-    } catch { /* non-critical */ }
+    } catch (err) { log.debug('post-normalize probe failed', { error: String(err) }); }
 
     fs.unlinkSync(filePath);
     fs.renameSync(outPath, filePath);
@@ -343,7 +346,7 @@ async function compressToFit(filePath: string): Promise<boolean> {
     log.error('compression failed', { error: String(err) });
     // Clean up temp file if it exists
     const outPath = filePath.replace(/\.mp4$/, '.compress.mp4');
-    try { fs.unlinkSync(outPath); } catch { /* ignore */ }
+    try { fs.unlinkSync(outPath); } catch { /* temp file may not exist */ }
     return false;
   }
 }
@@ -370,7 +373,8 @@ async function fetchDuration(ytDlp: string, url: string, extraArgs: string[]): P
     const { stdout } = await execFileAsync(ytDlp, args, { timeout: METADATA_TIMEOUT });
     const info = JSON.parse(stdout);
     return info.duration ? Math.round(Number(info.duration)) : undefined;
-  } catch { /* metadata fetch failed, duration unknown */
+  } catch (err) {
+    log.debug('metadata fetch failed, duration unknown', { error: String(err) });
     return undefined;
   }
 }
@@ -436,8 +440,9 @@ export async function downloadVideo(youtubeUrl: string, youtubeId: string): Prom
       await execFileAsync(ytDlp, args, { timeout: DOWNLOAD_SINGLE_TIMEOUT });
       succeeded = true;
       break;
-    } catch (err: any) {
-      lastError = err.stderr || err.message || String(err);
+    } catch (err: unknown) {
+      const e = err as { stderr?: string; message?: string };
+      lastError = e.stderr || e.message || String(err);
       log.warn(`attempt failed: ${lastError.slice(0, 200)}`);
     }
   }
@@ -484,7 +489,7 @@ export async function downloadVideo(youtubeUrl: string, youtubeId: string): Prom
     fileSizeBytes: size,
     meta,
     cleanup: () => {
-      try { fs.unlinkSync(filePath); } catch { /* ignore */ }
+      try { fs.unlinkSync(filePath); } catch { /* temp file cleanup — failure is OK */ }
     },
   };
 }
@@ -493,7 +498,7 @@ export function isYtDlpAvailable(): boolean {
   try {
     findYtDlp();
     return true;
-  } catch { /* yt-dlp not installed */
+  } catch { /* yt-dlp not installed — expected on some environments */
     return false;
   }
 }

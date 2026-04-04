@@ -40,7 +40,7 @@ export function registerAdminHandlers(
 ): void {
   // --- "📊 Дашборд" button ---
   bot.hears('📊 Дашборд', async (ctx) => {
-    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
+    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from?.id ?? 0)) return;
     const { todayMsk, yesterdayMsk, thisMondayMsk } = await import('./dates');
     const {
       ensureActiveChallenge, getChallengeDay, initWeekSlots, getWeekStatus,
@@ -202,7 +202,7 @@ export function registerAdminHandlers(
 
   // --- "📅 Неделя" button ---
   bot.hears('📅 Неделя', async (ctx) => {
-    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
+    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from?.id ?? 0)) return;
     const { todayMsk, thisMondayMsk } = await import('./dates');
     const {
       ensureActiveChallenge, getChallengeDay,
@@ -338,7 +338,7 @@ export function registerAdminHandlers(
 
   // --- "Опубликовать" button ---
   bot.hears('Опубликовать', async (ctx) => {
-    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
+    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from?.id ?? 0)) return;
     const { todayMsk, tomorrowMsk } = await import('./dates');
     const { postVideoToChannel } = await import('./poster');
     const { getApprovedVideo } = await import('./db');
@@ -374,7 +374,7 @@ export function registerAdminHandlers(
 
   // --- "Сбросить выбор" button ---
   bot.hears('Сбросить выбор', async (ctx) => {
-    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
+    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from?.id ?? 0)) return;
     const { todayMsk, tomorrowMsk } = await import('./dates');
     const { resetApprovalSessions } = await import('./db');
     const today = todayMsk();
@@ -387,7 +387,7 @@ export function registerAdminHandlers(
 
   // --- "Очистить" button (admin only) — clear channel posts ---
   bot.hears('🧹 Очистить канал', async (ctx) => {
-    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
+    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from?.id ?? 0)) return;
     const kb = new InlineKeyboard()
       .text('Да, удалить все посты', 'clear_channel_confirm')
       .text('❌ Отмена', 'clear_channel_cancel');
@@ -428,7 +428,7 @@ export function registerAdminHandlers(
 
   // --- /invites command (admin only) — trackable invite links ---
   bot.command('invites', async (ctx) => {
-    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
+    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from?.id ?? 0)) return;
 
     const text = ctx.message?.text ?? '';
     const args = text.replace(/^\/invites\s*/, '').trim();

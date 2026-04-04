@@ -5,7 +5,7 @@ const log = createLogger('github');
 const REPO_OWNER = 'diyoriko';
 const REPO_NAME = 'sami';
 const BACKLOG_PATH = 'BACKLOG.md';
-const BRANCH = 'main';
+const BRANCH = 'develop';
 
 function getToken(): string | null {
   return process.env.GITHUB_TOKEN ?? null;

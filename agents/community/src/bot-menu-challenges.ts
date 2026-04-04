@@ -41,7 +41,7 @@ export function registerChallengeHandlers(
   // ─── CHALLENGE SERIES ──────────────────────────────────────────────────────
 
   bot.hears('🏆 Челлендж', async (ctx) => {
-    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
+    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from?.id ?? 0)) return;
     deleteUgcState(ctx.from!.id);
 
     const active = getActiveChallengeSeriesList();
@@ -70,19 +70,19 @@ export function registerChallengeHandlers(
 
   // Create challenge: step 1 — name
   bot.callbackQuery('cs_create', async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
+    if (!isAdmin(ctx.from?.id ?? 0)) return;
     await ctx.answerCallbackQuery();
     saveUgcState(ctx.from!.id, 'cs_name');
     try {
       await ctx.editMessageText('Как назвать челлендж? Например: «Здоровая спина» или «7 дней стретчинга»');
-    } catch { /* TG API: message may be deleted, fallback to reply */
+    } catch (err) { log.debug('editMessageText failed, falling back to reply', { error: String(err) });
       await ctx.reply('Как назвать челлендж?');
     }
   });
 
   // Create challenge: step 2 — duration (after name is typed in text handler below)
   bot.callbackQuery(/^cs_dur:(\d+)$/, async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
+    if (!isAdmin(ctx.from?.id ?? 0)) return;
     const days = parseInt(ctx.match[1]);
     await ctx.answerCallbackQuery();
 
@@ -107,13 +107,13 @@ export function registerChallengeHandlers(
 
     try {
       await ctx.editMessageText(`Длительность: ${days} дней\n\nКатегория по умолчанию (можно менять для каждого дня):`, { reply_markup: kb });
-    } catch { /* TG API: message may be deleted */ }
+    } catch (err) { log.debug('editMessageText failed (message may be deleted)', { error: String(err) }); }
   });
 
   // Create challenge: step 3 — default category
   const csCatPattern = new RegExp(`^cs_cat:(${CATEGORIES.join('|')}|mixed)$`);
   bot.callbackQuery(csCatPattern, async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
+    if (!isAdmin(ctx.from?.id ?? 0)) return;
     const category = ctx.match[1] === 'mixed' ? null : ctx.match[1];
     await ctx.answerCallbackQuery();
 
@@ -146,7 +146,7 @@ export function registerChallengeHandlers(
         `Статус: черновик\n\n` +
         `Теперь заполни расписание и активируй.`
       );
-    } catch { /* TG API: message may be deleted */ }
+    } catch (err) { log.debug('editMessageText failed (message may be deleted)', { error: String(err) }); }
 
     // Show challenge view
     await sendChallengeView(ctx, seriesId);
@@ -155,23 +155,23 @@ export function registerChallengeHandlers(
   bot.callbackQuery('cs_cancel', async (ctx) => {
     deleteUgcState(ctx.from!.id);
     await ctx.answerCallbackQuery('Отменено');
-    try { await ctx.editMessageText('Создание челленджа отменено.'); } catch { /* TG API: message may be deleted */ }
+    try { await ctx.editMessageText('Создание челленджа отменено.'); } catch (err) { log.debug('editMessageText failed (message may be deleted)', { error: String(err) }); }
   });
 
   // View a specific challenge series
   bot.callbackQuery(/^cs_view:(\d+)$/, async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
+    if (!isAdmin(ctx.from?.id ?? 0)) return;
     await ctx.answerCallbackQuery();
     await sendChallengeView(ctx, parseInt(ctx.match[1]));
   });
 
   // Completed challenges list
   bot.callbackQuery('cs_completed', async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
+    if (!isAdmin(ctx.from?.id ?? 0)) return;
     await ctx.answerCallbackQuery();
     const completed = listChallengeSeries(['completed']);
     if (completed.length === 0) {
-      try { await ctx.editMessageText('Нет завершённых челленджей.'); } catch { /* TG API: message may be deleted */ }
+      try { await ctx.editMessageText('Нет завершённых челленджей.'); } catch (err) { log.debug('editMessageText failed (message may be deleted)', { error: String(err) }); }
       return;
     }
     const kb = new InlineKeyboard();
@@ -181,34 +181,34 @@ export function registerChallengeHandlers(
     }
     try {
       await ctx.editMessageText('*Завершённые челленджи:*', { parse_mode: 'MarkdownV2', reply_markup: kb });
-    } catch { /* TG API: message may be deleted */ }
+    } catch (err) { log.debug('editMessageText failed (message may be deleted)', { error: String(err) }); }
   });
 
   // Activate / Complete / Cancel a challenge
   bot.callbackQuery(/^cs_activate:(\d+)$/, async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
+    if (!isAdmin(ctx.from?.id ?? 0)) return;
     await ctx.answerCallbackQuery('Активирован');
     updateChallengeSeriesStatus(parseInt(ctx.match[1]), 'active');
     await sendChallengeView(ctx, parseInt(ctx.match[1]));
   });
 
   bot.callbackQuery(/^cs_complete:(\d+)$/, async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
+    if (!isAdmin(ctx.from?.id ?? 0)) return;
     await ctx.answerCallbackQuery('Завершён');
     updateChallengeSeriesStatus(parseInt(ctx.match[1]), 'completed');
     await sendChallengeView(ctx, parseInt(ctx.match[1]));
   });
 
   bot.callbackQuery(/^cs_cancel_series:(\d+)$/, async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
+    if (!isAdmin(ctx.from?.id ?? 0)) return;
     await ctx.answerCallbackQuery('Отменён');
     updateChallengeSeriesStatus(parseInt(ctx.match[1]), 'cancelled');
-    try { await ctx.editMessageText('Челлендж отменён.'); } catch { /* TG API: message may be deleted */ }
+    try { await ctx.editMessageText('Челлендж отменён.'); } catch (err) { log.debug('editMessageText failed (message may be deleted)', { error: String(err) }); }
   });
 
   // Fill a day in challenge series — run approval flow
   bot.callbackQuery(/^fill_series_day:(\d+):(\d+)$/, async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
+    if (!isAdmin(ctx.from?.id ?? 0)) return;
     await ctx.answerCallbackQuery('Ищу видео...');
 
     const seriesId = parseInt(ctx.match[1]);
@@ -234,23 +234,23 @@ export function registerChallengeHandlers(
 
   // Publish a specific challenge series day
   bot.callbackQuery(/^cs_pub:(\d+):(\d+)$/, async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
+    if (!isAdmin(ctx.from?.id ?? 0)) return;
     await ctx.answerCallbackQuery('Публикую...');
 
     const seriesId = parseInt(ctx.match[1]);
     const dayNumber = parseInt(ctx.match[2]);
     const series = getChallengeSeries(seriesId);
     if (!series || series.status !== 'active') {
-      try { await ctx.editMessageText('Челлендж не активен.'); } catch { /* TG API: message may be deleted */ }
+      try { await ctx.editMessageText('Челлендж не активен.'); } catch (err) { log.debug('editMessageText failed (message may be deleted)', { error: String(err) }); }
       return;
     }
 
     const { postChallengeSeriesVideo } = await import('./poster');
     const result = await postChallengeSeriesVideo(bot, series, dayNumber);
     if (result === 'posted') {
-      try { await ctx.editMessageText('✅ Опубликовано!'); } catch { /* TG API: message may be deleted */ }
+      try { await ctx.editMessageText('✅ Опубликовано!'); } catch (err) { log.debug('editMessageText failed (message may be deleted)', { error: String(err) }); }
     } else {
-      try { await ctx.editMessageText(`Ошибка: ${result}`); } catch { /* TG API: message may be deleted */ }
+      try { await ctx.editMessageText(`Ошибка: ${result}`); } catch (err) { log.debug('editMessageText failed (message may be deleted)', { error: String(err) }); }
     }
   });
 

@@ -9,6 +9,7 @@
 import { Bot, InlineKeyboard } from 'grammy';
 import { getConfig } from './config';
 import { createLogger } from './logger';
+import { thisMondayMsk } from './dates';
 import {
   getCurrentRitual, createRitual, setRitualMessageId,
   recordRitualParticipation, getRitualProgress,
@@ -32,13 +33,7 @@ export async function postRitualChallenge(
 ): Promise<number> {
   const config = getConfig();
 
-  // Calculate week start (Monday)
-  const now = new Date();
-  const dayOfWeek = now.getUTCDay();
-  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  const monday = new Date(now);
-  monday.setUTCDate(now.getUTCDate() + mondayOffset);
-  const weekStart = monday.toISOString().slice(0, 10);
+  const weekStart = thisMondayMsk();
 
   const ritualId = createRitual(weekStart, title, description, category);
 
@@ -74,13 +69,7 @@ export async function postRitualChallenge(
 export async function postWeeklyProgress(bot: Bot): Promise<void> {
   const config = getConfig();
 
-  // Calculate week start
-  const now = new Date();
-  const dayOfWeek = now.getUTCDay();
-  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  const monday = new Date(now);
-  monday.setUTCDate(now.getUTCDate() + mondayOffset);
-  const weekStart = monday.toISOString().slice(0, 10);
+  const weekStart = thisMondayMsk();
 
   const topMembers = getWeeklyTopMembers(weekStart, 5);
 

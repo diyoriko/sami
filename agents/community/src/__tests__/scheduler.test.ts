@@ -45,11 +45,25 @@ vi.mock('../notify-admin', () => ({
   notifyAdmin: vi.fn(async () => {}),
 }));
 
+// ── Mock poster (uses @napi-rs/canvas which may not be available in tests) ──
+
+vi.mock('../poster', () => ({
+  postChallengeVideo: vi.fn(async () => 'posted'),
+  postChallengeSeriesVideo: vi.fn(async () => 'posted'),
+}));
+
 // ── Mock dates ──────────────────────────────────────────────────────────────
 
 vi.mock('../dates', () => ({
   todayMsk: vi.fn(() => '2026-03-16'),
   currentWeekMsk: vi.fn(() => ({ start: '2026-03-09', end: '2026-03-15' })),
+  thisMondayMsk: vi.fn(() => '2026-03-09'),
+  addDaysMsk: vi.fn((date: string, days: number) => {
+    const d = new Date(date + 'T00:00:00');
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+  }),
+  moscowNow: vi.fn(() => new Date('2026-03-16T12:00:00')),
 }));
 
 // ── Env setup ───────────────────────────────────────────────────────────────
