@@ -75,7 +75,7 @@ export function registerChallengeHandlers(
     saveUgcState(ctx.from!.id, 'cs_name');
     try {
       await ctx.editMessageText('Как назвать челлендж? Например: «Здоровая спина» или «7 дней стретчинга»');
-    } catch { /* TG API: message may be deleted, fallback to reply */
+    } catch (err) { log.debug('editMessageText failed, falling back to reply', { error: String(err) });
       await ctx.reply('Как назвать челлендж?');
     }
   });
@@ -107,7 +107,7 @@ export function registerChallengeHandlers(
 
     try {
       await ctx.editMessageText(`Длительность: ${days} дней\n\nКатегория по умолчанию (можно менять для каждого дня):`, { reply_markup: kb });
-    } catch { /* TG API: message may be deleted */ }
+    } catch (err) { log.debug('editMessageText failed (message may be deleted)', { error: String(err) }); }
   });
 
   // Create challenge: step 3 — default category
@@ -146,7 +146,7 @@ export function registerChallengeHandlers(
         `Статус: черновик\n\n` +
         `Теперь заполни расписание и активируй.`
       );
-    } catch { /* TG API: message may be deleted */ }
+    } catch (err) { log.debug('editMessageText failed (message may be deleted)', { error: String(err) }); }
 
     // Show challenge view
     await sendChallengeView(ctx, seriesId);
@@ -155,7 +155,7 @@ export function registerChallengeHandlers(
   bot.callbackQuery('cs_cancel', async (ctx) => {
     deleteUgcState(ctx.from!.id);
     await ctx.answerCallbackQuery('Отменено');
-    try { await ctx.editMessageText('Создание челленджа отменено.'); } catch { /* TG API: message may be deleted */ }
+    try { await ctx.editMessageText('Создание челленджа отменено.'); } catch (err) { log.debug('editMessageText failed (message may be deleted)', { error: String(err) }); }
   });
 
   // View a specific challenge series
@@ -171,7 +171,7 @@ export function registerChallengeHandlers(
     await ctx.answerCallbackQuery();
     const completed = listChallengeSeries(['completed']);
     if (completed.length === 0) {
-      try { await ctx.editMessageText('Нет завершённых челленджей.'); } catch { /* TG API: message may be deleted */ }
+      try { await ctx.editMessageText('Нет завершённых челленджей.'); } catch (err) { log.debug('editMessageText failed (message may be deleted)', { error: String(err) }); }
       return;
     }
     const kb = new InlineKeyboard();
@@ -181,7 +181,7 @@ export function registerChallengeHandlers(
     }
     try {
       await ctx.editMessageText('*Завершённые челленджи:*', { parse_mode: 'MarkdownV2', reply_markup: kb });
-    } catch { /* TG API: message may be deleted */ }
+    } catch (err) { log.debug('editMessageText failed (message may be deleted)', { error: String(err) }); }
   });
 
   // Activate / Complete / Cancel a challenge
@@ -203,7 +203,7 @@ export function registerChallengeHandlers(
     if (!isAdmin(ctx.from!.id)) return;
     await ctx.answerCallbackQuery('Отменён');
     updateChallengeSeriesStatus(parseInt(ctx.match[1]), 'cancelled');
-    try { await ctx.editMessageText('Челлендж отменён.'); } catch { /* TG API: message may be deleted */ }
+    try { await ctx.editMessageText('Челлендж отменён.'); } catch (err) { log.debug('editMessageText failed (message may be deleted)', { error: String(err) }); }
   });
 
   // Fill a day in challenge series — run approval flow
@@ -241,16 +241,16 @@ export function registerChallengeHandlers(
     const dayNumber = parseInt(ctx.match[2]);
     const series = getChallengeSeries(seriesId);
     if (!series || series.status !== 'active') {
-      try { await ctx.editMessageText('Челлендж не активен.'); } catch { /* TG API: message may be deleted */ }
+      try { await ctx.editMessageText('Челлендж не активен.'); } catch (err) { log.debug('editMessageText failed (message may be deleted)', { error: String(err) }); }
       return;
     }
 
     const { postChallengeSeriesVideo } = await import('./poster');
     const result = await postChallengeSeriesVideo(bot, series, dayNumber);
     if (result === 'posted') {
-      try { await ctx.editMessageText('✅ Опубликовано!'); } catch { /* TG API: message may be deleted */ }
+      try { await ctx.editMessageText('✅ Опубликовано!'); } catch (err) { log.debug('editMessageText failed (message may be deleted)', { error: String(err) }); }
     } else {
-      try { await ctx.editMessageText(`Ошибка: ${result}`); } catch { /* TG API: message may be deleted */ }
+      try { await ctx.editMessageText(`Ошибка: ${result}`); } catch (err) { log.debug('editMessageText failed (message may be deleted)', { error: String(err) }); }
     }
   });
 

@@ -1,12 +1,20 @@
 import * as cron from 'node-cron';
-import { Bot } from 'grammy';
+import { Bot, InlineKeyboard } from 'grammy';
 import { getConfig } from './config';
 import { createLogger } from './logger';
 import { writeCommunityReport } from './strategist-sync';
 import { runDailyAnalytics, runWeeklyAnalytics, postWeeklyDigest } from './analytics';
-
 import { notifyAdmin } from './notify-admin';
-import { todayMsk, currentWeekMsk } from './dates';
+import { todayMsk, currentWeekMsk, thisMondayMsk, addDaysMsk, moscowNow } from './dates';
+import {
+  ensureActiveChallenge, getChallengeDay, completeChallenge, getWeekSlotForDay,
+  getActiveChallengeSeriesList, getChallengeSeriesDaySlot,
+  getWeeklyConsistentUsers, getInactiveUsers, markReminderSent,
+  getLatestPost, getLatestPostForDate, getPostCountForDate,
+  cleanupOldApprovalSessions,
+} from './db';
+import { postChallengeVideo, postChallengeSeriesVideo } from './poster';
+import { DAY_CATEGORY_MAP, CATEGORY_RU, CATEGORY_EMOJI, CHALLENGE_DURATION } from './shared';
 
 const log = createLogger('scheduler');
 
@@ -32,11 +40,6 @@ export function startScheduler(bot: Bot): void {
   cron.schedule(config.CRON_CHALLENGE_PUBLISH, async () => {
     log.info('challenge auto-publish cron triggered');
     try {
-      const { ensureActiveChallenge, getChallengeDay, completeChallenge, getWeekSlotForDay } = require('./db') as typeof import('./db');
-      const { postChallengeVideo } = require('./poster') as typeof import('./poster');
-      const { thisMondayMsk } = require('./dates') as typeof import('./dates');
-      const { DAY_CATEGORY_MAP, CATEGORY_RU, CHALLENGE_DURATION } = require('./shared') as typeof import('./shared');
-
       const today = todayMsk();
       const challenge = ensureActiveChallenge(today, thisMondayMsk());
       if (challenge.status !== 'active') {
@@ -82,10 +85,6 @@ export function startScheduler(bot: Bot): void {
   // Runs every minute at :00 to check if any active series has a slot to publish at this time
   cron.schedule('* * * * *', async () => {
     try {
-      const { getActiveChallengeSeriesList, getChallengeSeriesDaySlot } = require('./db') as typeof import('./db');
-      const { postChallengeSeriesVideo } = require('./poster') as typeof import('./poster');
-      const { moscowNow } = require('./dates') as typeof import('./dates');
-
       const now = moscowNow();
       const currentHH = String(now.getHours()).padStart(2, '0');
       const currentMM = String(now.getMinutes()).padStart(2, '0');
@@ -121,10 +120,6 @@ export function startScheduler(bot: Bot): void {
   // ---- 22:00 MSK — notify admin if tomorrow has no video ----
   cron.schedule('0 22 * * *', async () => {
     try {
-      const { ensureActiveChallenge, getChallengeDay, getWeekSlotForDay } = require('./db') as typeof import('./db');
-      const { thisMondayMsk, addDaysMsk } = require('./dates') as typeof import('./dates');
-      const { DAY_CATEGORY_MAP, CATEGORY_RU, CATEGORY_EMOJI, CHALLENGE_DURATION } = require('./shared') as typeof import('./shared');
-
       const tomorrow = addDaysMsk(todayMsk(), 1);
       const tomorrowMonday = thisMondayMsk(); // may shift if tomorrow is Monday
       const challenge = ensureActiveChallenge(tomorrow, tomorrowMonday);
@@ -139,7 +134,7 @@ export function startScheduler(bot: Bot): void {
       const dow = new Date(tomorrow + 'T00:00:00').getDay();
       const cat = DAY_CATEGORY_MAP[dow];
       const catRu = cat ? CATEGORY_RU[cat] : '?';
-      const catEmoji = cat ? CATEGORY_EMOJI[cat] : '❓';
+      const catEmoji = cat ? CATEGORY_EMOJI[cat] : '?';
 
       await bot.api.sendMessage(
         config.TELEGRAM_ADMIN_USER_ID,
@@ -198,9 +193,6 @@ export function startScheduler(bot: Bot): void {
   cron.schedule('0 9 * * 0', async () => {
     log.info('posting weekly progress poll');
     try {
-      const { ensureActiveChallenge } = require('./db') as typeof import('./db');
-      const { thisMondayMsk } = require('./dates') as typeof import('./dates');
-
       const today = todayMsk();
       const challenge = ensureActiveChallenge(today, thisMondayMsk());
       if (challenge.status !== 'active') return;
@@ -224,9 +216,6 @@ export function startScheduler(bot: Bot): void {
   cron.schedule('0 16 * * 5', async () => {
     log.info('posting stability wall');
     try {
-      const { getWeeklyConsistentUsers, ensureActiveChallenge } = require('./db') as typeof import('./db');
-      const { thisMondayMsk } = require('./dates') as typeof import('./dates');
-
       const today = todayMsk();
       const challenge = ensureActiveChallenge(today, thisMondayMsk());
       if (challenge.status !== 'active') return;
@@ -262,23 +251,20 @@ export function startScheduler(bot: Bot): void {
   cron.schedule('0 10 * * *', async () => {
     log.info('checking for inactive users (48h reminder)');
     try {
-      const { getInactiveUsers, markReminderSent, getLatestPost } = require('./db') as typeof import('./db');
-
       const inactiveUsers = getInactiveUsers(48);
       if (inactiveUsers.length === 0) {
         log.info('no inactive users to remind');
         return;
       }
 
-      const latestPost = getLatestPost();
+      const latestPostData = getLatestPost();
       const channelHandle = config.TELEGRAM_CHANNEL_ID.startsWith('@')
         ? config.TELEGRAM_CHANNEL_ID.slice(1)
         : `c/${config.TELEGRAM_CHANNEL_ID.replace(/^-100/, '')}`;
 
       let postLink = 'https://t.me/sami_workouts';
-      if (latestPost) {
-        const { getLatestPostForDate: getLP } = require('./db') as typeof import('./db');
-        const todayPost = getLP(todayMsk());
+      if (latestPostData) {
+        const todayPost = getLatestPostForDate(todayMsk());
         if (todayPost) {
           postLink = `https://t.me/${channelHandle}/${todayPost.channel_message_id}`;
         }
@@ -307,8 +293,6 @@ export function startScheduler(bot: Bot): void {
   cron.schedule('0 15 * * *', async () => {
     log.info('checking if owner posted today (15:00 reminder)');
     try {
-      const { getPostCountForDate } = require('./db') as typeof import('./db');
-
       const today = todayMsk();
       const postCount = getPostCountForDate(today);
 
@@ -317,7 +301,6 @@ export function startScheduler(bot: Bot): void {
         return;
       }
 
-      const { InlineKeyboard } = require('grammy');
       const kb = new InlineKeyboard().text('📅 Искать тренировку', 'show_week_status');
 
       await bot.api.sendMessage(
@@ -341,7 +324,6 @@ export function startScheduler(bot: Bot): void {
   // Cleanup old approval sessions on startup
   setTimeout(() => {
     try {
-      const { cleanupOldApprovalSessions } = require('./db');
       const cleaned = cleanupOldApprovalSessions(2);
       if (cleaned > 0) log.info(`cleaned up ${cleaned} old approval sessions`);
     } catch (err) {
@@ -362,11 +344,6 @@ export function startScheduler(bot: Bot): void {
   // Catch-up on startup: publish today's challenge video if queued but not yet posted
   setTimeout(async () => {
     try {
-      const { ensureActiveChallenge, getChallengeDay, getWeekSlotForDay } = require('./db') as typeof import('./db');
-      const { postChallengeVideo } = require('./poster') as typeof import('./poster');
-      const { thisMondayMsk } = require('./dates') as typeof import('./dates');
-      const { CHALLENGE_DURATION } = require('./shared') as typeof import('./shared');
-
       const today = todayMsk();
       const challenge = ensureActiveChallenge(today, thisMondayMsk());
       if (challenge.status !== 'active') return;
@@ -391,9 +368,6 @@ export function startScheduler(bot: Bot): void {
   // Catch-up on startup: publish queued challenge series slots for today
   setTimeout(async () => {
     try {
-      const { getActiveChallengeSeriesList, getChallengeSeriesDaySlot } = require('./db') as typeof import('./db');
-      const { postChallengeSeriesVideo } = require('./poster') as typeof import('./poster');
-
       const today = todayMsk();
       const activeSeries = getActiveChallengeSeriesList();
       for (const series of activeSeries) {

@@ -233,7 +233,7 @@ function buildPrompt(): string {
           contextParts.push(`## Source: ${path.basename(filePath)}\n\n${text.slice(0, 6000)}`);
         }
       }
-    } catch { /* skip missing files */ }
+    } catch (err) { log.debug(`skipping context file: ${filePath}`, { error: String(err) }); }
   }
 
   // Add live metrics from DB
@@ -374,7 +374,7 @@ function extractPacket(reportText: string): StrategistPacket {
       : [];
     return { ...DEFAULT_PACKET, ...parsed, actions };
   } catch (err) {
-    console.warn('[strategist] failed to parse COMMUNITY_PACKET:', err);
+    log.warn('failed to parse COMMUNITY_PACKET', { error: String(err) });
     return DEFAULT_PACKET;
   }
 }
@@ -628,7 +628,7 @@ export function registerStrategistCallbacks(bot: Bot): void {
         await ctx.editMessageReplyMarkup({
           reply_markup: new InlineKeyboard().text('✅ Одобрено', 'noop'),
         });
-      } catch {}
+      } catch (err) { log.debug('failed to update proposal markup', { error: String(err) }); }
       await ctx.answerCallbackQuery('Одобрено');
     } else {
       updateProposalStatus(proposalId, 'rejected');
@@ -636,7 +636,7 @@ export function registerStrategistCallbacks(bot: Bot): void {
         await ctx.editMessageReplyMarkup({
           reply_markup: new InlineKeyboard().text('❌ Отклонено', 'noop'),
         });
-      } catch {}
+      } catch (err) { log.debug('failed to update proposal markup', { error: String(err) }); }
       await ctx.answerCallbackQuery('Отклонено');
     }
   });
@@ -661,7 +661,7 @@ export function registerStrategistCallbacks(bot: Bot): void {
         await ctx.editMessageReplyMarkup({
           reply_markup: new InlineKeyboard().text('❌ Отклонено', 'noop'),
         });
-      } catch {}
+      } catch (err) { log.debug('failed to update action markup', { error: String(err) }); }
       await ctx.answerCallbackQuery('Отклонено');
       return;
     }
@@ -679,7 +679,7 @@ export function registerStrategistCallbacks(bot: Bot): void {
         await ctx.editMessageReplyMarkup({
           reply_markup: new InlineKeyboard().text(`✅ ${result}`, 'noop'),
         });
-      } catch {}
+      } catch (err) { log.debug('failed to update action markup', { error: String(err) }); }
 
       log.info('action executed', { actionId, type: action.type, result });
     } catch (err) {
@@ -690,7 +690,7 @@ export function registerStrategistCallbacks(bot: Bot): void {
         await ctx.editMessageReplyMarkup({
           reply_markup: new InlineKeyboard().text(`⚠️ Ошибка: ${errMsg.slice(0, 50)}`, 'noop'),
         });
-      } catch {}
+      } catch (editErr) { log.debug('failed to update action error markup', { error: String(editErr) }); }
 
       log.error('action execution failed', { actionId, error: errMsg });
     }
