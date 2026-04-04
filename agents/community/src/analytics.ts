@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getConfig } from './config';
 import { createLogger } from './logger';
+import { thisMondayMsk, addDaysMsk } from './dates';
 import { type Category, CATEGORY_RU, escV2 } from './shared';
 
 const log = createLogger('analytics');
@@ -148,17 +149,9 @@ export async function runWeeklyAnalytics(bot: Bot, weekStr: string): Promise<voi
   const config = getConfig();
   log.info(`running weekly analytics for ${weekStr}`);
 
-  // Calculate week boundaries (current week: Mon-Sun)
-  const now = new Date();
-  const dayOfWeek = now.getDay(); // 0=Sun
-  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  const monday = new Date(now);
-  monday.setDate(now.getDate() + mondayOffset);
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-
-  const startDate = monday.toISOString().slice(0, 10);
-  const endDate = sunday.toISOString().slice(0, 10);
+  // Calculate week boundaries (current week: Mon-Sun) using Moscow time
+  const startDate = thisMondayMsk();
+  const endDate = addDaysMsk(startDate, 6);
 
   const days = getWeeklyStats(startDate, endDate);
 
@@ -271,16 +264,9 @@ export async function postWeeklyDigest(bot: Bot, weekStr: string): Promise<void>
   const config = getConfig();
   log.info(`posting weekly digest to channel for ${weekStr}`);
 
-  const now = new Date();
-  const dayOfWeek = now.getDay();
-  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  const monday = new Date(now);
-  monday.setDate(now.getDate() + mondayOffset);
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-
-  const startDate = monday.toISOString().slice(0, 10);
-  const endDate = sunday.toISOString().slice(0, 10);
+  // Week boundaries using Moscow time
+  const startDate = thisMondayMsk();
+  const endDate = addDaysMsk(startDate, 6);
 
   const recentPosts = getRecentPosts(7);
   const cumulative = getCumulativeStats();

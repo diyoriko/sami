@@ -41,7 +41,7 @@ export function registerChallengeHandlers(
   // ─── CHALLENGE SERIES ──────────────────────────────────────────────────────
 
   bot.hears('🏆 Челлендж', async (ctx) => {
-    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from!.id)) return;
+    if (ctx.chat.type !== 'private' || !isAdmin(ctx.from?.id ?? 0)) return;
     deleteUgcState(ctx.from!.id);
 
     const active = getActiveChallengeSeriesList();
@@ -70,7 +70,7 @@ export function registerChallengeHandlers(
 
   // Create challenge: step 1 — name
   bot.callbackQuery('cs_create', async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
+    if (!isAdmin(ctx.from?.id ?? 0)) return;
     await ctx.answerCallbackQuery();
     saveUgcState(ctx.from!.id, 'cs_name');
     try {
@@ -82,7 +82,7 @@ export function registerChallengeHandlers(
 
   // Create challenge: step 2 — duration (after name is typed in text handler below)
   bot.callbackQuery(/^cs_dur:(\d+)$/, async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
+    if (!isAdmin(ctx.from?.id ?? 0)) return;
     const days = parseInt(ctx.match[1]);
     await ctx.answerCallbackQuery();
 
@@ -113,7 +113,7 @@ export function registerChallengeHandlers(
   // Create challenge: step 3 — default category
   const csCatPattern = new RegExp(`^cs_cat:(${CATEGORIES.join('|')}|mixed)$`);
   bot.callbackQuery(csCatPattern, async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
+    if (!isAdmin(ctx.from?.id ?? 0)) return;
     const category = ctx.match[1] === 'mixed' ? null : ctx.match[1];
     await ctx.answerCallbackQuery();
 
@@ -160,14 +160,14 @@ export function registerChallengeHandlers(
 
   // View a specific challenge series
   bot.callbackQuery(/^cs_view:(\d+)$/, async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
+    if (!isAdmin(ctx.from?.id ?? 0)) return;
     await ctx.answerCallbackQuery();
     await sendChallengeView(ctx, parseInt(ctx.match[1]));
   });
 
   // Completed challenges list
   bot.callbackQuery('cs_completed', async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
+    if (!isAdmin(ctx.from?.id ?? 0)) return;
     await ctx.answerCallbackQuery();
     const completed = listChallengeSeries(['completed']);
     if (completed.length === 0) {
@@ -186,21 +186,21 @@ export function registerChallengeHandlers(
 
   // Activate / Complete / Cancel a challenge
   bot.callbackQuery(/^cs_activate:(\d+)$/, async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
+    if (!isAdmin(ctx.from?.id ?? 0)) return;
     await ctx.answerCallbackQuery('Активирован');
     updateChallengeSeriesStatus(parseInt(ctx.match[1]), 'active');
     await sendChallengeView(ctx, parseInt(ctx.match[1]));
   });
 
   bot.callbackQuery(/^cs_complete:(\d+)$/, async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
+    if (!isAdmin(ctx.from?.id ?? 0)) return;
     await ctx.answerCallbackQuery('Завершён');
     updateChallengeSeriesStatus(parseInt(ctx.match[1]), 'completed');
     await sendChallengeView(ctx, parseInt(ctx.match[1]));
   });
 
   bot.callbackQuery(/^cs_cancel_series:(\d+)$/, async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
+    if (!isAdmin(ctx.from?.id ?? 0)) return;
     await ctx.answerCallbackQuery('Отменён');
     updateChallengeSeriesStatus(parseInt(ctx.match[1]), 'cancelled');
     try { await ctx.editMessageText('Челлендж отменён.'); } catch (err) { log.debug('editMessageText failed (message may be deleted)', { error: String(err) }); }
@@ -208,7 +208,7 @@ export function registerChallengeHandlers(
 
   // Fill a day in challenge series — run approval flow
   bot.callbackQuery(/^fill_series_day:(\d+):(\d+)$/, async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
+    if (!isAdmin(ctx.from?.id ?? 0)) return;
     await ctx.answerCallbackQuery('Ищу видео...');
 
     const seriesId = parseInt(ctx.match[1]);
@@ -234,7 +234,7 @@ export function registerChallengeHandlers(
 
   // Publish a specific challenge series day
   bot.callbackQuery(/^cs_pub:(\d+):(\d+)$/, async (ctx) => {
-    if (!isAdmin(ctx.from!.id)) return;
+    if (!isAdmin(ctx.from?.id ?? 0)) return;
     await ctx.answerCallbackQuery('Публикую...');
 
     const seriesId = parseInt(ctx.match[1]);

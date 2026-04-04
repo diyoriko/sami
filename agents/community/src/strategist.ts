@@ -403,12 +403,12 @@ export async function runStrategist(bot: Bot): Promise<void> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
 
   if (!apiKey) {
-    console.warn('[strategist] ANTHROPIC_API_KEY not set, skipping');
+    log.warn('ANTHROPIC_API_KEY not set, skipping');
     return;
   }
 
   const date = todayMsk();
-  console.log(`[strategist] starting daily run for ${date}`);
+  log.info(`starting daily run for ${date}`);
 
   const client = new Anthropic({ apiKey });
   const prompt = buildPrompt();
@@ -449,7 +449,7 @@ export async function runStrategist(bot: Bot): Promise<void> {
       response.usage.output_tokens,
     );
 
-    console.log(`[strategist] report stored (${response.usage.input_tokens}+${response.usage.output_tokens} tokens)`);
+    log.info(`report stored (${response.usage.input_tokens}+${response.usage.output_tokens} tokens)`);
 
     // Notify admin
     const costEstimate = (
@@ -486,7 +486,7 @@ export async function runStrategist(bot: Bot): Promise<void> {
     }
 
   } catch (err: any) {
-    console.error('[strategist] generation failed:', err);
+    log.error('generation failed', { error: String(err) });
     await notifyAdmin(bot, 'Strategist', `Генерация отчёта упала:\n\`${String(err).slice(0, 200)}\``);
   }
 }

@@ -15,6 +15,7 @@ import { migrateStrategist, registerStrategistCallbacks } from './strategist';
 import { registerRubricHandlers } from './rubrics';
 import { sendAdminMessage } from './notify-admin';
 import { startHttpServer } from './http-server';
+import type { Category } from './shared';
 
 async function sendDeployReport(
   bot: Bot,
@@ -326,7 +327,7 @@ async function main(): Promise<void> {
       const video = getVideoById(p.video_id);
       if (!video) { fail++; continue; }
 
-      const caption = await formatCaption(video, undefined, undefined, p.category as any);
+      const caption = await formatCaption(video, undefined, undefined, p.category as Category);
 
       try {
         if (p.post_type === 'video') {
@@ -341,9 +342,10 @@ async function main(): Promise<void> {
           });
         }
         ok++;
-      } catch (err: any) {
+      } catch (err: unknown) {
         // "message is not modified" is OK — content didn't change
-        if (err?.description?.includes('not modified')) { ok++; continue; }
+        const desc = (err as { description?: string })?.description;
+        if (desc?.includes('not modified')) { ok++; continue; }
         fail++;
       }
 

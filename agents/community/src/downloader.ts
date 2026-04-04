@@ -116,8 +116,9 @@ export async function upgradeYtDlp(): Promise<void> {
     resetYtDlpCache();
     const lastLine = stdout.trim().split('\n').pop() ?? '';
     log.info(`pip upgrade: ${lastLine}`);
-  } catch (err: any) {
-    log.warn(`pip upgrade failed (using existing version)`, { error: (err.message || '').slice(0, 200) });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    log.warn(`pip upgrade failed (using existing version)`, { error: msg.slice(0, 200) });
   }
 }
 
@@ -181,8 +182,9 @@ export async function runDiagnostic(): Promise<string> {
         files.forEach((f: string) => fs.unlinkSync(path.join(os.tmpdir(), f)));
       } catch { /* cleanup of temp files — failure is OK */ }
       return lines.join('\n');
-    } catch (err: any) {
-      const msg = (err.stderr || err.message || '').slice(0, 150);
+    } catch (err: unknown) {
+      const e = err as { stderr?: string; message?: string };
+      const msg = (e.stderr || e.message || String(err)).slice(0, 150);
       log(`FAIL client=${client || 'default'}: ${msg}`);
     }
   }
@@ -201,7 +203,7 @@ async function probeVideoMeta(filePath: string): Promise<VideoMeta> {
       filePath,
     ], { timeout: METADATA_TIMEOUT });
     const info = JSON.parse(stdout);
-    const videoStream = info.streams?.find((s: any) => s.codec_type === 'video');
+    const videoStream = info.streams?.find((s: Record<string, unknown>) => s.codec_type === 'video');
     return {
       width: videoStream?.width ? Number(videoStream.width) : undefined,
       height: videoStream?.height ? Number(videoStream.height) : undefined,
@@ -438,8 +440,9 @@ export async function downloadVideo(youtubeUrl: string, youtubeId: string): Prom
       await execFileAsync(ytDlp, args, { timeout: DOWNLOAD_SINGLE_TIMEOUT });
       succeeded = true;
       break;
-    } catch (err: any) {
-      lastError = err.stderr || err.message || String(err);
+    } catch (err: unknown) {
+      const e = err as { stderr?: string; message?: string };
+      lastError = e.stderr || e.message || String(err);
       log.warn(`attempt failed: ${lastError.slice(0, 200)}`);
     }
   }
