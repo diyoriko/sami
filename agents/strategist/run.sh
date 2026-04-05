@@ -20,14 +20,9 @@ STRATEGIST_HC_UUID="d22ef7e8-38ab-4930-816e-dcd434a0c914"
 # ─── Source shared runner ─────────────────────────────────────────────
 source "$HOME/Documents/Projects/Architect/shared/strategist-base.sh"
 
-# ─── Load env (bot token, API key) ───────────────────────────────────
+# ─── Load env (API key for Railway) ──────────────────────────────────
+# Bot token: loaded from ~/.config/diyoriko/notify-bot-token by strategist-base.sh
 _load_env() {
-  if [ -z "${BOT_TOKEN:-}" ]; then
-    local env_file="$HOME/.config/sami/community.env"
-    if [ -f "$env_file" ]; then
-      BOT_TOKEN=$(grep -m1 'TELEGRAM_BOT_TOKEN=' "$env_file" | cut -d= -f2-)
-    fi
-  fi
   SAMI_API_KEY="${STRATEGIST_API_KEY:-${BOT_TOKEN:-}}"
   if [ -z "$SAMI_API_KEY" ]; then
     SAMI_API_KEY=$(grep -m1 'STRATEGIST_API_KEY=' "$HOME/.config/sami/community.env" 2>/dev/null | cut -d= -f2- || true)
