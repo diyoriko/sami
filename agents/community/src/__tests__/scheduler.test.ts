@@ -45,11 +45,25 @@ vi.mock('../notify-admin', () => ({
   notifyAdmin: vi.fn(async () => {}),
 }));
 
+// ── Mock poster (uses @napi-rs/canvas which may not be available in tests) ──
+
+vi.mock('../poster', () => ({
+  postChallengeVideo: vi.fn(async () => 'posted'),
+  postChallengeSeriesVideo: vi.fn(async () => 'posted'),
+}));
+
 // ── Mock dates ──────────────────────────────────────────────────────────────
 
 vi.mock('../dates', () => ({
   todayMsk: vi.fn(() => '2026-03-16'),
   currentWeekMsk: vi.fn(() => ({ start: '2026-03-09', end: '2026-03-15' })),
+  thisMondayMsk: vi.fn(() => '2026-03-09'),
+  addDaysMsk: vi.fn((date: string, days: number) => {
+    const d = new Date(date + 'T00:00:00');
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+  }),
+  moscowNow: vi.fn(() => new Date('2026-03-16T12:00:00')),
 }));
 
 // ── Env setup ───────────────────────────────────────────────────────────────
@@ -114,13 +128,13 @@ describe('scheduler: startScheduler registers cron jobs', () => {
     // 3. Daily report (55 23 * * *)
     // 4. Daily analytics (config.CRON_ANALYTICS_DAILY)
     // 5. Weekly analytics (config.CRON_ANALYTICS_WEEKLY)
-    // 6. Weekly progress poll (0 9 * * 0)
+    // 6. Weekly progress poll — DISABLED
     // 7. Stability wall (0 16 * * 5)
     // 8. 48h inactivity reminder (0 10 * * *)
     // 9. Owner reminder (0 15 * * *)
     // 10. Weekly digest to channel (0 20 * * 0)
     // 11. Tomorrow video check (0 22 * * *)
-    expect(scheduledJobs.length).toBe(11);
+    expect(scheduledJobs.length).toBe(10);
   });
 
   it('all cron jobs use Europe/Moscow timezone', async () => {
@@ -142,13 +156,13 @@ describe('scheduler: startScheduler registers cron jobs', () => {
     expect(dailyReport).toBeDefined();
   });
 
-  it('registers weekly poll job for Sundays at 09:00', async () => {
+  it('weekly poll job is disabled', async () => {
     const { startScheduler } = await import('../scheduler');
     const bot = createFakeBot();
     startScheduler(bot);
 
     const weeklyPoll = scheduledJobs.find(j => j.expression === '0 9 * * 0');
-    expect(weeklyPoll).toBeDefined();
+    expect(weeklyPoll).toBeUndefined();
   });
 
   it('registers stability wall job for Fridays at 16:00', async () => {

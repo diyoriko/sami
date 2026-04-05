@@ -5,7 +5,7 @@
  * any grammY handlers. They are imported back into bot-menu.ts.
  */
 
-import { Bot, InlineKeyboard } from 'grammy';
+import { Bot, InlineKeyboard, Context } from 'grammy';
 import { getConfig } from './config';
 import { createLogger } from './logger';
 import {
@@ -35,7 +35,7 @@ const PAGE_SIZE = 5;
 // ---------------------------------------------------------------------------
 
 export async function sendMyWorkouts(
-  ctx: any,
+  ctx: Context,
   userId: number,
   offset: number,
   editMessageId?: number
@@ -176,7 +176,7 @@ export function formatUptime(seconds: number): string {
 // sendChallengeView
 // ---------------------------------------------------------------------------
 
-export async function sendChallengeView(ctx: any, seriesId: number): Promise<void> {
+export async function sendChallengeView(ctx: Context, seriesId: number): Promise<void> {
   const series = getChallengeSeries(seriesId);
   if (!series) return;
 
@@ -255,7 +255,7 @@ export async function sendChallengeView(ctx: any, seriesId: number): Promise<voi
 // sendFilterResults
 // ---------------------------------------------------------------------------
 
-export async function sendFilterResults(ctx: any, videos: ReturnType<typeof filterVideos>, label: string): Promise<void> {
+export async function sendFilterResults(ctx: Context, videos: ReturnType<typeof filterVideos>, label: string): Promise<void> {
   if (videos.length === 0) {
     try {
       await ctx.editMessageText(`Фильтр: ${label}\n\nНичего не найдено. Попробуй другой фильтр.`);

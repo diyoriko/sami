@@ -44,8 +44,8 @@ async function googleTranslate(text: string): Promise<string> {
     const res = await fetch(url.toString(), { signal: controller.signal });
     if (!res.ok) return text;
 
-    const data = await res.json() as any[][];
-    return data[0]?.map((s: any[]) => s[0]).join('') ?? text;
+    const data = await res.json() as unknown[][];
+    return (data[0] as unknown[][])?.map((s) => (s as unknown[])[0]).join('') ?? text;
   } catch {
     return text;
   } finally {

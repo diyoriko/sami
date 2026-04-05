@@ -1,8 +1,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { getConfig } from './config';
+import { createLogger } from './logger';
 import { getDb, writeDailyStats, getCompletionCountForDate, getUniqueCompletionUsersForDate, getRecentPosts, getCumulativeStats } from './db';
 import { getLatestPacket, type StrategistPacket } from './strategist';
+
+const log = createLogger('strategist-sync');
 
 export type { StrategistPacket as CommunityPacket };
 
@@ -15,7 +18,7 @@ export function readCommunityPacket(): StrategistPacket {
   // Try DB first (new flow: strategist runs on Railway)
   const packet = getLatestPacket();
   if (packet.week_focus !== 'general' || Object.keys(packet.search_keywords).length > 0) {
-    console.log('[sync] loaded community packet from DB');
+    log.info('loaded community packet from DB');
     return packet;
   }
 
@@ -38,7 +41,7 @@ function readFromFilesystem(): StrategistPacket | null {
     if (!match) return null;
 
     const parsed = JSON.parse(match[1].trim()) as Partial<StrategistPacket>;
-    console.log('[sync] loaded community packet from filesystem (legacy)');
+    log.info('loaded community packet from filesystem (legacy)');
     return {
       week_focus: 'general',
       content_themes: ['всё тело', 'ежедневная практика'],
@@ -49,7 +52,7 @@ function readFromFilesystem(): StrategistPacket | null {
       ...parsed,
     };
   } catch (err) {
-    console.warn('[sync] failed to read filesystem packet:', err);
+    log.warn('failed to read filesystem packet', { error: String(err) });
     return null;
   }
 }
@@ -78,5 +81,5 @@ export function writeCommunityReport(date: string, newMembers: number): void {
 
   const outPath = path.join(reportDir, 'latest.json');
   fs.writeFileSync(outPath, JSON.stringify(report, null, 2), 'utf-8');
-  console.log(`[sync] wrote community report to ${outPath}`);
+  log.info(`wrote community report to ${outPath}`);
 }

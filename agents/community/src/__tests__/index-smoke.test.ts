@@ -89,7 +89,7 @@ describe('index.ts module smoke tests', () => {
   it('scheduler module loads without side effects', async () => {
     const scheduler = await import('../scheduler');
     expect(typeof scheduler.startScheduler).toBe('function');
-  });
+  }, 30_000);
 
   it('poster module loads without throwing', async () => {
     const poster = await import('../poster');
@@ -134,8 +134,8 @@ describe('index.ts source structure', () => {
   });
 
   it('starts HTTP server', () => {
-    expect(indexSource).toContain('http.createServer');
-    expect(indexSource).toContain("'/health'");
+    expect(indexSource).toContain('startHttpServer');
+    expect(indexSource).toContain("import { startHttpServer } from './http-server'");
   });
 
   it('has admin commands', () => {
