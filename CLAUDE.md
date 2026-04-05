@@ -217,6 +217,7 @@ Default branch: `develop`.
 - Coverage: `npm run test:coverage` — отчёт покрытия (@vitest/coverage-v8)
 - CI coverage delta gate: warning при Δ% > -2% на PR (cache-based baseline)
 - `index.ts` coverage 0% — ожидаемо: тесты через bot.handleUpdate() mock, не direct import (index.ts вызывает main() at top level)
+- **Adversarial self-review**: Before marking any task as done, re-read the changes in adversarial mode — actively look for bugs, edge cases, missing tests, and documentation drift. This replaces CodeRabbit which is disabled due to flagged GitHub account.
 
 ## Commit Rules
 - Do NOT add `Co-Authored-By` trailer to commits — GitHub flagged the account for bot-like activity
