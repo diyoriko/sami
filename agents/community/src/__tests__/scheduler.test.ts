@@ -128,13 +128,13 @@ describe('scheduler: startScheduler registers cron jobs', () => {
     // 3. Daily report (55 23 * * *)
     // 4. Daily analytics (config.CRON_ANALYTICS_DAILY)
     // 5. Weekly analytics (config.CRON_ANALYTICS_WEEKLY)
-    // 6. Weekly progress poll (0 9 * * 0)
+    // 6. Weekly progress poll — DISABLED
     // 7. Stability wall (0 16 * * 5)
     // 8. 48h inactivity reminder (0 10 * * *)
     // 9. Owner reminder (0 15 * * *)
     // 10. Weekly digest to channel (0 20 * * 0)
     // 11. Tomorrow video check (0 22 * * *)
-    expect(scheduledJobs.length).toBe(11);
+    expect(scheduledJobs.length).toBe(10);
   });
 
   it('all cron jobs use Europe/Moscow timezone', async () => {
@@ -156,13 +156,13 @@ describe('scheduler: startScheduler registers cron jobs', () => {
     expect(dailyReport).toBeDefined();
   });
 
-  it('registers weekly poll job for Sundays at 09:00', async () => {
+  it('weekly poll job is disabled', async () => {
     const { startScheduler } = await import('../scheduler');
     const bot = createFakeBot();
     startScheduler(bot);
 
     const weeklyPoll = scheduledJobs.find(j => j.expression === '0 9 * * 0');
-    expect(weeklyPoll).toBeDefined();
+    expect(weeklyPoll).toBeUndefined();
   });
 
   it('registers stability wall job for Fridays at 16:00', async () => {
