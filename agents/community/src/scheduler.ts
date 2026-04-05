@@ -190,28 +190,7 @@ export function startScheduler(bot: Bot): void {
     }
   }, { timezone: 'Europe/Moscow' });
 
-  // ---- S5: Weekly progress poll (Sunday 12:00 MSK) ----
-  cron.schedule('0 9 * * 0', async () => {
-    log.info('posting weekly progress poll');
-    try {
-      const today = todayMsk();
-      const challenge = ensureActiveChallenge(today, thisMondayMsk());
-      if (challenge.status !== 'active') return;
-
-      const question = `Неделя позади! Сколько тренировок удалось сделать?`;
-
-      await bot.api.sendPoll(config.TELEGRAM_CHANNEL_ID, question, [
-        { text: `Все 7` },
-        { text: `4–6` },
-        { text: `1–3` },
-        { text: `Пропустил(а) неделю` },
-      ], { is_anonymous: true });
-
-      log.info('weekly poll posted');
-    } catch (err) {
-      log.error('weekly poll failed', { error: String(err) });
-    }
-  }, { timezone: 'Europe/Moscow' });
+  // ---- S5: Weekly progress poll — DISABLED (admin request 2026-04-05) ----
 
   // ---- S6: Stability wall (Friday 19:00 MSK) ----
   cron.schedule('0 16 * * 5', async () => {
@@ -320,7 +299,7 @@ export function startScheduler(bot: Bot): void {
   // Strategist runs on Mac (claude --print, Max subscription) and POSTs packet to /packet endpoint.
   // If ANTHROPIC_API_KEY is set, can also run locally on Railway (future option).
 
-  log.info('all cron jobs registered (community + analytics + digest + poll + stability + reminder + owner)');
+  log.info('all cron jobs registered (community + analytics + digest + stability + reminder + owner)');
 
   // Cleanup old approval sessions on startup
   setTimeout(() => {
