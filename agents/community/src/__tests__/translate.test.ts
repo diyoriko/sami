@@ -114,12 +114,11 @@ describe('rewriteTitle', () => {
 
   // ── New tests: length cap ──
 
-  it('caps title at 60 characters', async () => {
+  it('preserves full title without truncation', async () => {
     const long = 'Очень длинное название тренировки которое содержит множество слов и фраз описывающих содержание видео';
     const result = await rewriteTitle(long);
-    // escV2 adds backslashes, so unescaped length should be ≤ 60
     const unescaped = result.replace(/\\(.)/g, '$1');
-    expect(unescaped.length).toBeLessThanOrEqual(60);
+    expect(unescaped.length).toBeGreaterThan(60);
   });
 
   // ── New tests: abbreviation handling ──

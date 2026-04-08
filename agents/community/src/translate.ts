@@ -277,7 +277,6 @@ export async function rewriteTitle(title: string): Promise<string> {
 
   clean = applyFitnessFixes(clean);
   clean = ensureCapitalized(clean);
-  clean = capLength(clean, MAX_TITLE_LENGTH);
 
   return escV2(clean);
 }

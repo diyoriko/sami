@@ -17,13 +17,16 @@ export interface RecentPost {
   date: string;
   category: string;
   title: string;
+  display_title: string | null;
   post_type: string;
   completions: number;
+  channel_message_id: number | null;
 }
 
 export function getRecentPosts(days: number = 7): RecentPost[] {
   return getDb().prepare(`
-    SELECT p.date, p.category, v.title, p.post_type,
+    SELECT p.date, p.category, v.title, v.display_title, p.post_type,
+      p.channel_message_id,
       (SELECT COUNT(*) FROM completions c WHERE c.post_id = p.id) as completions
     FROM posts p
     JOIN videos v ON v.id = p.video_id
