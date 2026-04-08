@@ -87,6 +87,8 @@ export async function formatCaption(video: VideoRow, challengeInfo?: ChallengeIn
     ...(samiScoreLine ? [samiScoreLine] : []),
     '',
     `Автор: ${channelName}, 📎 [YouTube](${safeUrl})`,
+    '',
+    `_👇 Нажми «Я сделаль» в комментариях после тренировки_`,
   ];
 
   return lines.join('\n');

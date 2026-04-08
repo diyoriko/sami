@@ -21,8 +21,12 @@ import {
   setChallengeSeriesDayVideo,
   clearChallengeSeriesDaySlot,
   getChallengeParticipantCount,
+  getChallengeSeriesDaySlot,
   type ChallengeSeriesRow,
 } from './db';
+import { tomorrowMsk, todayMsk } from './dates';
+import { runApprovalFlow } from './approval';
+import { postChallengeSeriesVideo } from './poster';
 import {
   type Category,
   CATEGORIES,
@@ -123,7 +127,6 @@ export function registerChallengeHandlers(
     meta.category = category;
 
     // Create the challenge with start = tomorrow MSK
-    const { tomorrowMsk } = await import('./dates');
     const startDate = tomorrowMsk();
 
     const seriesId = createChallengeSeries(meta.name, meta.duration, startDate, {
@@ -217,7 +220,6 @@ export function registerChallengeHandlers(
     const series = getChallengeSeries(seriesId);
     if (!series) return;
 
-    const { getChallengeSeriesDaySlot } = await import('./db');
     const slot = getChallengeSeriesDaySlot(seriesId, dayNumber);
     if (slot?.status === 'queued') {
       clearChallengeSeriesDaySlot(seriesId, dayNumber);
@@ -226,9 +228,6 @@ export function registerChallengeHandlers(
     const category = (slot?.category ?? series.default_category ?? 'stretching') as Category;
 
     // Use approval flow with series context
-    const { runApprovalFlow } = await import('./approval');
-    const { todayMsk } = await import('./dates');
-
     await runApprovalFlow(bot, todayMsk(), category, { challengeId: seriesId, dayNumber, type: 'series' }, undefined, undefined);
   });
 
@@ -245,7 +244,6 @@ export function registerChallengeHandlers(
       return;
     }
 
-    const { postChallengeSeriesVideo } = await import('./poster');
     const result = await postChallengeSeriesVideo(bot, series, dayNumber);
     if (result === 'posted') {
       try { await ctx.editMessageText('✅ Опубликовано!'); } catch (err) { log.debug('editMessageText failed (message may be deleted)', { error: String(err) }); }

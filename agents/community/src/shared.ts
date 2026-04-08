@@ -11,9 +11,26 @@
 export const CATEGORIES = [
   'stretching', 'strength', 'mobility',
   'yoga', 'breathing', 'recovery', 'cardio',
+  'muay_thai',
 ] as const;
 
 export type Category = (typeof CATEGORIES)[number];
+
+/**
+ * Categories that are NEVER auto-rotated by the weekly schedule or by the
+ * "search all" command. They only appear when the admin explicitly picks
+ * the category from a button (e.g. 🥊 Муай-Тай in the YouTube search filter).
+ *
+ * `searchAllCategories` and `DAY_CATEGORY_MAP` must skip these.
+ */
+export const OPT_IN_CATEGORIES: ReadonlySet<Category> = new Set(['muay_thai']);
+
+/**
+ * Categories that participate in the weekly auto-search ("Неделя" button,
+ * `/search` command, scheduled flows). Excludes opt-in categories.
+ */
+export const WEEKLY_CATEGORIES: readonly Category[] =
+  CATEGORIES.filter((c) => !OPT_IN_CATEGORIES.has(c));
 
 export const CATEGORY_RU: Record<Category, string> = {
   stretching: 'стретчинг',
@@ -23,6 +40,7 @@ export const CATEGORY_RU: Record<Category, string> = {
   breathing: 'дыхание',
   recovery: 'восстановление',
   cardio: 'кардио',
+  muay_thai: 'муай-тай',
 };
 
 export const CATEGORY_EMOJI: Record<Category, string> = {
@@ -33,6 +51,7 @@ export const CATEGORY_EMOJI: Record<Category, string> = {
   breathing: '🫁',
   recovery: '🧊',
   cardio: '🏃',
+  muay_thai: '🥊',
 };
 
 /** Inline keyboard buttons for UGC flow and filters (two rows) */
@@ -44,6 +63,7 @@ export const CATEGORY_BUTTONS: { label: string; value: Category }[] = [
   { label: '🫁 Дыхание', value: 'breathing' },
   { label: '🧊 Восстановление', value: 'recovery' },
   { label: '🏃 Кардио', value: 'cardio' },
+  { label: '🥊 Муай-Тай', value: 'muay_thai' },
 ];
 
 // ─── DIFFICULTY ──────────────────────────────────────────────────────────────
@@ -96,6 +116,7 @@ export const MUSCLE_DEFAULTS: Record<string, string[]> = {
   breathing: ['диафрагма'],
   recovery: ['всё тело'],
   cardio: ['всё тело'],
+  muay_thai: ['всё тело, кор, ноги'],
 };
 
 // ─── EQUIPMENT ───────────────────────────────────────────────────────────────
@@ -256,6 +277,22 @@ export const CATEGORY_QUERIES: Record<Category, string[]> = {
     'animal flow cardio bodyweight circuit',
     'EMOM bodyweight conditioning workout',
     'kickboxing cardio home no equipment',
+  ],
+  muay_thai: [
+    // Тренировки/техника без снаряжения и без мешка — основной формат для канала
+    'muay thai shadow boxing workout home',
+    'muay thai basics technique tutorial beginner',
+    'muay thai footwork drills no bag',
+    'муай тай тренировка дома без мешка',
+    'муай тай техника удары для начинающих',
+    'муай тай шадоу боксинг дома',
+    'muay thai conditioning bodyweight home',
+    'muay thai stance and guard tutorial',
+    // Бои профи — вдохновляющий контент (legendary fighters)
+    'Buakaw best fights highlights',
+    'Saenchai technique highlights muay thai',
+    'Rodtang ONE Championship best moments',
+    'Samart Payakaroon legendary muay thai',
   ],
 };
 
