@@ -310,8 +310,6 @@ export function escV2(text: string): string {
   return String(text).replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, '\\$1');
 }
 
-/** @deprecated Use escV2 — kept for backward compatibility */
-export const escapeMarkdown = escV2;
 
 export function decodeHtmlEntities(text: string): string {
   return text

@@ -10,6 +10,10 @@ const ConfigSchema = z.object({
   TELEGRAM_GROUP_ID: z.string().min(1),      // e.g. "@sami_chat" or "-100987654321"
   TELEGRAM_ADMIN_USER_ID: z.string().transform(Number),
   YOUTUBE_API_KEY: z.string().min(1),
+  // Healthchecks.io self-ping URL (optional). When set, the bot pings the URL
+  // every 5 min from its own runtime so liveness is owned by the bot, not by
+  // a Mac-side launchd monitor that pauses on sleep. Unset = no ping (local dev).
+  HEALTHCHECKS_PING_URL: z.string().url().optional(),
   COMMUNITY_DB_PATH: z.string().default('./data/community.sqlite'),
   STRATEGIST_LATEST_JSON: z.string().default('../../reports/strategist/.internal/latest.json'),
   COMMUNITY_REPORT_DIR: z.string().default('../../reports/community/.internal'),

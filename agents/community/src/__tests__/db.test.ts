@@ -546,11 +546,11 @@ describe('filter videos', () => {
 
 describe('shared constants', () => {
   it('exports CATEGORY_RU and DIFFICULTY_RU', async () => {
-    const { CATEGORY_RU, DIFFICULTY_RU, decodeHtmlEntities, escapeMarkdown } = await import('../shared');
+    const { CATEGORY_RU, DIFFICULTY_RU, decodeHtmlEntities, escV2 } = await import('../shared');
     expect(CATEGORY_RU.stretching).toBe('стретчинг');
     expect(DIFFICULTY_RU.beginner).toBe('начинающий');
     expect(decodeHtmlEntities('&amp;&quot;')).toBe('&"');
-    expect(escapeMarkdown('*bold*')).toBe('\\*bold\\*');
+    expect(escV2('*bold*')).toBe('\\*bold\\*');
   });
 
   it('DAY_CATEGORY_MAP covers all 7 days of the week', async () => {
