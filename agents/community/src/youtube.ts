@@ -15,7 +15,7 @@ import { wasPostedEver, isVideoRejected, VideoRow } from './db';
 import { createLogger } from './logger';
 import {
   type Category, type Difficulty,
-  CATEGORIES, CATEGORY_QUERIES,
+  CATEGORY_QUERIES, WEEKLY_CATEGORIES,
   EQUIPMENT_PATTERNS as EQUIPMENT_DETECT_PATTERNS,
   MUSCLE_PATTERNS, MUSCLE_DEFAULTS,
 } from './shared';
@@ -491,7 +491,9 @@ export async function searchAllCategories(
   const searchLog = correlationId ? log.withCorrelation(correlationId) : log;
   const result = {} as Record<Category, ScoredVideo[]>;
 
-  for (const cat of CATEGORIES) {
+  // Iterate WEEKLY_CATEGORIES (skips opt-in like muay_thai). Opt-in categories
+  // only ever run via explicit single-category searchVideos calls.
+  for (const cat of WEEKLY_CATEGORIES) {
     try {
       result[cat] = await searchVideos(cat, 3, keywords?.[cat], correlationId);
       const top = result[cat][0];

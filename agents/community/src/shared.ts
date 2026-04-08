@@ -16,6 +16,22 @@ export const CATEGORIES = [
 
 export type Category = (typeof CATEGORIES)[number];
 
+/**
+ * Categories that are NEVER auto-rotated by the weekly schedule or by the
+ * "search all" command. They only appear when the admin explicitly picks
+ * the category from a button (e.g. 🥊 Муай-Тай in the YouTube search filter).
+ *
+ * `searchAllCategories` and `DAY_CATEGORY_MAP` must skip these.
+ */
+export const OPT_IN_CATEGORIES: ReadonlySet<Category> = new Set(['muay_thai']);
+
+/**
+ * Categories that participate in the weekly auto-search ("Неделя" button,
+ * `/search` command, scheduled flows). Excludes opt-in categories.
+ */
+export const WEEKLY_CATEGORIES: readonly Category[] =
+  CATEGORIES.filter((c) => !OPT_IN_CATEGORIES.has(c));
+
 export const CATEGORY_RU: Record<Category, string> = {
   stretching: 'стретчинг',
   strength: 'сила',
