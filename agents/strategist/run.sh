@@ -166,9 +166,13 @@ custom_extract_tasks() {
   fi
 
   # Send proposals as Telegram messages with Approve/Reject buttons
+  # SAMI_API_KEY is exported so extract-strategist-tasks.sh can authenticate
+  # against Railway's /proposal endpoint (which expects STRATEGIST_API_KEY,
+  # not the Telegram BOT_TOKEN). BOT_TOKEN/ADMIN_CHAT_ID are still used for
+  # the Telegram sendMessage call inside the script.
   local extract_tasks="$PROJECT_DIR/agents/extract-strategist-tasks.sh"
   if [ -f "$extract_tasks" ] && [ -n "${BOT_TOKEN:-}" ] && [ -n "${SAMI_API_KEY:-}" ]; then
-    bash "$extract_tasks" "$report_file" "$PROJECT_DIR/BACKLOG.md" \
+    SAMI_API_KEY="$SAMI_API_KEY" bash "$extract_tasks" "$report_file" "$PROJECT_DIR/BACKLOG.md" \
       "$BOT_TOKEN" "$ADMIN_CHAT_ID" "$COMMUNITY_AGENT_URL" 2>&1 \
       && echo "$(_ts) Proposals sent for approval" \
       || echo "$(_ts) Proposal buttons failed (non-critical)"

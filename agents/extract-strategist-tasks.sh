@@ -69,10 +69,14 @@ while IFS= read -r task; do
     continue
   fi
 
-  # Save proposal to bot DB via HTTP and get ID
+  # Save proposal to bot DB via HTTP and get ID.
+  # Auth: Railway /proposal endpoint expects STRATEGIST_API_KEY (passed via
+  # SAMI_API_KEY env var by run.sh), not the Telegram BOT_TOKEN. Fallback to
+  # BOT_TOKEN preserves the historical behavior on environments where the
+  # api key isn't separated.
   PROPOSAL_ID=$(curl -s -X POST "${BOT_URL}/proposal" \
     -H "Content-Type: application/json" \
-    -H "x-admin-token: ${BOT_TOKEN}" \
+    -H "x-admin-token: ${SAMI_API_KEY:-$BOT_TOKEN}" \
     -d "{\"task_text\": $(echo "$task" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().strip()))')}" \
     | python3 -c "import json,sys; print(json.load(sys.stdin).get('id', ''))" 2>/dev/null || echo "")
 
