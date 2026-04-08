@@ -370,6 +370,29 @@ async function main(): Promise<void> {
   // HTTP report server — стратег читает отсюда метрики
   const httpServer = startHttpServer(bot, config);
 
+  // Healthchecks.io self-ping — bot owns its own liveness signal.
+  // The Mac-side bot-health-monitor.sh launchd job was unreliable because
+  // launchd StartInterval doesn't fire while the laptop is asleep, causing
+  // false DOWN alerts. Self-ping decouples liveness from any external machine.
+  let healthPingTimer: NodeJS.Timeout | undefined;
+  if (config.HEALTHCHECKS_PING_URL) {
+    const pingUrl = config.HEALTHCHECKS_PING_URL;
+    const ping = async () => {
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 10_000);
+        await fetch(pingUrl, { signal: ctrl.signal });
+        clearTimeout(timer);
+      } catch {
+        // Silent — bot health is reported elsewhere; ping failure is non-fatal
+      }
+    };
+    void ping(); // immediate ping at boot so HC sees us right after Railway redeploy
+    healthPingTimer = setInterval(ping, 5 * 60 * 1000);
+    healthPingTimer.unref();
+    log.info('healthchecks self-ping started (every 5 min)');
+  }
+
   // Graceful shutdown (Railway sends SIGTERM on redeploy, 10s before SIGKILL)
   let shuttingDown = false;
   const shutdown = async (signal: string) => {
@@ -379,6 +402,7 @@ async function main(): Promise<void> {
     // Force exit after 8s (Railway SIGKILL at 10s)
     const forceTimer = setTimeout(() => { log.info('force exit'); process.exit(0); }, 8000);
     forceTimer.unref();
+    if (healthPingTimer) clearInterval(healthPingTimer);
     try { await bot.stop(); } catch {}
     httpServer.close();
     closeDb();
