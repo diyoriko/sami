@@ -11,6 +11,7 @@
 export const CATEGORIES = [
   'stretching', 'strength', 'mobility',
   'yoga', 'breathing', 'recovery', 'cardio',
+  'muay_thai',
 ] as const;
 
 export type Category = (typeof CATEGORIES)[number];
@@ -23,6 +24,7 @@ export const CATEGORY_RU: Record<Category, string> = {
   breathing: 'дыхание',
   recovery: 'восстановление',
   cardio: 'кардио',
+  muay_thai: 'муай-тай',
 };
 
 export const CATEGORY_EMOJI: Record<Category, string> = {
@@ -33,6 +35,7 @@ export const CATEGORY_EMOJI: Record<Category, string> = {
   breathing: '🫁',
   recovery: '🧊',
   cardio: '🏃',
+  muay_thai: '🥊',
 };
 
 /** Inline keyboard buttons for UGC flow and filters (two rows) */
@@ -44,6 +47,7 @@ export const CATEGORY_BUTTONS: { label: string; value: Category }[] = [
   { label: '🫁 Дыхание', value: 'breathing' },
   { label: '🧊 Восстановление', value: 'recovery' },
   { label: '🏃 Кардио', value: 'cardio' },
+  { label: '🥊 Муай-Тай', value: 'muay_thai' },
 ];
 
 // ─── DIFFICULTY ──────────────────────────────────────────────────────────────
@@ -96,6 +100,7 @@ export const MUSCLE_DEFAULTS: Record<string, string[]> = {
   breathing: ['диафрагма'],
   recovery: ['всё тело'],
   cardio: ['всё тело'],
+  muay_thai: ['всё тело, кор, ноги'],
 };
 
 // ─── EQUIPMENT ───────────────────────────────────────────────────────────────
@@ -256,6 +261,22 @@ export const CATEGORY_QUERIES: Record<Category, string[]> = {
     'animal flow cardio bodyweight circuit',
     'EMOM bodyweight conditioning workout',
     'kickboxing cardio home no equipment',
+  ],
+  muay_thai: [
+    // Тренировки/техника без снаряжения и без мешка — основной формат для канала
+    'muay thai shadow boxing workout home',
+    'muay thai basics technique tutorial beginner',
+    'muay thai footwork drills no bag',
+    'муай тай тренировка дома без мешка',
+    'муай тай техника удары для начинающих',
+    'муай тай шадоу боксинг дома',
+    'muay thai conditioning bodyweight home',
+    'muay thai stance and guard tutorial',
+    // Бои профи — вдохновляющий контент (legendary fighters)
+    'Buakaw best fights highlights',
+    'Saenchai technique highlights muay thai',
+    'Rodtang ONE Championship best moments',
+    'Samart Payakaroon legendary muay thai',
   ],
 };
 
