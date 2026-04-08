@@ -33,23 +33,45 @@ _load_env() {
 pre_run() {
   _load_env
 
+  if [ -z "${SAMI_API_KEY:-}" ]; then
+    echo "$(_ts) WARN: SAMI_API_KEY not set — Railway endpoints will return 401 (set STRATEGIST_API_KEY in ~/.config/sami/community.env)"
+  fi
+
   # Trigger fresh analytics so subscriber_count is current
+  # Auth: x-admin-token required since 04.04 P0-1 security fix (commit 1d8b2a1)
   echo "$(_ts) Triggering analytics refresh..."
-  curl -sf --max-time 30 -X POST "$COMMUNITY_AGENT_URL/trigger-analytics" >/dev/null 2>&1 \
-    && echo "$(_ts) Analytics refreshed" \
-    || echo "$(_ts) Analytics refresh unavailable (using cached)"
+  local trigger_code
+  trigger_code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 -X POST \
+    -H "x-admin-token: ${SAMI_API_KEY:-}" \
+    "$COMMUNITY_AGENT_URL/trigger-analytics" 2>/dev/null || echo "000")
+  if [ "$trigger_code" = "200" ]; then
+    echo "$(_ts) Analytics refreshed"
+  else
+    echo "$(_ts) Analytics refresh unavailable (HTTP $trigger_code, using cached)"
+  fi
   sleep 3
 
   # Fetch community + analytics reports
   local internal="$_SB_INTERNAL_DIR"
-  curl -sf --max-time 10 "$COMMUNITY_AGENT_URL/report/community" \
-    -o "$internal/community-latest.json" 2>/dev/null \
-    && echo "$(_ts) Fetched community report" \
-    || echo "$(_ts) Community report unavailable"
-  curl -sf --max-time 10 "$COMMUNITY_AGENT_URL/report/analytics" \
-    -o "$internal/analytics-latest.json" 2>/dev/null \
-    && echo "$(_ts) Fetched analytics report" \
-    || echo "$(_ts) Analytics report unavailable"
+  local community_code analytics_code
+  community_code=$(curl -s -w '%{http_code}' --max-time 10 \
+    -H "x-admin-token: ${SAMI_API_KEY:-}" \
+    "$COMMUNITY_AGENT_URL/report/community" \
+    -o "$internal/community-latest.json" 2>/dev/null || echo "000")
+  if [ "$community_code" = "200" ]; then
+    echo "$(_ts) Fetched community report"
+  else
+    echo "$(_ts) Community report unavailable (HTTP $community_code)"
+  fi
+  analytics_code=$(curl -s -w '%{http_code}' --max-time 10 \
+    -H "x-admin-token: ${SAMI_API_KEY:-}" \
+    "$COMMUNITY_AGENT_URL/report/analytics" \
+    -o "$internal/analytics-latest.json" 2>/dev/null || echo "000")
+  if [ "$analytics_code" = "200" ]; then
+    echo "$(_ts) Fetched analytics report"
+  else
+    echo "$(_ts) Analytics report unavailable (HTTP $analytics_code)"
+  fi
 
   # Sync proposal statuses (non-critical)
   local sync_script="$PROJECT_DIR/agents/sync-proposal-status.mjs"

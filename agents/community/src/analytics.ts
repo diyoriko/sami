@@ -4,7 +4,7 @@ import * as path from 'path';
 import { getConfig } from './config';
 import { createLogger } from './logger';
 import { thisMondayMsk, addDaysMsk } from './dates';
-import { type Category, CATEGORY_RU, escV2 } from './shared';
+import { type Category, CATEGORY_RU, CATEGORY_EMOJI, escV2 } from './shared';
 
 const log = createLogger('analytics');
 import {
@@ -264,41 +264,33 @@ export async function postWeeklyDigest(bot: Bot, weekStr: string): Promise<void>
   const config = getConfig();
   log.info(`posting weekly digest to channel for ${weekStr}`);
 
-  // Week boundaries using Moscow time
   const startDate = thisMondayMsk();
   const endDate = addDaysMsk(startDate, 6);
 
   const recentPosts = getRecentPosts(7);
-  const cumulative = getCumulativeStats();
-  const weeklyCompletions = recentPosts.reduce((sum, p) => sum + p.completions, 0);
 
   if (recentPosts.length === 0) {
     log.info('no posts this week, skipping digest');
     return;
   }
 
-  // Top 3 by completions
-  const top3 = [...recentPosts]
-    .sort((a, b) => b.completions - a.completions)
-    .slice(0, 3);
+  // Sort chronologically (oldest first)
+  const sorted = [...recentPosts].sort((a, b) => a.date.localeCompare(b.date));
 
-  const topLines = top3.map((p, i) => {
-    const medal = ['🥇', '🥈', '🥉'][i];
-    const title = escV2(p.title.slice(0, 40) + (p.title.length > 40 ? '…' : ''));
-    return `${medal} ${title} — ${p.completions} выполнений`;
+  const postLines = sorted.map(p => {
+    const cat = p.category as Category;
+    const emoji = CATEGORY_EMOJI[cat] ?? '🏷';
+    const title = p.display_title ?? p.title;
+    const link = p.channel_message_id
+      ? `[${escV2(title)}](https://t.me/sami_workouts/${p.channel_message_id})`
+      : escV2(title);
+    return `${emoji} ${link}`;
   });
 
   const lines = [
-    `*${escV2(`Итоги недели ${startDate} — ${endDate}`)}*`,
+    `*${escV2(`Тренировки недели ${startDate} — ${endDate}`)}*`,
     '',
-    `${escV2(`📊 ${recentPosts.length} тренировок опубликовано`)}`,
-    `${escV2(`✅ ${weeklyCompletions} выполнений`)}`,
-    `${escV2(`👥 ${cumulative.total_active_users} активных участников`)}`,
-    '',
-    `*${escV2('Топ тренировки:')}*`,
-    ...topLines,
-    '',
-    `${escV2('Спасибо всем, кто практикует 💪')}`,
+    ...postLines,
   ];
 
   try {
