@@ -22,11 +22,20 @@ source "$HOME/Documents/Projects/Architect/shared/strategist-base.sh"
 
 # ─── Load env (API key for Railway) ──────────────────────────────────
 # Bot token: loaded from ~/.config/diyoriko/notify-bot-token by strategist-base.sh
+#
+# IMPORTANT: STRATEGIST_API_KEY (the value Railway expects in x-admin-token)
+# is DIFFERENT from the Telegram BOT_TOKEN. Do NOT fall back to BOT_TOKEN —
+# the previous version did `${STRATEGIST_API_KEY:-${BOT_TOKEN:-}}` which
+# silently sent the Telegram token to Railway after strategist-base.sh
+# loaded BOT_TOKEN from ~/.config/diyoriko/notify-bot-token, producing
+# 401 on every fetch under launchd. See SM-1056.
 _load_env() {
-  SAMI_API_KEY="${STRATEGIST_API_KEY:-${BOT_TOKEN:-}}"
-  if [ -z "$SAMI_API_KEY" ]; then
-    SAMI_API_KEY=$(grep -m1 'STRATEGIST_API_KEY=' "$HOME/.config/sami/community.env" 2>/dev/null | cut -d= -f2- || true)
+  if [ -n "${STRATEGIST_API_KEY:-}" ]; then
+    SAMI_API_KEY="$STRATEGIST_API_KEY"
+  elif [ -f "$HOME/.config/sami/community.env" ]; then
+    SAMI_API_KEY=$(grep -m1 '^STRATEGIST_API_KEY=' "$HOME/.config/sami/community.env" 2>/dev/null | cut -d= -f2- || true)
   fi
+  SAMI_API_KEY="${SAMI_API_KEY:-}"
 }
 
 # ─── pre_run: Railway fetches + proposal sync ─────────────────────────
