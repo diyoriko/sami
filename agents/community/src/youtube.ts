@@ -15,7 +15,7 @@ import { wasPostedEver, isVideoRejected, VideoRow } from './db';
 import { createLogger } from './logger';
 import {
   type Category, type Difficulty,
-  CATEGORIES, CATEGORY_QUERIES,
+  CATEGORY_QUERIES, WEEKLY_CATEGORIES,
   EQUIPMENT_PATTERNS as EQUIPMENT_DETECT_PATTERNS,
   MUSCLE_PATTERNS, MUSCLE_DEFAULTS,
 } from './shared';
@@ -107,17 +107,27 @@ const SAMI_CONTENT_PATTERNS = [
 
 // MAX_PENALTY loaded from config.VIDEO_PENALTY_CAP
 
-function scoreBrandAlignment(title: string, description: string): number {
+function scoreBrandAlignment(title: string, description: string, category?: Category): number {
   const text = (title + ' ' + description).toLowerCase();
   let penalty = 0;
+
+  // muay_thai is intentionally a "fight & technique" category — competition framing,
+  // gendered audience labels and 1-vs-1 highlights are signal, not noise. Skip those
+  // penalties so Buakaw / Saenchai / Rodtang highlights and "muay thai for men"
+  // tutorials are not auto-rejected.
+  const isMuayThai = category === 'muay_thai';
 
   // Heavy penalties (anti-SAMI values) — each match adds to penalty pool
   for (const p of WEIGHT_LOSS_PATTERNS) if (p.test(text)) penalty += 25;
   for (const p of FIX_BODY_PATTERNS) if (p.test(text)) penalty += 20;
-  for (const p of COMPETITION_PATTERNS) if (p.test(text)) penalty += 15;
+  if (!isMuayThai) {
+    for (const p of COMPETITION_PATTERNS) if (p.test(text)) penalty += 15;
+  }
   for (const p of HYPE_PATTERNS) if (p.test(text)) penalty += 15;
   for (const p of HEAVY_EQUIPMENT_PATTERNS) if (p.test(text)) penalty += 20;
-  for (const p of WRONG_AUDIENCE_PATTERNS) if (p.test(text)) penalty += 50;
+  if (!isMuayThai) {
+    for (const p of WRONG_AUDIENCE_PATTERNS) if (p.test(text)) penalty += 50;
+  }
 
   // ALL CAPS title = hype / anti-calm
   const upperRatio = (title.match(/[A-ZА-ЯЁ]/g) || []).length / title.length;
@@ -131,6 +141,12 @@ function scoreBrandAlignment(title: string, description: string): number {
   for (const p of BODYWEIGHT_PATTERNS) if (p.test(text)) score += 12;
   for (const p of CALM_INSTRUCTIONAL_PATTERNS) if (p.test(text)) score += 8;
   for (const p of SAMI_CONTENT_PATTERNS) if (p.test(text)) score += 6;
+
+  // muay_thai-specific bonus: legendary fighters and core technique terms
+  if (isMuayThai) {
+    if (/buakaw|saenchai|rodtang|samart|yodsanklai|петбоончу/i.test(text)) score += 10;
+    if (/technique|техника|stance|guard|footwork|шадоу|shadow/i.test(text)) score += 6;
+  }
 
   return Math.max(0, Math.min(100, score));
 }
@@ -423,7 +439,7 @@ export async function searchVideos(
     const channelName = item.snippet.channelTitle;
     const thumbnail = item.snippet.thumbnails.high?.url ?? item.snippet.thumbnails.default?.url ?? null;
 
-    const brandScore = scoreBrandAlignment(title, description);
+    const brandScore = scoreBrandAlignment(title, description, category);
     const viewScore = scoreViewCount(viewCount);
     const engagementScore = scoreEngagement(likeRatio);
     const durationScore = scoreDuration(seconds);
@@ -475,7 +491,9 @@ export async function searchAllCategories(
   const searchLog = correlationId ? log.withCorrelation(correlationId) : log;
   const result = {} as Record<Category, ScoredVideo[]>;
 
-  for (const cat of CATEGORIES) {
+  // Iterate WEEKLY_CATEGORIES (skips opt-in like muay_thai). Opt-in categories
+  // only ever run via explicit single-category searchVideos calls.
+  for (const cat of WEEKLY_CATEGORIES) {
     try {
       result[cat] = await searchVideos(cat, 3, keywords?.[cat], correlationId);
       const top = result[cat][0];

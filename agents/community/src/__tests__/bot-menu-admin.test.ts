@@ -126,9 +126,9 @@ describe('shared utilities used by admin', () => {
     expect(decodeHtmlEntities('&lt;b&gt;')).toBe('<b>');
   });
 
-  it('CATEGORIES has 7 entries (one per day)', async () => {
+  it('CATEGORIES has 8 entries (7 weekday slots + muay_thai opt-in)', async () => {
     const { CATEGORIES } = await import('../shared');
-    expect(CATEGORIES.length).toBe(7);
+    expect(CATEGORIES.length).toBe(8);
   });
 
   it('formatUptime returns human readable string', async () => {

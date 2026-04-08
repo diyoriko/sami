@@ -5,20 +5,18 @@
 ---
 
 ## Now
-
-- **SM-1051** Подсказка «👇 Нажми Я сделал(а)» в caption — 1 строка в `poster.ts`, разблокирует completion stats
+<!-- One task you're working on right now. Empty if nothing active. -->
 
 ## SPRINT 10 — Growth + Architecture + Неделя
 
 Статус: **в работе** | Начало: 23.03.2026 | Конец: ~13.04.2026 | Тесты: 428
 
-### P0: Срочное
-
-- [ ] **SM-1056 Pipeline аналитики не обновляется 6 дней** — `reports/analytics/.internal/latest.json` последний раз обновлён 02.04. `runDailyAnalytics` должен запускаться кроном `00:30 * * *` (`scheduler.ts`) + catch-up на старте (`scheduler.ts:2781-2788`). Проверить Railway логи: бот вообще рестартился? cron срабатывает? есть ли исключения в `analytics.ts`? Без свежих данных стратег слепой. Done when: latest.json обновляется ежедневно, проверено 2 дня подряд.
-- [ ] **SM-1051 Подсказка «Я сделал» в caption** — В `formatCaption` (`poster.ts:2237-2289`) добавить строку `\n\n👇 Нажми «Я сделал(а)» после тренировки` в конце. Без неё 31 пост дал 3 completions (~10%). Эксперимент стратега EXP-002 просрочен с 07.04. Done when: новые посты содержат подсказку, через неделю фиксируется рост completions.
-
 ### Done
 
+- [x] **SM-1056 Pipeline аналитики (auth-регрессия)** — Корневая причина: P0-1 security fix 04.04 (`commit 1d8b2a1`) добавил `x-admin-token` на `/trigger-analytics` и `/report/{community,analytics}`, но `agents/strategist/run.sh` не обновили — `curl -sf` молча возвращал 401, стратег читал кэш от 8 марта. Fix в `run.sh`: посылаем `x-admin-token: $SAMI_API_KEY`, логируем фактический HTTP-код. PR #19. Дополнительно: `extract-strategist-tasks.sh` имел ту же проблему (использовал TELEGRAM_BOT_TOKEN вместо STRATEGIST_API_KEY) — починено в этой ветке.
+- [x] **SM-1051 Подсказка «Я сделаль» в caption** — `formatCaption` теперь добавляет `_👇 Нажми «Я сделаль» в комментариях после тренировки_` italic-строкой в конце caption. Кнопка живёт в discussion-комментах, без in-post pointer'а 36 постов дали только 3 completions. PR #19.
+- [x] **SM-1060 Расширить поиск: Муай-Тай (отдельный фильтр)** — Добавлена 8-я категория `muay_thai` (🥊). `CATEGORY_QUERIES` содержит 8 training-запросов (shadow boxing, technique, footwork drills, без мешка) + 4 fight highlights (Buakaw, Saenchai, Rodtang, Samart). `scoreBrandAlignment` принимает category, для muay_thai пропускает `COMPETITION_PATTERNS` и `WRONG_AUDIENCE_PATTERNS`, плюс бонус +10 за легендарные имена и +6 за термины техники. **True opt-in**: новые `OPT_IN_CATEGORIES` set + `WEEKLY_CATEGORIES` (всё кроме муай-тая). `searchAllCategories` (вызываемый `/search` командой и «Неделя») итерирует только `WEEKLY_CATEGORIES` → Муай-Тай НЕ вылазит автоматически. `DAY_CATEGORY_MAP` не тронут. Доступ только через 🔍 Поиск YouTube → 🥊 Муай-Тай.
+- [x] **SM-1062 Static imports for ./db в hot path** — `bot-menu-challenges.ts`: 5 dynamic `await import(...)` (./dates, ./db, ./approval, ./poster) перенесены в top-level. Циклов нет, callback latency микро-оптимизация.
 - [x] **SM-1002 Trackable invite links** — DB таблица, `/invites` команда, `/invites add`. 4 теста
 - [x] **SM-1003 Welcome DM «Как нашёл?»** — кнопки (знакомый/поиск/соцсети/другое) → join_source в DB
 - [x] **SM-1004 Stories reminder** — крон 09:00 МСК, DM админу со ссылкой на сегодняшний пост. **Отключён 03.04** по запросу
@@ -31,14 +29,9 @@
 - [x] **SM-1050 Telegram SEO** — обновлено описание канала с ключевыми словами для поиска
 - [x] **SM-1040 Еженедельный дайджест в канал** — крон вс 20:00, собирает посты за неделю, постит в @sami_workouts
 
-### P2: Tech debt
+### Icebox (P3)
 
-- [ ] **SM-1061 Cron polling серий каждую минуту** — `scheduler.ts:2697-2730` дёргает `getActiveChallengeSeriesList()` 1440 раз/день даже когда серий 0. Заменить на early-return при пустом списке (закешировать на 5 минут) или скипать минуту если active=[]. Низкий приоритет, но бессмысленный DB-трафик.
-- [ ] **SM-1062 Динамические импорты `./db` в hot path** — `bot-menu-challenges.ts:819, 913` использует `await import('./db')` для одной функции внутри callback'а. Эти модули уже грузятся на старте — заменить на статические импорты сверху файла. Микро-оптимизация callback latency.
-
-### P2: Контент/Поиск
-
-- [ ] **SM-1060 Расширить поиск: Муай-Тай (тренировки + бои профи)** — Сейчас `CATEGORY_QUERIES` ищет только stretching/strength/recovery/etc. Идея: добавить категорию или подкатегорию `muay-thai` с двумя типами контента: (1) тренировки/техника Муай-Тай (shadow boxing, pad work, домашние drills без мешка) — встают в обычный «силовой» или новый день недели, (2) лучшие бои профи (Buakaw, Saenchai, Rodtang) — отдельный формат «вдохновляющий контент» для канала, не как workout. Нужно решить: это новый день в `DAY_CATEGORY_MAP` или отдельная вкладка в боте «Вдохновение». Done when: запросы добавлены в `shared.ts`, бот умеет искать оба типа, скоринг не штрафует «competition» для категории fights.
+- [ ] **SM-1061 Cron polling серий каждую минуту** — `scheduler.ts:2697-2730` дёргает `getActiveChallengeSeriesList()` 1440 раз/день даже когда серий 0. SQLite hit — микросекунды, не реальная проблема. Оставлено как заметка — фиксить только если профайл покажет горячую точку.
 
 ### P1: Growth (ручная работа)
 

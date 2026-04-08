@@ -132,8 +132,8 @@ describe('UX smoke: shared constants', () => {
 
   it('category buttons match categories count', () => {
     const catCount = (sharedSource.match(/value: '/g) || []).length;
-    // 7 categories + 3 difficulties + 6 equipment = 16 value: ' occurrences in buttons
-    expect(catCount).toBe(16);
+    // 8 categories + 3 difficulties + 6 equipment = 17 value: ' occurrences in buttons
+    expect(catCount).toBe(17);
   });
 
   it('SQL helpers generate valid constraint strings', () => {
