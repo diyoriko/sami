@@ -82,20 +82,9 @@ pre_run() {
     echo "$(_ts) Analytics report unavailable (HTTP $analytics_code)"
   fi
 
-  # Sync proposal statuses (non-critical)
-  local sync_script="$PROJECT_DIR/agents/sync-proposal-status.mjs"
-  if [ -f "$sync_script" ] && command -v node >/dev/null 2>&1; then
-    node "$sync_script" 2>&1 && echo "$(_ts) Proposals synced" \
-      || echo "$(_ts) Proposal sync failed (non-critical)"
-  fi
-
-  # Apply approved proposals to BACKLOG.md (non-critical)
-  local apply_script="$PROJECT_DIR/agents/apply-proposals.sh"
-  if [ -f "$apply_script" ] && [ -f "$PROJECT_DIR/BACKLOG.md" ] && [ -n "$SAMI_API_KEY" ]; then
-    bash "$apply_script" "$PROJECT_DIR/BACKLOG.md" "$SAMI_API_KEY" "$COMMUNITY_AGENT_URL" 2>&1 \
-      && echo "$(_ts) Approved proposals applied" \
-      || echo "$(_ts) Apply proposals failed (non-critical)"
-  fi
+  # Legacy Telegram DM proposal flow DISABLED (2026-04-09).
+  # Proposals now go to BACKLOG.md "## Proposals (Not Approved)" section.
+  # Owner reviews on dashboard (localhost:3333) and approves manually.
 }
 
 # ─── build_prompt: SAMI-specific context ──────────────────────────────
@@ -162,11 +151,11 @@ print(f'{h}h' if h > 0 else f'{int(age//60)}m')
   fi
 }
 
-# ─── custom_extract_tasks: SAMI proposal system ──────────────────────
+# ─── custom_extract_tasks: write proposals to BACKLOG.md ─────────────
 custom_extract_tasks() {
   local report_file="$1"
 
-  # Extract BACKLOG_PROPOSALS to proposed-tasks.md
+  # Keep proposed-tasks.md as tracking file (no functional impact)
   local extract_proposals="$PROJECT_DIR/agents/extract-backlog-proposals.mjs"
   if [ -f "$extract_proposals" ] && command -v node >/dev/null 2>&1; then
     node "$extract_proposals" "$report_file" 2>&1 \
@@ -174,17 +163,13 @@ custom_extract_tasks() {
       || echo "$(_ts) Proposal extraction failed (non-critical)"
   fi
 
-  # Send proposals as Telegram messages with Approve/Reject buttons
-  # SAMI_API_KEY is exported so extract-strategist-tasks.sh can authenticate
-  # against Railway's /proposal endpoint (which expects STRATEGIST_API_KEY,
-  # not the Telegram BOT_TOKEN). BOT_TOKEN/ADMIN_CHAT_ID are still used for
-  # the Telegram sendMessage call inside the script.
-  local extract_tasks="$PROJECT_DIR/agents/extract-strategist-tasks.sh"
-  if [ -f "$extract_tasks" ] && [ -n "${BOT_TOKEN:-}" ] && [ -n "${SAMI_API_KEY:-}" ]; then
-    SAMI_API_KEY="$SAMI_API_KEY" bash "$extract_tasks" "$report_file" "$PROJECT_DIR/BACKLOG.md" \
-      "$BOT_TOKEN" "$ADMIN_CHAT_ID" "$COMMUNITY_AGENT_URL" 2>&1 \
-      && echo "$(_ts) Proposals sent for approval" \
-      || echo "$(_ts) Proposal buttons failed (non-critical)"
+  # Write proposals to BACKLOG.md "## Proposals (Not Approved)" section.
+  # Owner reviews and approves manually — no Telegram DM, no auto-insert.
+  local write_proposals="$HOME/Documents/Projects/Architect/shared/write-proposals-to-backlog.sh"
+  if [ -f "$write_proposals" ] && [ -f "$PROJECT_DIR/BACKLOG.md" ]; then
+    bash "$write_proposals" "$report_file" "$PROJECT_DIR/BACKLOG.md" "strategist" 2>&1 \
+      && echo "$(_ts) Proposals written to BACKLOG.md" \
+      || echo "$(_ts) Write proposals failed (non-critical)"
   fi
 }
 
