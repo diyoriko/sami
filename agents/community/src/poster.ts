@@ -11,7 +11,7 @@ import {
 import { downloadVideo, isYtDlpAvailable } from './downloader';
 import { detectEquipment } from './youtube';
 import { rewriteTitle, formatChannelName } from './translate';
-// story imports removed — fireStory disabled (2026-04-05)
+import { type StoryData, sendStoryToAdmin } from './story';
 import { createLogger, type Logger } from './logger';
 import {
   type Category, type Difficulty,
@@ -94,10 +94,22 @@ export async function formatCaption(video: VideoRow, challengeInfo?: ChallengeIn
 
 export type PostResult = 'posted' | 'skipped' | 'no_video' | 'error';
 
-// ---- fireStory — DISABLED (admin request 2026-04-05) ----
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function fireStory(_bot: Bot, _video: VideoRow, _category: Category, _postMessageId?: number): void {
-  // no-op: story reminders disabled
+function fireStory(bot: Bot, video: VideoRow, category: Category, postMessageId?: number): void {
+  const titlePromise = video.display_title
+    ? Promise.resolve(video.display_title)
+    : rewriteTitle(video.title).then(t => t.replace(/\\(.)/g, '$1'));
+
+  titlePromise.then(title => {
+    const storyData: StoryData = {
+      title,
+      category,
+      durationLabel: video.duration_label ?? '—',
+      difficulty: video.difficulty,
+      rawTitle: video.title,
+      thumbnailUrl: video.thumbnail_url ?? undefined,
+    };
+    return sendStoryToAdmin(bot, storyData, postMessageId);
+  }).catch(() => {});
 }
 
 export async function postVideoToChannel(
