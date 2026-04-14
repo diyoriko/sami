@@ -123,15 +123,11 @@ export async function generateStory(data: StoryData): Promise<Buffer> {
   ctx.stroke();
 
   // ── Sanitize: keep only chars that Oceanic font can render ──
-  // Whitelist: Cyrillic, Latin, digits, basic punctuation
+  // Negated class with `u` flag — replaces ANY non-whitelisted Unicode char with space.
+  // Only ASCII space whitelisted (not \s) to prevent exotic Unicode spaces → tofu.
   const sanitize = (t: string) => t
-    .replace(/[а-яА-ЯёЁa-zA-Z0-9\s.,!?\-()'"]+|./g, (ch) => {
-      // Keep whitelisted chars (matched by the first alternative)
-      if (/[а-яА-ЯёЁa-zA-Z0-9\s.,!?\-()'"]/u.test(ch)) return ch;
-      // Replace everything else with space
-      return ' ';
-    })
-    .replace(/\s{2,}/g, ' ')
+    .replace(/[^а-яА-ЯёЁa-zA-Z0-9 .,!?\-()'"]/gu, ' ')
+    .replace(/ {2,}/g, ' ')
     .trim();
 
   data.title = sanitize(data.title);
