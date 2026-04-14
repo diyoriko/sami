@@ -135,7 +135,7 @@ export async function generateStory(data: StoryData): Promise<Buffer> {
   // ── Category tag ──
   ctx.font = '52px OceanicReg, sans-serif';
   ctx.fillStyle = '#666666';
-  ctx.fillText(categoryRu, 90, 270);
+  ctx.fillText(sanitize(categoryRu), 90, 270);
 
   // ── Title (Oceanic Bold, auto-sized, max 3 lines) ──
   const maxWidth = W - 180;
@@ -145,7 +145,7 @@ export async function generateStory(data: StoryData): Promise<Buffer> {
   let titleLines = allTitleLines;
   if (allTitleLines.length > 4) {
     titleLines = allTitleLines.slice(0, 4);
-    titleLines[3] = titleLines[3].replace(/\s+\S*$/, '') + '...';
+    titleLines[3] = titleLines[3].replace(/\s+\S*$/u, '') + '...';
   }
   const lineHeight = Math.round(titleSize * 1.08);
 
@@ -160,11 +160,12 @@ export async function generateStory(data: StoryData): Promise<Buffer> {
   const valX = 470;
   const rowH = 64;
   // Replace : with . — Oceanic TRIAL font is missing the colon glyph
-  const duration = (data.durationLabel || '—').replace(/:/g, '.');
+  // Fallback '-' instead of '—' (em-dash has no glyph in Oceanic)
+  const duration = sanitize((data.durationLabel || '-').replace(/:/g, '.'));
   const meta = [
     ['ВРЕМЯ', duration],
-    ['УРОВЕНЬ', difficultyRu],
-    ['ИНВЕНТАРЬ', gear],
+    ['УРОВЕНЬ', sanitize(difficultyRu)],
+    ['ИНВЕНТАРЬ', sanitize(gear)],
   ];
 
   for (let i = 0; i < meta.length; i++) {
