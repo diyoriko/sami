@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+> При старте сессии прочти `~/.claude/projects/-Users-diyoriko/memory/session_current.md` если файл существует — там зафиксировано на чём остановились в прошлый раз.
+
 Правила работы с проектом SAMI.
 
 ## Quick Commands
@@ -205,7 +207,8 @@ bash agents/uninstall-1x-daily-mac.sh              # удалить cron
 7. **Архивация** — закрытый спринт в `<details>`, открытые переносятся с причиной
 8. **Max 3 релиза в неделю** — develop→main мержи, каждый = Railway restart
 
-**NEVER push directly to main OR develop.** Always go through a PR.
+Prefer PR-based merges over direct push to main/develop. `guard-branch.sh` enforces this.
+Direct push allowed only when: (a) hot-fix on rollback branch, (b) docs-only change with explicit user ack, (c) hook deliberately bypassed for the operation.
 Default branch: `develop`.
 
 ## Quality Gate
@@ -222,11 +225,12 @@ Default branch: `develop`.
 ## Commit Rules
 - Do NOT add `Co-Authored-By` trailer to commits — GitHub flagged the account for bot-like activity
 - Squash related changes into 1-3 meaningful commits before pushing, not micro-commits
-- Never push more than 5 commits at a time to main
+- Prefer batches of ≤5 commits at a time to main; if more, ask user before pushing
 - Wait at least 3 minutes between pushes (enforced by pre-push hook)
 
 ## Guardrails
 
+- **Open task ≠ approved for implementation.** A task in BACKLOG.md means "we want this eventually", NOT "implement this now". Only implement tasks that the user explicitly approves in the current session. If an agent (implementor, strategist) picks up a task without explicit approval, it must be reverted.
 - **Max 3 релиза в неделю** — develop→main мержи. Каждый = Railway restart.
 - Не создавать группы/каналы автоматически — только вручную, потом добавлять бота
 - Не полагаться на Google Drive для доставки отчётов
