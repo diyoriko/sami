@@ -415,7 +415,7 @@ export async function runStrategist(bot: Bot): Promise<void> {
 
   try {
     const response = await client.messages.create({
-      model: process.env.STRATEGIST_MODEL ?? 'claude-sonnet-4-6',
+      model: process.env.STRATEGIST_MODEL ?? 'claude-opus-4-7',
       max_tokens: 4096,
       messages: [{ role: 'user', content: prompt }],
     });
@@ -452,9 +452,14 @@ export async function runStrategist(bot: Bot): Promise<void> {
     log.info(`report stored (${response.usage.input_tokens}+${response.usage.output_tokens} tokens)`);
 
     // Notify admin
+    // Cost rates depend on STRATEGIST_MODEL. Defaults below assume claude-opus-4-7
+    // ($15 input / $75 output per M tokens). Adjust if STRATEGIST_MODEL is changed.
+    const isOpus = (process.env.STRATEGIST_MODEL ?? 'claude-opus-4-7').includes('opus');
+    const inputRate = isOpus ? 15 : 3;
+    const outputRate = isOpus ? 75 : 15;
     const costEstimate = (
-      (response.usage.input_tokens / 1_000_000) * 3 +
-      (response.usage.output_tokens / 1_000_000) * 15
+      (response.usage.input_tokens / 1_000_000) * inputRate +
+      (response.usage.output_tokens / 1_000_000) * outputRate
     ).toFixed(3);
 
     const { escV2 } = await import('./shared');
